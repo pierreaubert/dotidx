@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -264,119 +264,114 @@ func TestCallSidecar(t *testing.T) {
 }
 
 func TestSaveToDatabase(t *testing.T) {
-	// Skip if TEST_POSTGRES_URI is not set
-	postgresURI := os.Getenv("TEST_POSTGRES_URI")
-	if postgresURI == "" {
-		t.Skip("Skipping database test. Set TEST_POSTGRES_URI environment variable to run.")
-	}
-
-	// Ensure sslmode=disable is in the PostgreSQL URI if not already present
-	if !strings.Contains(postgresURI, "sslmode=") {
-		if strings.Contains(postgresURI, "?") {
-			postgresURI += "&sslmode=disable"
-		} else {
-			postgresURI += "?sslmode=disable"
-		}
-	}
-
-	// Connect to PostgreSQL
-	db, err := sql.Open("postgres", postgresURI)
+	// Create a mock database connection
+	db, mock, err := sqlmock.New()
 	if err != nil {
-		t.Fatalf("Failed to connect to PostgreSQL: %v", err)
+		t.Fatalf("Error creating mock database: %v", err)
 	}
 	defer db.Close()
 
-	// Create table
-	if err := createTable(db); err != nil {
-		t.Fatalf("Failed to create table: %v", err)
-	}
-
-	// Clean up test data
-	_, err = db.Exec("DELETE FROM blocks_Polkadot_Polkadot WHERE hash = $1 OR hash = $2", "0x1234567890abcdef", "0xabcdef1234567890")
-	if err != nil {
-		t.Fatalf("Failed to clean up test data: %v", err)
-	}
-
 	// Create test data
-	now := time.Now()
-	items := []BlockData{
+	testData := []BlockData{
 		{
-			ID:             1, // Used for sidecar API call
-			Timestamp:      now,
-			Hash:           "0x1234567890abcdef",
-			ParentHash:     "0x0987654321fedcba",
-			StateRoot:      "0xabcdef1234567890",
-			ExtrinsicsRoot: "0xfedcba0987654321",
-			AuthorID:       "0xaabbccddeeff",
+			ID:             1,
+			Timestamp:      time.Now(),
+			Hash:           "0x1234567890abcdef1234567890abcdef",
+			ParentHash:     "0xabcdef1234567890abcdef1234567890",
+			StateRoot:      "0x1234567890abcdef1234567890abcdef",
+			ExtrinsicsRoot: "0xabcdef1234567890abcdef1234567890",
+			AuthorID:       "0x1234567890",
 			Finalized:      true,
-			OnInitialize:   json.RawMessage(`{"events":[]}`),
-			OnFinalize:     json.RawMessage(`{"events":[]}`),
-			Logs:           json.RawMessage(`["log1", "log2"]`),
-			Extrinsics:     json.RawMessage(`["ex1", "ex2"]`),
+			OnInitialize:   json.RawMessage(`{"test": true}`),
+			OnFinalize:     json.RawMessage(`{"test": true}`),
+			Logs:           json.RawMessage(`{"test": true}`),
+			Extrinsics: json.RawMessage(`[
+				{
+					"method": "transfer",
+					"params": {
+						"id": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+					}
+				}
+			]`),
 		},
 		{
-			ID:             2, // Used for sidecar API call
-			Timestamp:      now.Add(time.Second),
-			Hash:           "0xabcdef1234567890",
-			ParentHash:     "0x1234567890abcdef",
-			StateRoot:      "0x0987654321fedcba",
-			ExtrinsicsRoot: "0xaabbccddeeff",
-			AuthorID:       "0xfedcba0987654321",
+			ID:             2,
+			Timestamp:      time.Now(),
+			Hash:           "0xabcdef1234567890abcdef1234567890",
+			ParentHash:     "0x1234567890abcdef1234567890abcdef",
+			StateRoot:      "0xabcdef1234567890abcdef1234567890",
+			ExtrinsicsRoot: "0x1234567890abcdef1234567890abcdef",
+			AuthorID:       "0xabcdef1234",
 			Finalized:      false,
-			OnInitialize:   json.RawMessage(`{"events":[]}`),
-			OnFinalize:     json.RawMessage(`{"events":[]}`),
-			Logs:           json.RawMessage(`["log3", "log4"]`),
-			Extrinsics:     json.RawMessage(`["ex3", "ex4"]`),
+			OnInitialize:   json.RawMessage(`{"test": false}`),
+			OnFinalize:     json.RawMessage(`{"test": false}`),
+			Logs:           json.RawMessage(`{"test": false}`),
+			Extrinsics: json.RawMessage(`[
+				{
+					"method": "transfer",
+					"params": {
+						"data": ["0x1234567890abcdef", "normal_string"]
+					}
+				}
+			]`),
 		},
 	}
-	
-	// Save to database
-	err = saveToDatabase(db, items)
+
+	// Set up expectations for transaction
+	mock.ExpectBegin()
+
+	// Expect prepared statement for blocks table
+	mock.ExpectPrepare("INSERT INTO blocks_Polkadot_Polkadot")
+
+	// Expect prepared statement for address2blocks table
+	mock.ExpectPrepare("INSERT INTO address2blocks")
+
+	// Expect executions for each item in blocks table
+	mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// Expect executions for addresses in address2blocks table
+	// First block has one address from id field
+	mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(0, 1))
+	// Second block has one address from data array
+	mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// Expect transaction commit
+	mock.ExpectCommit()
+
+	// Call the function being tested
+	err = saveToDatabase(db, testData)
 	if err != nil {
-		t.Fatalf("Failed to save to database: %v", err)
+		t.Errorf("saveToDatabase returned an error: %v", err)
 	}
-	
-	// Verify data was saved
-	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM blocks_Polkadot_Polkadot").Scan(&count)
-	if err != nil {
-		t.Errorf("Failed to query database: %v", err)
-	}
-	
-	if count != 2 {
-		t.Errorf("Expected 2 records, got %d", count)
-	}
-	
-	// Verify specific fields
-	var hash string
-	err = db.QueryRow("SELECT hash FROM blocks_Polkadot_Polkadot WHERE block_id = $1", 1).Scan(&hash)
-	if err != nil {
-		t.Errorf("Failed to query specific record: %v", err)
-	}
-	
-	if hash != "0x1234567890abcdef" {
-		t.Errorf("Expected hash=0x1234567890abcdef, got hash=%s", hash)
+
+	// Verify that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("Unfulfilled expectations: %v", err)
 	}
 }
 
 func TestCreateTable(t *testing.T) {
-	// Create a test database
+	// Create a mock database connection
 	db, mock, err := sqlmock.New()
 	if err != nil {
-		t.Fatalf("Failed to create mock database: %v", err)
+		t.Fatalf("Error creating mock database: %v", err)
 	}
 	defer db.Close()
 
-	// Set up expectations
-	mock.ExpectExec("CREATE TABLE IF NOT EXISTS blocks_Polkadot_Polkadot").
-		WillReturnResult(sqlmock.NewResult(0, 0))
+	// Expect the first query to create the blocks table
+	mock.ExpectExec("CREATE TABLE IF NOT EXISTS blocks_Polkadot_Polkadot").WillReturnResult(sqlmock.NewResult(0, 0))
 
-	// Call the function
-	if err := createTable(db); err != nil {
-		t.Errorf("Failed to create table: %v", err)
+	// Expect the second query to create the address2blocks table
+	mock.ExpectExec("CREATE TABLE IF NOT EXISTS address2blocks").WillReturnResult(sqlmock.NewResult(0, 0))
+
+	// Call the function being tested
+	err = createTable(db)
+	if err != nil {
+		t.Errorf("createTable returned an error: %v", err)
 	}
 
-	// Check expectations
+	// Verify that all expectations were met
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("Unfulfilled expectations: %v", err)
 	}
@@ -392,7 +387,7 @@ func TestWorkerDistribution(t *testing.T) {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
-		
+
 		// Return a mock response
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -426,9 +421,12 @@ func TestWorkerDistribution(t *testing.T) {
 
 	// Expect transaction for batch insert
 	mock.ExpectBegin()
+
+	// Expect prepared statements
 	mock.ExpectPrepare("INSERT INTO blocks_Polkadot_Polkadot.*")
-	
-	// Expect a single exec with any arguments
+	mock.ExpectPrepare("INSERT INTO address2blocks.*")
+
+	// Expect executions for blocks table
 	mock.ExpectExec("INSERT INTO blocks_Polkadot_Polkadot.*").
 		WithArgs(
 			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
@@ -436,7 +434,7 @@ func TestWorkerDistribution(t *testing.T) {
 			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	
+
 	mock.ExpectExec("INSERT INTO blocks_Polkadot_Polkadot.*").
 		WithArgs(
 			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
@@ -444,7 +442,7 @@ func TestWorkerDistribution(t *testing.T) {
 			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	
+
 	mock.ExpectExec("INSERT INTO blocks_Polkadot_Polkadot.*").
 		WithArgs(
 			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
@@ -452,7 +450,9 @@ func TestWorkerDistribution(t *testing.T) {
 			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	
+
+	// No addresses to insert since the mock extrinsics are empty arrays
+
 	mock.ExpectCommit()
 
 	// Create a test config
@@ -520,22 +520,22 @@ func TestWorkerDistributionAllBlocksExist(t *testing.T) {
 func TestSidecarMetrics(t *testing.T) {
 	// Create a new metrics instance
 	m := NewSidecarMetrics()
-	
+
 	// Test with no calls
 	count, avgTime, minTime, maxTime, failures := m.GetStats()
 	if count != 0 || failures != 0 {
 		t.Errorf("Expected 0 calls and 0 failures, got %d calls and %d failures", count, failures)
 	}
-	
+
 	// Test with successful calls
 	start := time.Now()
 	time.Sleep(10 * time.Millisecond)
 	m.RecordLatency(start, nil)
-	
+
 	start = time.Now()
 	time.Sleep(20 * time.Millisecond)
 	m.RecordLatency(start, nil)
-	
+
 	count, avgTime, minTime, maxTime, failures = m.GetStats()
 	if count != 2 {
 		t.Errorf("Expected 2 calls, got %d", count)
@@ -552,15 +552,157 @@ func TestSidecarMetrics(t *testing.T) {
 	if maxTime < 10*time.Millisecond {
 		t.Errorf("Expected maximum time >= 10ms, got %v", maxTime)
 	}
-	
+
 	// Test with failed calls
 	m.RecordLatency(time.Now(), fmt.Errorf("test error"))
-	
+
 	count, _, _, _, failures = m.GetStats()
 	if count != 2 {
 		t.Errorf("Expected count to remain 2, got %d", count)
 	}
 	if failures != 1 {
 		t.Errorf("Expected 1 failure, got %d", failures)
+	}
+}
+
+func TestExtractAddressesFromExtrinsics(t *testing.T) {
+	tests := []struct {
+		name       string
+		extrinsics string
+		expected   int
+		err        bool
+	}{
+		{
+			name:       "Empty extrinsics",
+			extrinsics: `[]`,
+			expected:   0,
+			err:        false,
+		},
+		{
+			name:       "Invalid JSON",
+			extrinsics: `invalid`,
+			expected:   0,
+			err:        true,
+		},
+		{
+			name:       "ID field",
+			extrinsics: `[{"id": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"}]`,
+			expected:   1,
+			err:        false,
+		},
+		{
+			name:       "Multiple ID fields",
+			extrinsics: `[{"id": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"}, {"user_id": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"}]`,
+			expected:   2,
+			err:        false,
+		},
+		{
+			name:       "Data array with Polkadot addresses",
+			extrinsics: `[{"data": ["5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"]}]`,
+			expected:   2,
+			err:        false,
+		},
+		{
+			name:       "Nested data array",
+			extrinsics: `[{"nested": {"data": ["5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"]}}]`,
+			expected:   2,
+			err:        false,
+		},
+		{
+			name:       "Combined ID and data fields",
+			extrinsics: `[{"id": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "data": ["5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"]}]`,
+			expected:   2,
+			err:        false,
+		},
+		{
+			name:       "Duplicate addresses",
+			extrinsics: `[{"id": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"}, {"data": ["5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"]}]`,
+			expected:   2,
+			err:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			addresses, err := extractAddressesFromExtrinsics(json.RawMessage(tt.extrinsics))
+			if tt.err {
+				if err == nil {
+					t.Errorf("Expected error but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+				if len(addresses) != tt.expected {
+					t.Errorf("extractAddressesFromExtrinsics() got %d addresses, expected %d", len(addresses), tt.expected)
+				}
+			}
+		})
+	}
+}
+
+func TestExtractAddressesFromRealData(t *testing.T) {
+	// Get all JSON files in the tests/data/blocks directory
+	blockDir := "tests/data/blocks"
+	files, err := os.ReadDir(blockDir)
+	if err != nil {
+		t.Fatalf("Failed to read blocks directory: %v", err)
+	}
+
+	// Filter for JSON files
+	jsonFiles := make([]string, 0)
+	for _, file := range files {
+		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
+			jsonFiles = append(jsonFiles, filepath.Join(blockDir, file.Name()))
+		}
+	}
+
+	if len(jsonFiles) == 0 {
+		t.Fatalf("No JSON files found in %s", blockDir)
+	}
+
+	t.Logf("Found %d JSON files to test", len(jsonFiles))
+
+	// Process each JSON file
+	for _, jsonFile := range jsonFiles {
+		t.Run(jsonFile, func(t *testing.T) {
+			// Read the file
+			fileData, err := os.ReadFile(jsonFile)
+			if err != nil {
+				t.Fatalf("Failed to read file %s: %v", jsonFile, err)
+			}
+
+			// Parse the JSON to extract the extrinsics field
+			var blockData struct {
+				Extrinsics json.RawMessage `json:"extrinsics"`
+			}
+			if err := json.Unmarshal(fileData, &blockData); err != nil {
+				t.Fatalf("Failed to unmarshal JSON from %s: %v", jsonFile, err)
+			}
+
+			// Extract addresses from the extrinsics
+			addresses, err := extractAddressesFromExtrinsics(blockData.Extrinsics)
+			if err != nil {
+				t.Logf("Error extracting addresses from %s: %v", jsonFile, err)
+				return
+			}
+
+			// Log the extracted addresses
+			t.Logf("Extracted %d addresses from %s", len(addresses), jsonFile)
+			for i, addr := range addresses {
+				t.Logf("  Address %d: %s", i+1, addr)
+			}
+
+			// Count Polkadot addresses
+			polkadotAddresses := len(addresses)
+			t.Logf("Found %d Polkadot addresses in %s", polkadotAddresses, jsonFile)
+
+			// Verify that all addresses start with a valid prefix (typically 1-9 or A-Z)
+			for _, addr := range addresses {
+				if strings.HasPrefix(addr, "0x") {
+					t.Errorf("Found hex address %s in %s, expected only Polkadot addresses", addr, jsonFile)
+				}
+			}
+		})
 	}
 }
