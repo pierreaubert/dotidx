@@ -16,6 +16,15 @@ A command-line tool for fetching block data from a Polkadot sidecar API and stor
 - Go 1.18 or higher
 - PostgreSQL database
 
+## Design
+
+Indexer (read)  --> Nginx --> SideCar 1 --> Full Node
+                         --> SideCar 2 --> Full Node
+        (write) --> PostgreSQL
+
+UserApp (read)  --> PostgreSQL
+                --> Node
+
 ## Installation
 
 ```bash
@@ -48,55 +57,6 @@ polidx -start=1000 -end=2000 -sidecar=http://localhost:8080 -postgres="postgres:
 polidx -start=1 -end=100 -sidecar=https://example.com/sidecar -postgres="postgres://user:password@localhost:5432/dbname" -batch=50 -workers=10 -flush=1m
 ```
 
-## Database Schema
-
-The application creates a PostgreSQL table with the following schema:
-
-```sql
-CREATE TABLE IF NOT EXISTS blocks_Polkadot_Polkadot (
-    block_id INTEGER PRIMARY KEY,
-    timestamp TIMESTAMP NOT NULL,
-    hash VARCHAR(255),
-    parenthash VARCHAR(255),
-    stateroot VARCHAR(255),
-    extrinsicsroot VARCHAR(255),
-    authorid VARCHAR(255),
-    finalized BOOLEAN,
-    oninitialize JSONB,
-    onfinalize JSONB,
-    logs JSONB,
-    extrinsics JSONB,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-```
-
-The `block_id` field corresponds to the block number from the blockchain and serves as the primary key.
-
-## Performance Metrics
-
-The application now tracks and displays performance metrics for sidecar API calls. These metrics are printed every time data is written to the database and at the end of execution. The metrics include:
-
-- Total number of API calls
-- Number of failed calls
-- Average latency
-- Minimum latency
-- Maximum latency
-- Success rate
-
-Example output:
-
-```
-Sidecar API Call Statistics:
-  Total calls: 100
-  Failed calls: 2
-  Average latency: 245.32ms
-  Minimum latency: 120.45ms
-  Maximum latency: 890.12ms
-  Success rate: 98.00%
-```
-
-These metrics can help you monitor the performance of the sidecar API and adjust your worker count and batch size accordingly.
-
 ## Testing
 
 ```bash
@@ -109,4 +69,4 @@ TEST_POSTGRES_URI="postgres://user:password@localhost:5432/testdb" go test -v ./
 
 ## License
 
-MIT
+Apache 2, see [LICENSE](LICENSE) file.

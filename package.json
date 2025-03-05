@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@substrate/api-sidecar": "^20.2.0"
+  }
+}

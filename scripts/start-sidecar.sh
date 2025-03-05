@@ -29,6 +29,6 @@ for p in `seq 1 15`; do
     SAS_METRICS_LOKI_PORT=3100 \
     SAS_METRICS_INCLUDE_QUERYPARAMS=false \
     SAS_EXPRESS_PORT=$(($SAS_EXPRESS_PORT_START+$p)) \
-    "$ROOT/src/substrate-api-sidecar/node_modules/.bin/substrate-api-sidecar" 2>&1 >> "$ROOT/logs/sidecar-$p.log" &
+    "$ROOT/node_modules/.bin/substrate-api-sidecar" 2>&1 >> "$ROOT/logs/sidecar-$p.log" &
 done
 
