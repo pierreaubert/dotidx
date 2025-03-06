@@ -27,6 +27,8 @@ type Config struct {
 	BatchSize    int
 	MaxWorkers   int
 	FlushTimeout time.Duration
+	Relaychain   string
+	Chain        string
 }
 
 // BlockData represents the data received from the sidecar API
@@ -126,6 +128,64 @@ func (m *SidecarMetrics) PrintStats() {
 // Global metrics instance
 var metrics = NewSidecarMetrics()
 
+// testSidecarService checks if the sidecar service is working by making a request to the root endpoint
+func testSidecarService(sidecarURL string) error {
+	log.Printf("Testing sidecar service at %s", sidecarURL)
+	
+	// Construct the URL for the root endpoint
+	url := sidecarURL
+	if !strings.HasSuffix(url, "/") {
+		url += "/"
+	}
+	
+	// Create a new request
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("error creating request: %w", err)
+	}
+	
+	// Send the request
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("error connecting to sidecar service: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	// Check the response status
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code from sidecar service: %d", resp.StatusCode)
+	}
+	
+	log.Printf("Sidecar service test successful with status code: %d", resp.StatusCode)
+	return nil
+}
+
+// sanitizeChainName removes non-alphanumeric characters and the relaychain name from the chain name
+func sanitizeChainName(chainName, relaychainName string) string {
+	// Convert to lowercase
+	chainName = strings.ToLower(chainName)
+	relaychainName = strings.ToLower(relaychainName)
+
+	// Remove non-alphanumeric characters (like hyphens)
+	var result strings.Builder
+	for _, char := range chainName {
+		if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') {
+			result.WriteRune(char)
+		}
+	}
+	chainName = result.String()
+
+	// Remove relaychain name if it's included in the chain name
+	chainName = strings.ReplaceAll(chainName, relaychainName, "")
+
+	// If the chain name is empty after processing, use the original name
+	if chainName == "" {
+		chainName = "chain"
+	}
+
+	return chainName
+}
+
 func main() {
 	// Parse command line arguments
 	config := parseFlags()
@@ -163,10 +223,16 @@ func main() {
 	log.Println("Successfully connected to PostgreSQL")
 
 	// Create table if not exists
-	if err := createTable(db); err != nil {
+	if err := createTable(db, config); err != nil {
 		log.Fatalf("Failed to create table: %v", err)
 	}
 	log.Println("Ensured table exists")
+
+	// Test the sidecar service
+	if err := testSidecarService(config.SidecarURL); err != nil {
+		log.Fatalf("Sidecar service test failed: %v", err)
+	}
+	log.Println("Sidecar service is working properly")
 
 	// Set up context with cancellation for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -191,6 +257,8 @@ func parseFlags() Config {
 	batchSize := flag.Int("batch", 100, "Number of items to collect before writing to database")
 	maxWorkers := flag.Int("workers", 5, "Maximum number of concurrent workers")
 	flushTimeout := flag.Duration("flush", 30*time.Second, "Maximum time to wait before flushing data to database")
+	relaychain := flag.String("relaychain", "Polkadot", "Relaychain name")
+	chain := flag.String("chain", "Polkadot", "Chain name")
 
 	flag.Parse()
 
@@ -202,6 +270,8 @@ func parseFlags() Config {
 		BatchSize:    *batchSize,
 		MaxWorkers:   *maxWorkers,
 		FlushTimeout: *flushTimeout,
+		Relaychain:   *relaychain,
+		Chain:        *chain,
 	}
 }
 
@@ -229,10 +299,14 @@ func validateConfig(config Config) error {
 	return nil
 }
 
-func createTable(db *sql.DB) error {
-	// Create blocks table
-	blocksQuery := `
-	CREATE TABLE IF NOT EXISTS blocks_Polkadot_Polkadot (
+func createTable(db *sql.DB, config Config) error {
+	// Create blocks table with dynamic name based on Relaychain and sanitized Chain
+	sanitizedChain := sanitizeChainName(config.Chain, config.Relaychain)
+	// Convert relaychain name to lowercase for PostgreSQL compatibility
+	lowercaseRelaychain := strings.ToLower(config.Relaychain)
+	tableName := fmt.Sprintf("blocks_%s_%s", lowercaseRelaychain, sanitizedChain)
+	blocksQuery := fmt.Sprintf(`
+	CREATE TABLE IF NOT EXISTS %s (
 		block_id INTEGER PRIMARY KEY,
 		timestamp TIMESTAMP NOT NULL,
 		hash VARCHAR(255),
@@ -247,22 +321,22 @@ func createTable(db *sql.DB) error {
 		extrinsics JSONB,
 		created_at TIMESTAMP NOT NULL DEFAULT NOW()
 	);
-	`
+	`, tableName)
 	_, err := db.Exec(blocksQuery)
 	if err != nil {
 		return fmt.Errorf("error creating blocks table: %w", err)
 	}
 
-	// Create address2blocks table
-	address2blocksQuery := `
+	// Create address2blocks table with reference to dynamic blocks table
+	address2blocksQuery := fmt.Sprintf(`
 	CREATE TABLE IF NOT EXISTS address2blocks (
 		address VARCHAR(255) NOT NULL,
 		block_id INTEGER NOT NULL,
 		PRIMARY KEY (address, block_id),
-		FOREIGN KEY (block_id) REFERENCES blocks_Polkadot_Polkadot(block_id),
+		FOREIGN KEY (block_id) REFERENCES %s(block_id),
 		created_at TIMESTAMP NOT NULL DEFAULT NOW()
 	);
-	`
+	`, tableName)
 	_, err = db.Exec(address2blocksQuery)
 	if err != nil {
 		return fmt.Errorf("error creating address2blocks table: %w", err)
@@ -284,9 +358,17 @@ func setupSignalHandler(cancel context.CancelFunc) {
 func startWorkers(ctx context.Context, config Config, db *sql.DB) {
 	log.Printf("Starting workers to process blocks from %d to %d", config.StartRange, config.EndRange)
 
+	// Create dynamic table name with sanitized chain name
+	sanitizedChain := sanitizeChainName(config.Chain, config.Relaychain)
+	// Convert relaychain name to lowercase for PostgreSQL compatibility
+	lowercaseRelaychain := strings.ToLower(config.Relaychain)
+	tableName := fmt.Sprintf("blocks_%s_%s", lowercaseRelaychain, sanitizedChain)
+	log.Printf("Using table: %s", tableName)
+
 	// Query database for existing block IDs in the range
 	existingIDs := make(map[int]bool)
-	rows, err := db.QueryContext(ctx, "SELECT block_id FROM blocks_Polkadot_Polkadot WHERE block_id BETWEEN $1 AND $2", config.StartRange, config.EndRange)
+	query := fmt.Sprintf("SELECT block_id FROM %s WHERE block_id BETWEEN $1 AND $2", tableName)
+	rows, err := db.QueryContext(ctx, query, config.StartRange, config.EndRange)
 	if err != nil {
 		log.Printf("Warning: Failed to query existing blocks: %v. Will process all blocks in range.", err)
 	} else {
@@ -421,7 +503,7 @@ func startWorkers(ctx context.Context, config Config, db *sql.DB) {
 					// Channel closed, save remaining data and return
 					if len(batch) > 0 {
 						log.Printf("Saving final batch of %d items to database", len(batch))
-						if err := saveToDatabase(db, batch); err != nil {
+						if err := saveToDatabase(db, batch, config); err != nil {
 							log.Printf("Error saving final batch to database: %v", err)
 						}
 						metrics.PrintStats()
@@ -433,7 +515,7 @@ func startWorkers(ctx context.Context, config Config, db *sql.DB) {
 				batch = append(batch, data)
 				if len(batch) >= config.BatchSize {
 					log.Printf("Batch size reached (%d items), saving to database", len(batch))
-					if err := saveToDatabase(db, batch); err != nil {
+					if err := saveToDatabase(db, batch, config); err != nil {
 						log.Printf("Error saving batch to database: %v", err)
 					}
 					batch = nil
@@ -443,7 +525,7 @@ func startWorkers(ctx context.Context, config Config, db *sql.DB) {
 			case <-ticker.C:
 				if len(batch) > 0 {
 					log.Printf("Flush timeout reached, saving %d items to database", len(batch))
-					if err := saveToDatabase(db, batch); err != nil {
+					if err := saveToDatabase(db, batch, config); err != nil {
 						log.Printf("Error saving batch to database on timeout: %v", err)
 					}
 					batch = nil
@@ -453,7 +535,7 @@ func startWorkers(ctx context.Context, config Config, db *sql.DB) {
 			case <-ctx.Done():
 				if len(batch) > 0 {
 					log.Printf("Context cancelled, saving remaining %d items to database", len(batch))
-					if err := saveToDatabase(db, batch); err != nil {
+					if err := saveToDatabase(db, batch, config); err != nil {
 						log.Printf("Error saving batch to database on shutdown: %v", err)
 					}
 					metrics.PrintStats()
@@ -524,9 +606,15 @@ func callSidecar(ctx context.Context, id int, sidecarURL string) (BlockData, err
 	return data, nil
 }
 
-func saveToDatabase(db *sql.DB, items []BlockData) error {
+func saveToDatabase(db *sql.DB, items []BlockData, config Config) error {
 	startTime := time.Now()
 	log.Printf("Saving %d items to database", len(items))
+
+	// Create dynamic table name with sanitized chain name
+	sanitizedChain := sanitizeChainName(config.Chain, config.Relaychain)
+	// Convert relaychain name to lowercase for PostgreSQL compatibility
+	lowercaseRelaychain := strings.ToLower(config.Relaychain)
+	tableName := fmt.Sprintf("blocks_%s_%s", lowercaseRelaychain, sanitizedChain)
 
 	// Start a transaction
 	tx, err := db.Begin()
@@ -536,8 +624,8 @@ func saveToDatabase(db *sql.DB, items []BlockData) error {
 	defer tx.Rollback()
 
 	// Prepare the statement for blocks table
-	blocksStmt, err := tx.Prepare(`
-		INSERT INTO blocks_Polkadot_Polkadot (block_id, timestamp, hash, parenthash, stateroot, extrinsicsroot, authorid, finalized, oninitialize, onfinalize, logs, extrinsics)
+	blocksQuery := fmt.Sprintf(`
+		INSERT INTO %s (block_id, timestamp, hash, parenthash, stateroot, extrinsicsroot, authorid, finalized, oninitialize, onfinalize, logs, extrinsics)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (block_id) DO UPDATE SET
 			timestamp = EXCLUDED.timestamp,
@@ -551,7 +639,8 @@ func saveToDatabase(db *sql.DB, items []BlockData) error {
 			onfinalize = EXCLUDED.onfinalize,
 			logs = EXCLUDED.logs,
 			extrinsics = EXCLUDED.extrinsics
-	`)
+	`, tableName)
+	blocksStmt, err := tx.Prepare(blocksQuery)
 	if err != nil {
 		return fmt.Errorf("error preparing blocks statement: %w", err)
 	}
@@ -633,7 +722,7 @@ func extractAddressesFromExtrinsics(extrinsics json.RawMessage) ([]string, error
 	addressMap := make(map[string]bool) // To ensure uniqueness
 
 	// Patterns to validate addresses
-	numericPattern := regexp.MustCompile(`^[0-9]+$`) // Simple numeric values
+	numericPattern := regexp.MustCompile(`^[0-9]+$`)                       // Simple numeric values
 	polkadotPattern := regexp.MustCompile(`^[1-9A-HJ-NP-Za-km-z]{46,48}$`) // Polkadot addresses are 46-48 chars
 
 	// Function to validate an address

@@ -7,3 +7,6 @@ apt install nginx
 
 # for sidecar
 apt install npm
+
+# for testing
+apt install curl
