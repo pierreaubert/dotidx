@@ -18,12 +18,7 @@ A command-line tool for fetching block data from a Polkadot sidecar API and stor
 
 ## Design
 
-Indexer (read)  --> Nginx --> SideCar 1 --> Full Node
-                         --> SideCar 2 --> Full Node
-        (write) --> PostgreSQL
-
-UserApp (read)  --> PostgreSQL
-                --> Node
+[![sequence diagram]](./docs/diagram/readme_seq.png)
 
 ## Installation
 
@@ -39,15 +34,15 @@ polidx -start=1000 -end=2000 -sidecar=http://localhost:8080 -postgres="postgres:
 
 ### Command Line Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `-start` | Start of the block range | 1 |
-| `-end` | End of the block range | 10 |
-| `-sidecar` | Sidecar API URL (required) | - |
-| `-postgres` | PostgreSQL connection URI (required) | - |
-| `-batch` | Number of items to collect before writing to database | 100 |
-| `-workers` | Maximum number of concurrent workers | 5 |
-| `-flush` | Maximum time to wait before flushing data to database | 30s |
+| Option      | Description                                           | Default |
+|-------------|-------------------------------------------------------|---------|
+| `-start`    | Start of the block range                              | 1       |
+| `-end`      | End of the block range                                | 10      |
+| `-sidecar`  | Sidecar API URL (required)                            | -       |
+| `-postgres` | PostgreSQL connection URI (required)                  | -       |
+| `-batch`    | Number of items to collect before writing to database | 100     |
+| `-workers`  | Maximum number of concurrent workers                  | 5       |
+| `-flush`    | Maximum time to wait before flushing data to database | 30s     |
 
 > **Note**: The application automatically adds `sslmode=disable` to the PostgreSQL connection URI if not already specified. If you need SSL, explicitly include `sslmode=require` or another appropriate SSL mode in your connection string.
 
