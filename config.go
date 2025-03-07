@@ -1,4 +1,4 @@
-package dotidx
+package main
 
 import (
 	"flag"
@@ -24,7 +24,7 @@ func parseFlags() Config {
 	endRange := flag.Int("end", 10, "End of the integer range")
 	sidecarURL := flag.String("sidecar", "", "Sidecar URL")
 	postgresURI := flag.String("postgres", "", "PostgreSQL connection URI")
-	batchSize := flag.Int("batch", 100, "Number of items to collect before writing to database")
+	batchSize := flag.Int("batch", 10, "Number of items to collect before writing to database")
 	maxWorkers := flag.Int("workers", 5, "Maximum number of concurrent workers")
 	flushTimeout := flag.Duration("flush", 30*time.Second, "Maximum time to wait before flushing data to database")
 	relaychain := flag.String("relaychain", "Polkadot", "Relaychain name")

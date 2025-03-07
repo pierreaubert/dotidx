@@ -1,5 +1,5 @@
 // Package dotidx BlockData represents the data of a block
-package dotidx
+package main
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 )
 
 type BlockData struct {
-	ID             int             `json:"number"`
+	ID             string          `json:"number"`
 	Timestamp      time.Time       `json:"timestamp"`
 	Hash           string          `json:"hash"`
 	ParentHash     string          `json:"parentHash"`

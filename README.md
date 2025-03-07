@@ -18,18 +18,24 @@ A command-line tool for fetching block data from a Polkadot sidecar API and stor
 
 ## Design
 
-[![sequence diagram]](./docs/diagram/readme_seq.png)
+<img src="./docs/diagram/readme_seq.png" alt="sequence diagram" width="600">
 
 ## Installation
 
 ```bash
-go get github.com/pierreaubert/polidx
+go get github.com/pierreaubert/dotidx
 ```
 
 ## Usage
 
 ```bash
-polidx -start=1000 -end=2000 -sidecar=http://localhost:8080 -postgres="postgres://user:pass@localhost:5432/db"
+dotidx -start=1000 -end=2000 -sidecar=http://localhost:8080 -postgres="postgres://user:pass@localhost:5432/db"
+```
+
+or if you want to index live blocks:
+
+```bash
+dotidx -live -sidecar=http://localhost:8080 -postgres="postgres://user:pass@localhost:5432/db"
 ```
 
 ### Command Line Options
@@ -43,14 +49,9 @@ polidx -start=1000 -end=2000 -sidecar=http://localhost:8080 -postgres="postgres:
 | `-batch`    | Number of items to collect before writing to database | 100     |
 | `-workers`  | Maximum number of concurrent workers                  | 5       |
 | `-flush`    | Maximum time to wait before flushing data to database | 30s     |
+| `-live`     | Index new blocks on the fly                           |         |
 
 > **Note**: The application automatically adds `sslmode=disable` to the PostgreSQL connection URI if not already specified. If you need SSL, explicitly include `sslmode=require` or another appropriate SSL mode in your connection string.
-
-### Example
-
-```bash
-polidx -start=1 -end=100 -sidecar=https://example.com/sidecar -postgres="postgres://user:password@localhost:5432/dbname" -batch=50 -workers=10 -flush=1m
-```
 
 ## Testing
 

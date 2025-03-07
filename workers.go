@@ -1,4 +1,4 @@
-package dotidx
+package main
 
 import (
 	"context"
@@ -33,7 +33,7 @@ func startWorkers(ctx context.Context, config Config, db *sql.DB) {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
-			log.Printf("Single block worker %d started", workerID)
+			// log.Printf("Single block worker %d started", workerID)
 
 			for {
 				select {
@@ -67,7 +67,7 @@ func startWorkers(ctx context.Context, config Config, db *sql.DB) {
 					return
 				case blockIDs, ok := <-batchCh:
 					if !ok {
-						log.Printf("Batch worker %d finished", workerID)
+						// log.Printf("Batch worker %d finished", workerID)
 						return
 					}
 
@@ -86,7 +86,7 @@ func startWorkers(ctx context.Context, config Config, db *sql.DB) {
 	for blockID := config.StartRange; blockID <= config.EndRange; blockID++ {
 		// Skip blocks that already exist in the database
 		if existingBlocks[blockID] {
-			log.Printf("Skipping block %d as it already exists in the database", blockID)
+			// log.Printf("Skipping block %d as it already exists in the database", blockID)
 
 			// If we have a batch in progress, send it since we're skipping this block
 			if len(currentBatch) > 0 {
@@ -175,7 +175,7 @@ func processBlockBatch(ctx context.Context, blockIDs []int, config Config, db *s
 		return
 	}
 
-	log.Printf("Worker %d processing batch of %d blocks from %d to %d", workerID, len(blockIDs), blockIDs[0], blockIDs[len(blockIDs)-1])
+	// log.Printf("Worker %d processing batch of %d blocks from %d to %d", workerID, len(blockIDs), blockIDs[0], blockIDs[len(blockIDs)-1])
 
 	// Fetch the blocks using fetchBlockRange
 	blocks, err := fetchBlockRange(ctx, blockIDs, config.SidecarURL)
@@ -190,15 +190,15 @@ func processBlockBatch(ctx context.Context, blockIDs []int, config Config, db *s
 		return
 	}
 
-	log.Printf("Worker %d successfully processed %d blocks", workerID, len(blocks))
+	// log.Printf("Worker %d successfully processed %d blocks", workerID, len(blocks))
 }
 
-// processSingleBlock fetches and processes a single block using callSidecar
+// processSingleBlock fetches and processes a single block using fetchBlock
 func processSingleBlock(ctx context.Context, blockID int, config Config, db *sql.DB, workerID int) {
 	log.Printf("Worker %d processing single block %d", workerID, blockID)
 
-	// Fetch the block data using callSidecar
-	block, err := callSidecar(ctx, blockID, config.SidecarURL)
+	// Fetch the block data using fetchBlock
+	block, err := fetchBlock(ctx, blockID, config.SidecarURL)
 	if err != nil {
 		log.Printf("Worker %d error fetching block %d: %v", workerID, blockID, err)
 		return
@@ -210,5 +210,5 @@ func processSingleBlock(ctx context.Context, blockID int, config Config, db *sql
 		return
 	}
 
-	log.Printf("Worker %d successfully processed block %d", workerID, blockID)
+	// log.Printf("Worker %d successfully processed block %d", workerID, blockID)
 }

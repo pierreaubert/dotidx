@@ -1,4 +1,4 @@
-package dotidx
+package main
 
 import (
 	"context"
@@ -54,7 +54,7 @@ func main() {
 	log.Println("Ensured table exists")
 
 	// Test the sidecar service
-	if err := testSidecarService(config.SidecarURL); err != nil {
+	if err := pingSidecarService(config.SidecarURL); err != nil {
 		log.Fatalf("Sidecar service test failed: %v", err)
 	}
 	log.Println("Sidecar service is working properly")

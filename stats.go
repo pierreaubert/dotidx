@@ -1,4 +1,4 @@
-package dotidx
+package main
 
 import (
 	"log"

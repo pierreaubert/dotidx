@@ -1,6 +1,7 @@
-package dotidx
+package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -22,7 +23,7 @@ func createTable(db *sql.DB, config Config) error {
 			block_id INTEGER PRIMARY KEY,
 			timestamp TIMESTAMP,
 			hash TEXT,
-			parent_hash TEXT,
+			parenthash TEXT,
 			state_root TEXT,
 			extrinsics_root TEXT,
 			author_id TEXT,
@@ -67,9 +68,6 @@ func saveToDatabase(db *sql.DB, items []BlockData, config Config) error {
 		return nil
 	}
 
-	log.Printf("Saving %d items to database", len(items))
-	startTime := time.Now()
-
 	// Sanitize chain name
 	chainName := sanitizeChainName(config.Chain, config.Relaychain)
 
@@ -94,19 +92,19 @@ func saveToDatabase(db *sql.DB, items []BlockData, config Config) error {
 	// Prepare statement for blocks table
 	blocksStmt, err := tx.Prepare(fmt.Sprintf(`
 		INSERT INTO %s (
-			block_id, timestamp, hash, parent_hash, state_root, extrinsics_root,
-			author_id, finalized, on_initialize, on_finalize, logs, extrinsics
+			block_id, timestamp, hash, parenthash, stateroot, extrinsicsroot,
+			authorid, finalized, oninitialize, onfinalize, logs, extrinsics
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (block_id) DO UPDATE SET
 			timestamp = EXCLUDED.timestamp,
 			hash = EXCLUDED.hash,
-			parent_hash = EXCLUDED.parent_hash,
-			state_root = EXCLUDED.state_root,
-			extrinsics_root = EXCLUDED.extrinsics_root,
-			author_id = EXCLUDED.author_id,
+			parenthash = EXCLUDED.parenthash,
+			stateroot = EXCLUDED.stateroot,
+			extrinsicsroot = EXCLUDED.extrinsicsroot,
+			authorid = EXCLUDED.authorid,
 			finalized = EXCLUDED.finalized,
-			on_initialize = EXCLUDED.on_initialize,
-			on_finalize = EXCLUDED.on_finalize,
+			oninitialize = EXCLUDED.oninitialize,
+			onfinalize = EXCLUDED.onfinalize,
 			logs = EXCLUDED.logs,
 			extrinsics = EXCLUDED.extrinsics
 	`, blocksTable))
@@ -154,8 +152,6 @@ func saveToDatabase(db *sql.DB, items []BlockData, config Config) error {
 			continue
 		}
 
-		log.Printf("Extracted %d addresses from extrinsics: %v", len(addresses), addresses)
-
 		// Insert into address2blocks table
 		for _, address := range addresses {
 			_, err = address2blocksStmt.Exec(address, item.ID)
@@ -170,15 +166,13 @@ func saveToDatabase(db *sql.DB, items []BlockData, config Config) error {
 		return fmt.Errorf("error committing transaction: %w", err)
 	}
 
-	log.Printf("Successfully saved %d items to database in %v", len(items), time.Since(startTime))
 	return nil
 }
 
 // sanitizeChainName removes non-alphanumeric characters and the relaychain name from the chain name
-func sanitizeChainName(chainName, relaychainName string) string {
-	// Convert to lowercase
-	chainName = strings.ToLower(chainName)
-	relaychainName = strings.ToLower(relaychainName)
+func sanitizeChainName(initialChainName, initialRelaychainName string) string {
+	chainName := strings.ToLower(initialChainName)
+	relaychainName := strings.ToLower(initialRelaychainName)
 
 	// Remove non-alphanumeric characters (like hyphens)
 	var result strings.Builder
@@ -190,13 +184,9 @@ func sanitizeChainName(chainName, relaychainName string) string {
 	chainName = result.String()
 
 	// Remove relaychain name if it's included in the chain name
-	chainName = strings.ReplaceAll(chainName, relaychainName, "")
-
-	// If the chain name is empty after processing, use the original name
-	if chainName == "" {
-		chainName = "chain"
+	if initialChainName != initialRelaychainName {
+		chainName = strings.ReplaceAll(chainName, relaychainName, "")
 	}
-
 	return chainName
 }
 
@@ -233,4 +223,53 @@ func getExistingBlocks(db *sql.DB, startRange, endRange int, config Config) (map
 	}
 
 	return existingBlocks, nil
+}
+
+// monitorNewBlocks continuously monitors for new blocks and adds them to the database
+func monitorNewBlocks(ctx context.Context, config Config, db *sql.DB, lastProcessedBlock int) {
+	// Create a ticker that ticks every second
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("Block monitor stopped due to context cancellation")
+			return
+		case <-ticker.C:
+			// Fetch the current head block
+			headBlock, err := fetchHeadBlock(config.SidecarURL)
+			if err != nil {
+				log.Printf("Error fetching head block: %v", err)
+				continue
+			}
+
+			// Check if there are new blocks
+			if headBlock > lastProcessedBlock {
+				log.Printf("New blocks detected: %d to %d", lastProcessedBlock+1, headBlock)
+
+				// Create array of block IDs to fetch
+				blockIDs := make([]int, 0, headBlock-lastProcessedBlock)
+				for id := lastProcessedBlock + 1; id <= headBlock; id++ {
+					blockIDs = append(blockIDs, id)
+				}
+
+				// Fetch and process the new blocks
+				blocks, err := fetchBlockRange(ctx, blockIDs, config.SidecarURL)
+				if err != nil {
+					log.Printf("Error fetching block range: %v", err)
+					continue
+				}
+
+				// Save the blocks to the database
+				if err := saveToDatabase(db, blocks, config); err != nil {
+					log.Printf("Error saving blocks to database: %v", err)
+					continue
+				}
+
+				// Update the last processed block
+				lastProcessedBlock = headBlock
+			}
+		}
+	}
 }

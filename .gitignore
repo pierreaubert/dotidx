@@ -7,3 +7,5 @@ run
 #*
 node_modules
 .idea
+TAGS
+ETAGS
