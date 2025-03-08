@@ -220,4 +220,3 @@ func TestFetchBlockRange(t *testing.T) {
 		t.Errorf("Expected third block Hash=0x1234567890abcdef3, got %s", blocks[2].Hash)
 	}
 }
-

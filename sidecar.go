@@ -43,12 +43,18 @@ func fetchHeadBlock(sidecarURL string) (int, error) {
 		return 0, fmt.Errorf("sidecar API returned status code %d", resp.StatusCode)
 	}
 
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("error reading response body for block range: %w", err)
+	}
+
 	// Parse the response
 	var block BlockData
-	if err := json.NewDecoder(resp.Body).Decode(&block); err != nil {
+	if err := json.Unmarshal(body, &block); err != nil {
 		return 0, fmt.Errorf("error parsing head block response: %w", err)
 	}
-	blockID, err := strconv.Atoi(block.ID);
+	blockID, err := strconv.Atoi(block.ID)
 	if err != nil {
 		return 0, fmt.Errorf("error parsing head blockID: %w", err)
 	}

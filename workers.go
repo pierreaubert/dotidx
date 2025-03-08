@@ -190,7 +190,6 @@ func processBlockBatch(ctx context.Context, blockIDs []int, config Config, db *s
 		return
 	}
 
-	// log.Printf("Worker %d successfully processed %d blocks", workerID, len(blocks))
 }
 
 // processSingleBlock fetches and processes a single block using fetchBlock
@@ -210,5 +209,4 @@ func processSingleBlock(ctx context.Context, blockID int, config Config, db *sql
 		return
 	}
 
-	// log.Printf("Worker %d successfully processed block %d", workerID, blockID)
 }
