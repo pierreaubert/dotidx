@@ -1,4 +1,4 @@
-CREATE USER DOTLAKE with encrypted password ‘my string password’;
+ALTER USER dotlake with ENCRYPTED PASSWORD 'YOURPASSWORD';
 GRANT ALL PRIVILEGES on DATABASE dotlake to dotlake;
 GRANT ALL PRIVILEGES ON SCHEMA public TO dotlake;
 
