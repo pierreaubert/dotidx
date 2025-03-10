@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -9,8 +8,31 @@ import (
 	"time"
 )
 
-// createTable creates the necessary tables if they don't exist
-func createTable(db *sql.DB, config Config) error {
+// Database defines the interface for database operations
+type Database interface {
+	CreateTable(config Config) error
+	Save(items []BlockData, config Config) error
+	GetExistingBlocks(startRange, endRange int, config Config) (map[int]bool, error)
+	Ping() error
+	GetStats() (count int, avgTime, minTime, maxTime time.Duration, failures int, rate float64)
+}
+
+// SQLDatabase implements Database using SQL
+type SQLDatabase struct {
+	db      *sql.DB
+	metrics *Metrics
+}
+
+// NewDatabase creates a new Database instance
+func NewSQLDatabase(db *sql.DB) *SQLDatabase {
+	return &SQLDatabase{
+		db:      db,
+		metrics: NewMetrics("Postgres"),
+	}
+}
+
+// CreateTable creates the necessary tables if they don't exist
+func (s *SQLDatabase) CreateTable(config Config) error {
 	// Sanitize chain name
 	chainName := sanitizeChainName(config.Chain, config.Relaychain)
 
@@ -18,12 +40,12 @@ func createTable(db *sql.DB, config Config) error {
 	blocksTable := fmt.Sprintf("blocks_%s_%s", strings.ToLower(config.Relaychain), chainName)
 
 	// Create the blocks table
-	_, err := db.Exec(fmt.Sprintf(`
+	_, err := s.db.Exec(fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
 			block_id INTEGER PRIMARY KEY,
 			timestamp TIMESTAMP,
 			hash TEXT,
-			parenthash TEXT,
+			parent_hash TEXT,
 			state_root TEXT,
 			extrinsics_root TEXT,
 			author_id TEXT,
@@ -40,7 +62,7 @@ func createTable(db *sql.DB, config Config) error {
 
 	// Create address to blocks mapping table
 	address2blocksTable := fmt.Sprintf("address2blocks_%s_%s", strings.ToLower(config.Relaychain), chainName)
-	_, err = db.Exec(fmt.Sprintf(`
+	_, err = s.db.Exec(fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
 			address TEXT,
 			block_id INTEGER,
@@ -52,7 +74,7 @@ func createTable(db *sql.DB, config Config) error {
 	}
 
 	// Create index on address column
-	_, err = db.Exec(fmt.Sprintf(`
+	_, err = s.db.Exec(fmt.Sprintf(`
 		CREATE INDEX IF NOT EXISTS %s_address_idx ON %s (address)
 	`, address2blocksTable, address2blocksTable))
 	if err != nil {
@@ -62,11 +84,18 @@ func createTable(db *sql.DB, config Config) error {
 	return nil
 }
 
-// saveToDatabase saves the given items to the database
-func saveToDatabase(db *sql.DB, items []BlockData, config Config) error {
+// Save saves the given items to the database
+func (s *SQLDatabase) Save(items []BlockData, config Config) error {
 	if len(items) == 0 {
 		return nil
 	}
+
+	start := time.Now()
+	defer func(start time.Time) {
+		go func(start time.Time, err error) {
+			s.metrics.RecordLatency(start, len(items), 0, err)
+		}(start, nil)
+	}(start)
 
 	// Sanitize chain name
 	chainName := sanitizeChainName(config.Chain, config.Relaychain)
@@ -76,7 +105,7 @@ func saveToDatabase(db *sql.DB, items []BlockData, config Config) error {
 	address2blocksTable := fmt.Sprintf("address2blocks_%s_%s", strings.ToLower(config.Relaychain), chainName)
 
 	// Begin transaction
-	tx, err := db.Begin()
+	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("error beginning transaction: %w", err)
 	}
@@ -92,19 +121,19 @@ func saveToDatabase(db *sql.DB, items []BlockData, config Config) error {
 	// Prepare statement for blocks table
 	blocksStmt, err := tx.Prepare(fmt.Sprintf(`
 		INSERT INTO %s (
-			block_id, timestamp, hash, parenthash, stateroot, extrinsicsroot,
-			authorid, finalized, oninitialize, onfinalize, logs, extrinsics
+			block_id, timestamp, hash, parent_hash, state_root, extrinsics_root,
+			author_id, finalized, on_initialize, on_finalize, logs, extrinsics
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (block_id) DO UPDATE SET
 			timestamp = EXCLUDED.timestamp,
 			hash = EXCLUDED.hash,
-			parenthash = EXCLUDED.parenthash,
-			stateroot = EXCLUDED.stateroot,
-			extrinsicsroot = EXCLUDED.extrinsicsroot,
-			authorid = EXCLUDED.authorid,
+			parent_hash = EXCLUDED.parent_hash,
+			state_root = EXCLUDED.state_root,
+			extrinsics_root = EXCLUDED.extrinsics_root,
+			author_id = EXCLUDED.author_id,
 			finalized = EXCLUDED.finalized,
-			oninitialize = EXCLUDED.oninitialize,
-			onfinalize = EXCLUDED.onfinalize,
+			on_initialize = EXCLUDED.on_initialize,
+			on_finalize = EXCLUDED.on_finalize,
 			logs = EXCLUDED.logs,
 			extrinsics = EXCLUDED.extrinsics
 	`, blocksTable))
@@ -169,6 +198,42 @@ func saveToDatabase(db *sql.DB, items []BlockData, config Config) error {
 	return nil
 }
 
+// GetExistingBlocks retrieves a list of block IDs that already exist in the database
+func (s *SQLDatabase) GetExistingBlocks(startRange, endRange int, config Config) (map[int]bool, error) {
+	// Sanitize chain name
+	chainName := sanitizeChainName(config.Chain, config.Relaychain)
+
+	// Create blocks table name
+	blocksTable := fmt.Sprintf("blocks_%s_%s", strings.ToLower(config.Relaychain), chainName)
+
+	// Query for existing blocks
+	rows, err := s.db.Query(fmt.Sprintf("SELECT block_id FROM %s WHERE block_id BETWEEN $1 AND $2", blocksTable), startRange, endRange)
+	if err != nil {
+		return nil, fmt.Errorf("error querying for existing blocks: %w", err)
+	}
+	defer rows.Close()
+
+	// Create map of existing blocks
+	existingBlocks := make(map[int]bool)
+	for rows.Next() {
+		var blockID int
+		if err := rows.Scan(&blockID); err != nil {
+			return nil, fmt.Errorf("error scanning block ID: %w", err)
+		}
+		existingBlocks[blockID] = true
+	}
+
+	return existingBlocks, nil
+}
+
+func (s *SQLDatabase) Ping() error {
+	return s.db.Ping()
+}
+
+func (s *SQLDatabase) GetStats() (count int, avgTime, minTime, maxTime time.Duration, failures int, rate float64) {
+	return s.metrics.GetStats()
+}
+
 // sanitizeChainName removes non-alphanumeric characters and the relaychain name from the chain name
 func sanitizeChainName(initialChainName, initialRelaychainName string) string {
 	chainName := strings.ToLower(initialChainName)
@@ -188,88 +253,4 @@ func sanitizeChainName(initialChainName, initialRelaychainName string) string {
 		chainName = strings.ReplaceAll(chainName, relaychainName, "")
 	}
 	return chainName
-}
-
-// getExistingBlocks retrieves a list of block IDs that already exist in the database
-func getExistingBlocks(db *sql.DB, startRange, endRange int, config Config) (map[int]bool, error) {
-	// Sanitize chain name
-	chainName := sanitizeChainName(config.Chain, config.Relaychain)
-
-	// Create blocks table name
-	blocksTable := fmt.Sprintf("blocks_%s_%s", strings.ToLower(config.Relaychain), chainName)
-
-	// Query for existing blocks
-	query := fmt.Sprintf("SELECT block_id FROM %s WHERE block_id BETWEEN $1 AND $2", blocksTable)
-	rows, err := db.Query(query, startRange, endRange)
-	if err != nil {
-		return nil, fmt.Errorf("error querying existing blocks: %w", err)
-	}
-	defer rows.Close()
-
-	// Create a map to store existing block IDs
-	existingBlocks := make(map[int]bool)
-	// Iterate through the results
-	for rows.Next() {
-		var blockID int
-		if err := rows.Scan(&blockID); err != nil {
-			return nil, fmt.Errorf("error scanning block ID: %w", err)
-		}
-		existingBlocks[blockID] = true
-	}
-
-	// Check for errors from iterating over rows
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating over rows: %w", err)
-	}
-
-	return existingBlocks, nil
-}
-
-// monitorNewBlocks continuously monitors for new blocks and adds them to the database
-func monitorNewBlocks(ctx context.Context, config Config, db *sql.DB, lastProcessedBlock int) {
-	// Create a ticker that ticks every second
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("Block monitor stopped due to context cancellation")
-			return
-		case <-ticker.C:
-			// Fetch the current head block
-			headBlock, err := fetchHeadBlock(config.SidecarURL)
-			if err != nil {
-				log.Printf("Error fetching head block: %v", err)
-				continue
-			}
-
-			// Check if there are new blocks
-			if headBlock > lastProcessedBlock {
-				log.Printf("New blocks detected: %d to %d", lastProcessedBlock+1, headBlock)
-
-				// Create array of block IDs to fetch
-				blockIDs := make([]int, 0, headBlock-lastProcessedBlock)
-				for id := lastProcessedBlock + 1; id <= headBlock; id++ {
-					blockIDs = append(blockIDs, id)
-				}
-
-				// Fetch and process the new blocks
-				blocks, err := fetchBlockRange(ctx, blockIDs, config.SidecarURL)
-				if err != nil {
-					log.Printf("Error fetching block range: %v", err)
-					continue
-				}
-
-				// Save the blocks to the database
-				if err := saveToDatabase(db, blocks, config); err != nil {
-					log.Printf("Error saving blocks to database: %v", err)
-					continue
-				}
-
-				// Update the last processed block
-				lastProcessedBlock = headBlock
-			}
-		}
-	}
 }

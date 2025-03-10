@@ -10,26 +10,38 @@ import (
 	"time"
 )
 
-// Global metrics for sidecar API calls
-var sidecarMetrics = NewSidecarMetrics()
+type ChainReader interface {
+	GetChainHeadID() (int, error)
+	FetchBlockRange(ctx context.Context, blockIDs []int) ([]BlockData, error)
+	FetchBlock(ctx context.Context, id int) (BlockData, error)
+	Ping() error
+	GetStats() (count int, avgTime, minTime, maxTime time.Duration, failures int, rate float64)
+}
 
-// fetchData fetches data for a single block from the sidecar API
-func fetchData(ctx context.Context, id int, sidecarURL string) (BlockData, error) {
-	return fetchBlock(ctx, id, sidecarURL)
+type Sidecar struct {
+	url     string
+	metrics *Metrics
+}
+
+func NewSidecar(url string) *Sidecar {
+	return &Sidecar{
+		url:     url,
+		metrics: NewMetrics("Sidecar"),
+	}
 }
 
 // fetchHeadBlock fetches the current head block from the sidecar API
-func fetchHeadBlock(sidecarURL string) (int, error) {
+func (s *Sidecar) GetChainHeadID() (int, error) {
+
 	start := time.Now()
 	defer func(start time.Time) {
-		// log.Printf("Sidecar API call for head block took %v", time.Since(start))
 		go func(start time.Time, err error) {
-			sidecarMetrics.RecordLatency(start, err)
+			s.metrics.RecordLatency(start, 1, 0, err)
 		}(start, nil)
 	}(start)
 
 	// Construct the URL for the head block
-	url := fmt.Sprintf("%s/blocks/head", sidecarURL)
+	url := fmt.Sprintf("%s/blocks/head", s.url)
 
 	// Make the request
 	resp, err := http.Get(url)
@@ -62,19 +74,19 @@ func fetchHeadBlock(sidecarURL string) (int, error) {
 }
 
 // fetchBlockRange fetches blocks with the specified IDs from the sidecar API
-func fetchBlockRange(ctx context.Context, blockIDs []int, sidecarURL string) ([]BlockData, error) {
-	start := time.Now()
-	defer func(start time.Time) {
-		// log.Printf("Sidecar API call for %d blocks took %v", len(blockIDs), time.Since(start))
-		go func(start time.Time, err error) {
-			sidecarMetrics.RecordLatency(start, err)
-		}(start, nil)
-	}(start)
+func (s *Sidecar) FetchBlockRange(ctx context.Context, blockIDs []int) ([]BlockData, error) {
 
 	// If no block IDs are provided, return an empty slice
 	if len(blockIDs) == 0 {
 		return []BlockData{}, nil
 	}
+
+	start := time.Now()
+	defer func(start time.Time) {
+		go func(start time.Time, err error) {
+			s.metrics.RecordLatency(start, len(blockIDs), 0, err)
+		}(start, nil)
+	}(start)
 
 	// For now, we'll convert the array to a range query if the blocks are sequential
 	// This is more efficient for the API but can be modified later if needed
@@ -94,7 +106,7 @@ func fetchBlockRange(ctx context.Context, blockIDs []int, sidecarURL string) ([]
 		endID := blockIDs[len(blockIDs)-1]
 
 		// Construct the URL for the block range
-		url := fmt.Sprintf("%s/blocks?range=%d-%d", sidecarURL, startID, endID)
+		url := fmt.Sprintf("%s/blocks?range=%d-%d", s.url, startID, endID)
 
 		// Make the request
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -127,7 +139,7 @@ func fetchBlockRange(ctx context.Context, blockIDs []int, sidecarURL string) ([]
 		// Fetch blocks individually for non-sequential IDs
 		blocks = make([]BlockData, 0, len(blockIDs))
 		for _, id := range blockIDs {
-			block, err := fetchBlock(ctx, id, sidecarURL)
+			block, err := s.FetchBlock(ctx, id)
 			if err != nil {
 				return nil, fmt.Errorf("error fetching block %d: %w", id, err)
 			}
@@ -139,17 +151,16 @@ func fetchBlockRange(ctx context.Context, blockIDs []int, sidecarURL string) ([]
 }
 
 // fetchBlock makes a call to the sidecar API to fetch a single block
-func fetchBlock(ctx context.Context, id int, sidecarURL string) (BlockData, error) {
+func (s *Sidecar) FetchBlock(ctx context.Context, id int) (BlockData, error) {
 	start := time.Now()
 	defer func(start time.Time) {
-		// log.Printf("Sidecar API call for block %d took %v", id, time.Since(start))
 		go func(start time.Time, err error) {
-			sidecarMetrics.RecordLatency(start, err)
+			s.metrics.RecordLatency(start, 1, 0, err)
 		}(start, nil)
 	}(start)
 
 	// Construct the URL for the block
-	url := fmt.Sprintf("%s/blocks/%d", sidecarURL, id)
+	url := fmt.Sprintf("%s/blocks/%d", s.url, id)
 
 	// Make the request
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -184,11 +195,11 @@ func fetchBlock(ctx context.Context, id int, sidecarURL string) (BlockData, erro
 }
 
 // testSidecarService tests if the sidecar service is available
-func pingSidecarService(sidecarURL string) error {
+func (s *Sidecar) Ping() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", sidecarURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", s.url, nil)
 	if err != nil {
 		return fmt.Errorf("error creating request: %w", err)
 	}
@@ -204,4 +215,8 @@ func pingSidecarService(sidecarURL string) error {
 	}
 
 	return nil
+}
+
+func (s *Sidecar) GetStats() (count int, avgTime, minTime, maxTime time.Duration, failures int, rate float64) {
+	return s.metrics.GetStats()
 }

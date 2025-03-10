@@ -7,23 +7,23 @@ import (
 )
 
 type Config struct {
-	StartRange   int
-	EndRange     int
-	SidecarURL   string
-	PostgresURI  string
-	BatchSize    int
-	MaxWorkers   int
-	FlushTimeout time.Duration
-	Relaychain   string
-	Chain        string
-	Live         bool
+	StartRange     int
+	EndRange       int
+	ChainReaderURL string
+	DatabaseURL    string
+	BatchSize      int
+	MaxWorkers     int
+	FlushTimeout   time.Duration
+	Relaychain     string
+	Chain          string
+	Live           bool
 }
 
 func parseFlags() Config {
 	startRange := flag.Int("start", 1, "Start of the integer range")
 	endRange := flag.Int("end", 10, "End of the integer range")
-	sidecarURL := flag.String("sidecar", "", "Sidecar URL")
-	postgresURI := flag.String("postgres", "", "PostgreSQL connection URI")
+	chainReaderURL := flag.String("chainreader", "", "Chain reader URL: sidecar or go")
+	databaseURL := flag.String("database", "", "Database URL")
 	batchSize := flag.Int("batch", 10, "Number of items to collect before writing to database")
 	maxWorkers := flag.Int("workers", 5, "Maximum number of concurrent workers")
 	flushTimeout := flag.Duration("flush", 30*time.Second, "Maximum time to wait before flushing data to database")
@@ -34,16 +34,16 @@ func parseFlags() Config {
 	flag.Parse()
 
 	return Config{
-		StartRange:   *startRange,
-		EndRange:     *endRange,
-		SidecarURL:   *sidecarURL,
-		PostgresURI:  *postgresURI,
-		BatchSize:    *batchSize,
-		MaxWorkers:   *maxWorkers,
-		FlushTimeout: *flushTimeout,
-		Relaychain:   *relaychain,
-		Chain:        *chain,
-		Live:         *live,
+		StartRange:     *startRange,
+		EndRange:       *endRange,
+		ChainReaderURL: *chainReaderURL,
+		DatabaseURL:    *databaseURL,
+		BatchSize:      *batchSize,
+		MaxWorkers:     *maxWorkers,
+		FlushTimeout:   *flushTimeout,
+		Relaychain:     *relaychain,
+		Chain:          *chain,
+		Live:           *live,
 	}
 }
 
@@ -55,12 +55,12 @@ func validateConfig(config Config) error {
 		}
 	}
 
-	if config.SidecarURL == "" {
-		return fmt.Errorf("sidecar url is required")
+	if config.ChainReaderURL == "" {
+		return fmt.Errorf("chainReader url is required")
 	}
 
-	if config.PostgresURI == "" {
-		return fmt.Errorf("postgres uri is required")
+	if config.DatabaseURL == "" {
+		return fmt.Errorf("database url is required")
 	}
 
 	if config.BatchSize <= 0 {
