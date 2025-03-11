@@ -302,8 +302,8 @@ func NewStats(ctx context.Context, db Database, reader ChainReader) *Stats {
 	return &Stats{
 		db:           db,
 		reader:       reader,
-		tickerHeader: time.NewTicker(120 * time.Second),
-		tickerInfo:   time.NewTicker(10 * time.Second),
+		tickerHeader: time.NewTicker(300 * time.Second),
+		tickerInfo:   time.NewTicker(15 * time.Second),
 		context:      ctx,
 	}
 }
@@ -314,25 +314,24 @@ func (s *Stats) Print() error {
 		case <-s.context.Done():
 			return nil
 		case <-s.tickerHeader.C:
-			log.Printf("+-- Blocks ---|------ Chain Reader ----|------- DBwriter -------------+")
-			log.Printf("| #----#  b/s | Latency          Error |  tr/s Latency          Error |")
-			log.Printf("|             | avg min max (ms)     %% |       avg min max (ms)    %%  |")
-			log.Printf("+-------------|------------------------|------------------------------|")
+			log.Printf("+-- Blocks -------------|------ Chain Reader ----|------- DBwriter -------------+")
+			log.Printf("| #----#  b/s  b/s  b/s | Latency          Error |  tr/s Latency          Error |")
+			log.Printf("|          1d   1h   5m | avg min max (ms)     %% |       avg min max (ms)    %%  |")
+			log.Printf("+-----------------------|------------------------|------------------------------|")
 		case <-s.tickerInfo.C:
-			rs_count, rs_avg, rs_min, rs_max, rs_failures, rs_rate := s.reader.GetStats()
-			ds_count, ds_avg, ds_min, ds_max, ds_failures, ds_rate := s.db.GetStats()
-			log.Printf("| %6d %4.1f | %3d %3d %4d    %3.0f%%   |  %3.1f  %3d %3d %4d    %3.0f%%  |",
-				rs_count, rs_rate,
-				rs_avg.Milliseconds(),
-				rs_min.Milliseconds(),
-				rs_max.Milliseconds(),
-				float64(rs_failures)/float64(rs_count+rs_failures)*100,
-				ds_rate,
-				ds_avg.Milliseconds(),
-				ds_min.Milliseconds(),
-				ds_max.Milliseconds(),
-				float64(ds_failures)/float64(ds_count+ds_failures)*100)
-
+			rs := s.reader.GetStats().bucketsStats
+			ds := s.db.GetStats().bucketsStats
+			log.Printf("| %6d %4.1f %4.1f %4.1f | %3d %3d %4d    %3.0f%%   |  %3.1f  %3d %3d %4d    %3.0f%%  |",
+				rs[0].count, rs[0].rate, rs[1].rate, rs[2].rate,
+				rs[0].avg.Milliseconds(),
+				rs[0].min.Milliseconds(),
+				rs[0].max.Milliseconds(),
+				float64(rs[0].failures)/float64(rs[0].count+rs[0].failures)*100,
+				ds[0].rate,
+				ds[0].avg.Milliseconds(),
+				ds[0].min.Milliseconds(),
+				ds[0].max.Milliseconds(),
+				float64(ds[0].failures)/float64(ds[0].count+ds[0].failures)*100)
 		}
 	}
 }

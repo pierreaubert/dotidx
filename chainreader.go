@@ -15,7 +15,7 @@ type ChainReader interface {
 	FetchBlockRange(ctx context.Context, blockIDs []int) ([]BlockData, error)
 	FetchBlock(ctx context.Context, id int) (BlockData, error)
 	Ping() error
-	GetStats() (count int, avgTime, minTime, maxTime time.Duration, failures int, rate float64)
+	GetStats() *MetricsStats
 }
 
 type Sidecar struct {
@@ -46,25 +46,25 @@ func (s *Sidecar) GetChainHeadID() (int, error) {
 	// Make the request
 	resp, err := http.Get(url)
 	if err != nil {
-		return 0, fmt.Errorf("error fetching head block: %w", err)
+		return -1, fmt.Errorf("error fetching head block: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Check the status code
 	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("sidecar API returned status code %d", resp.StatusCode)
+		return -1, fmt.Errorf("sidecar API returned status code %d", resp.StatusCode)
 	}
 
 	// Read the response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return 0, fmt.Errorf("error reading response body for block range: %w", err)
+		return -1, fmt.Errorf("error reading response body for block range: %w", err)
 	}
 
 	// Parse the response
 	var block BlockData
-	if err := json.Unmarshal(body, &block); err != nil {
-		return 0, fmt.Errorf("error parsing head block response: %w", err)
+	if err = json.Unmarshal(body, &block); err != nil {
+		return -1, fmt.Errorf("error parsing head block response: %w", err)
 	}
 	blockID, err := strconv.Atoi(block.ID)
 	if err != nil {
@@ -217,6 +217,6 @@ func (s *Sidecar) Ping() error {
 	return nil
 }
 
-func (s *Sidecar) GetStats() (count int, avgTime, minTime, maxTime time.Duration, failures int, rate float64) {
+func (s *Sidecar) GetStats() *MetricsStats {
 	return s.metrics.GetStats()
 }

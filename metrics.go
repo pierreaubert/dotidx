@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-// Metrics tracks performance metrics for sidecar API calls
-type Metrics struct {
+// Bucket tracks performance metrics for sidecar API calls
+type Bucket struct {
 	mutex     sync.Mutex
 	callCount int
 	totalTime time.Duration
@@ -15,22 +15,45 @@ type Metrics struct {
 	maxTime   time.Duration
 	failures  int
 	name      string
+	window    time.Duration
+	startedAt time.Time
 }
 
-// NewMetrics creates a new Metrics instance
-func NewMetrics(name string) *Metrics {
-	return &Metrics{
-		minTime: time.Hour, // Initialize with a large value
-		name:    name,
+type BucketStats struct {
+	count, failures int
+	avg, min, max   time.Duration
+	rate            float64
+}
+
+// NewBucket creates a new Bucket instance
+func NewBucket(name string, window time.Duration) *Bucket {
+	return &Bucket{
+		minTime:   time.Hour, // Initialize with a large value
+		name:      name,
+		window:    window,
+		startedAt: time.Now(),
 	}
 }
 
+func NewBucketStats() BucketStats {
+	return BucketStats{}
+}
+
 // RecordLatency records the latency of a sidecar API call
-func (m *Metrics) RecordLatency(start time.Time, countOK int, countError int, err error) {
+func (m *Bucket) RecordLatency(start time.Time, countOK int, countError int, err error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
 	duration := time.Since(start)
+
+	current := time.Since(m.startedAt)
+	if current >= m.window {
+		m.callCount = 0
+		m.failures = 0
+		m.totalTime = 0
+		m.minTime = m.window + time.Duration(time.Minute)
+		m.startedAt = time.Now()
+	}
 	if err != nil {
 		m.callCount += countError
 		m.failures += countOK
@@ -52,31 +75,86 @@ func (m *Metrics) RecordLatency(start time.Time, countOK int, countError int, er
 }
 
 // GetStats returns the current metrics statistics
-func (m *Metrics) GetStats() (count int, avgTime, minTime, maxTime time.Duration, failures int, rate float64) {
+func (m *Bucket) GetStats() (bs BucketStats) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	count = m.callCount
-	failures = m.failures
+	bs.count = m.callCount
+	bs.failures = m.failures
 
-	if count > 0 {
-		avgTime = (m.totalTime / time.Duration(count)).Round(time.Millisecond)
-		minTime = m.minTime.Round(time.Millisecond)
-		maxTime = m.maxTime.Round(time.Millisecond)
-		rate = float64(count+failures) / m.totalTime.Seconds()
+	if bs.count > 0 {
+		bs.avg = (m.totalTime / time.Duration(bs.count)).Round(time.Millisecond)
+		bs.min = m.minTime.Round(time.Millisecond)
+		bs.max = m.maxTime.Round(time.Millisecond)
+		bs.rate = float64(bs.count+bs.failures) / m.totalTime.Seconds()
 	}
 
 	return
 }
 
 // PrintStats prints the current metrics statistics
-func (m *Metrics) PrintStats(printHeader bool) {
-	count, avgTime, minTime, maxTime, failures, rate := m.GetStats()
+func (m *Bucket) PrintStats(printHeader bool) {
+	bs := m.GetStats()
 	if printHeader {
-		log.Printf("Statistics: Total calls: %d failure: %d rate: %.1fs", count, failures, rate)
+		log.Printf("Statistics: Total calls: %d failure: %d rate: %.1fs", bs.count, bs.failures, bs.rate)
 	}
-	if count > 0 {
+	if bs.count > 0 {
 		log.Printf("  Latency avg: %v min: %v max: %v Success rate: %.2f%%",
-			avgTime, minTime, maxTime, float64(count)/(float64(count+failures))*100)
+			bs.avg, bs.min, bs.max, float64(bs.count)/(float64(bs.count+bs.failures))*100)
+	}
+}
+
+// Metrics tracks performance metrics for API calls
+type Metrics struct {
+	buckets []*Bucket
+}
+
+type MetricsStats struct {
+	bucketsStats [4]BucketStats
+}
+
+// NewMetrics creates a new Metrics instance
+func NewMetrics(name string) *Metrics {
+	return &Metrics{
+		buckets: []*Bucket{
+			NewBucket(name, time.Duration(time.Hour*24)),
+			NewBucket(name, time.Duration(time.Hour)),
+			NewBucket(name, time.Duration(time.Minute*5)),
+			NewBucket(name, time.Duration(time.Minute)),
+		},
+	}
+}
+
+// RecordLatency records the latency of a sidecar API call
+func (m *Metrics) RecordLatency(start time.Time, countOK int, countError int, err error) {
+	for i := range m.buckets {
+		m.buckets[i].RecordLatency(start, countOK, countError, err)
+	}
+}
+
+func NewMetricsStats() *MetricsStats {
+	return &MetricsStats{
+		bucketsStats: [4]BucketStats{
+			NewBucketStats(),
+			NewBucketStats(),
+			NewBucketStats(),
+			NewBucketStats(),
+		},
+	}
+}
+
+// GetStats returns the current metrics statistics
+func (m *Metrics) GetStats() (s *MetricsStats) {
+	s = NewMetricsStats()
+	for i := range m.buckets {
+		s.bucketsStats[i] = m.buckets[i].GetStats()
+	}
+	return
+}
+
+// PrintStats prints the current metrics statistics
+func (m *Metrics) PrintStats(printHeader bool) {
+	for i := range m.buckets {
+		m.buckets[i].PrintStats(printHeader)
 	}
 }

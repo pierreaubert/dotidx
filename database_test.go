@@ -20,7 +20,7 @@ func TestSaveToDatabase(t *testing.T) {
 	// Create test data
 	testData := []BlockData{
 		{
-			ID:             1,
+			ID:             "1",
 			Timestamp:      time.Now(),
 			Hash:           "0x1234567890abcdef1234567890abcdef",
 			ParentHash:     "0xabcdef1234567890abcdef1234567890",
@@ -41,7 +41,7 @@ func TestSaveToDatabase(t *testing.T) {
 			]`),
 		},
 		{
-			ID:             2,
+			ID:             "2",
 			Timestamp:      time.Now(),
 			Hash:           "0xabcdef1234567890abcdef1234567890",
 			ParentHash:     "0x1234567890abcdef1234567890abcdef",
@@ -89,8 +89,10 @@ func TestSaveToDatabase(t *testing.T) {
 		Chain:      "chain",
 	}
 
+	database := NewSQLDatabase(db)
+
 	// Call the function being tested
-	err = saveToDatabase(db, testData, testConfig)
+	err = database.Save(testData, testConfig)
 	if err != nil {
 		t.Errorf("saveToDatabase returned an error: %v", err)
 	}
@@ -124,8 +126,10 @@ func TestCreateTable(t *testing.T) {
 		Chain:      "chain",
 	}
 
+	database := NewSQLDatabase(db)
+
 	// Call the function being tested
-	err = createTable(db, testConfig)
+	err = database.CreateTable(testConfig)
 	if err != nil {
 		t.Errorf("createTable returned an error: %v", err)
 	}

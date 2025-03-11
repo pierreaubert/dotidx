@@ -14,8 +14,12 @@ type Database interface {
 	Save(items []BlockData, config Config) error
 	GetExistingBlocks(startRange, endRange int, config Config) (map[int]bool, error)
 	Ping() error
-	GetStats() (count int, avgTime, minTime, maxTime time.Duration, failures int, rate float64)
+	GetStats() *MetricsStats
+	DoUpgrade(config Config) error
 }
+
+// version of schema for upgrade
+const SQLDatabaseSchemaVersion = 2
 
 // SQLDatabase implements Database using SQL
 type SQLDatabase struct {
@@ -23,7 +27,7 @@ type SQLDatabase struct {
 	metrics *Metrics
 }
 
-// NewDatabase creates a new Database instance
+// NewSQLDatabase creates a new Database instance
 func NewSQLDatabase(db *sql.DB) *SQLDatabase {
 	return &SQLDatabase{
 		db:      db,
@@ -31,19 +35,36 @@ func NewSQLDatabase(db *sql.DB) *SQLDatabase {
 	}
 }
 
+func (s *SQLDatabase) DoUpgrade(config Config) error {
+
+	// create dotlake version table to track migrations
+	_, err := s.db.Exec(`
+		CREATE TABLE IF NOT EXISTS dotlake_version (
+			version_id INTEGER NOT NULL,
+			timestamp TIMESTAMP WITHOUT TIME ZONE,
+                        CONSTRAINT dotlake_version_pkey PRIMARY KEY (version_id)
+		)
+        `)
+	if err != nil {
+		return fmt.Errorf("error creating table: %w", err)
+	}
+
+	return nil
+}
+
 // CreateTable creates the necessary tables if they don't exist
 func (s *SQLDatabase) CreateTable(config Config) error {
-	// Sanitize chain name
+	const schemaName = "public"
 	chainName := sanitizeChainName(config.Chain, config.Relaychain)
 
 	// Create blocks table
-	blocksTable := fmt.Sprintf("blocks_%s_%s", strings.ToLower(config.Relaychain), chainName)
+	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 
 	// Create the blocks table
 	_, err := s.db.Exec(fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
-			block_id INTEGER PRIMARY KEY,
-			timestamp TIMESTAMP,
+			block_id INTEGER NOT NULL,
+			timestamp TIMESTAMP WITHOUT TIME ZONE,
 			hash TEXT,
 			parent_hash TEXT,
 			state_root TEXT,
@@ -53,11 +74,23 @@ func (s *SQLDatabase) CreateTable(config Config) error {
 			on_initialize JSONB,
 			on_finalize JSONB,
 			logs JSONB,
-			extrinsics JSONB
+			extrinsics JSONB,
+                        CONSTRAINT blocks_polkadot_polkadot_pkey PRIMARY KEY (block_id)
 		)
 	`, blocksTable))
 	if err != nil {
 		return fmt.Errorf("error creating blocks table: %w", err)
+	}
+
+	// Create index on address column
+	_, err = s.db.Exec(fmt.Sprintf(`
+                CREATE INDEX IF NOT EXISTS extrinsincs_idx
+                ON %s USING gin(extrinsics jsonb_path_ops)
+                WITH (fastupdate=True)
+                TABLESPACE pg_default;
+	`, blocksTable))
+	if err != nil {
+		return fmt.Errorf("error creating index on address column: %w", err)
 	}
 
 	// Create address to blocks mapping table
@@ -230,7 +263,7 @@ func (s *SQLDatabase) Ping() error {
 	return s.db.Ping()
 }
 
-func (s *SQLDatabase) GetStats() (count int, avgTime, minTime, maxTime time.Duration, failures int, rate float64) {
+func (s *SQLDatabase) GetStats() *MetricsStats {
 	return s.metrics.GetStats()
 }
 

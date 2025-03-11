@@ -27,7 +27,7 @@ func TestFetchHeadBlock(t *testing.T) {
 
 		// Create a mock block with ID 12345
 		mockBlock := BlockData{
-			ID:             12345,
+			ID:             "12345",
 			Timestamp:      time.Now(),
 			Hash:           "0xabcdef1234567890",
 			ParentHash:     "0x1234567890abcdef",
@@ -35,22 +35,28 @@ func TestFetchHeadBlock(t *testing.T) {
 			ExtrinsicsRoot: "0x1234567890abcdef",
 			AuthorID:       "0xabcdef1234",
 			Finalized:      true,
+			OnInitialize:   json.RawMessage("{}"),
+			OnFinalize:     json.RawMessage("{}"),
+			Logs:           json.RawMessage("{}"),
+			Extrinsics:     json.RawMessage("{}"),
 		}
 
 		json.NewEncoder(w).Encode(mockBlock)
 	}))
 	defer server.Close()
 
+	reader := NewSidecar(server.URL)
+
 	// Call the fetchHeadBlock function with the test server URL
-	headBlock, err := fetchHeadBlock(server.URL)
+	headBlockID, err := reader.GetChainHeadID()
 	if err != nil {
 		t.Fatalf("fetchHeadBlock returned an error: %v", err)
 	}
 
 	// Verify the returned head block ID
 	expectedID := 12345
-	if headBlock != expectedID {
-		t.Errorf("Expected head block ID %d, got %d", expectedID, headBlock)
+	if headBlockID != expectedID {
+		t.Errorf("Expected head block ID %d, got %d", expectedID, headBlockID)
 	}
 }
 
@@ -58,7 +64,7 @@ func TestCallSidecar(t *testing.T) {
 	// Create a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check if the request URL matches the expected pattern
-		if r.URL.Path != "/blocks" || r.URL.Query().Get("id") != "1" {
+		if r.URL.Path != "/blocks/1" || r.URL.Query().Get("id") != "1" {
 			t.Errorf("Expected request to '/blocks/1', got '%s' with query params %v", r.URL.Path, r.URL.Query())
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
@@ -68,7 +74,7 @@ func TestCallSidecar(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, `{
-			"number": 1,
+			"number": "1",
 			"timestamp": "2023-01-01T00:00:00Z",
 			"hash": "0x1234567890abcdef",
 			"parentHash": "0xabcdef1234567890",
@@ -88,14 +94,15 @@ func TestCallSidecar(t *testing.T) {
 	ctx := context.Background()
 
 	// Call the function
-	blockData, err := fetchData(ctx, 1, server.URL)
+	reader := NewSidecar(server.URL)
+	blockData, err := reader.FetchBlock(ctx, 1)
 	if err != nil {
 		t.Fatalf("fetchData returned an error: %v", err)
 	}
 
 	// Check the result
-	if blockData.ID != 1 {
-		t.Errorf("Expected ID=1, got %d", blockData.ID)
+	if blockData.ID != "1" {
+		t.Errorf("Expected ID=1, got %s", blockData.ID)
 	}
 	if blockData.Hash != "0x1234567890abcdef" {
 		t.Errorf("Expected Hash=0x1234567890abcdef, got %s", blockData.Hash)
@@ -185,8 +192,10 @@ func TestFetchBlockRange(t *testing.T) {
 	// Create an array of block IDs to fetch
 	blockIDs := []int{100, 101, 102, 103, 104, 105}
 
+	reader := NewSidecar(server.URL)
+
 	// Call the function to fetch blocks with the specified IDs
-	blocks, err := fetchBlockRange(ctx, blockIDs, server.URL)
+	blocks, err := reader.FetchBlockRange(ctx, blockIDs)
 	if err != nil {
 		t.Fatalf("fetchBlockRange returned an error: %v", err)
 	}
@@ -197,24 +206,24 @@ func TestFetchBlockRange(t *testing.T) {
 	}
 
 	// Check the first block
-	if blocks[0].ID != 100 {
-		t.Errorf("Expected first block ID=100, got %d", blocks[0].ID)
+	if blocks[0].ID != "100" {
+		t.Errorf("Expected first block ID=100, got %s", blocks[0].ID)
 	}
 	if blocks[0].Hash != "0x1234567890abcdef1" {
 		t.Errorf("Expected first block Hash=0x1234567890abcdef1, got %s", blocks[0].Hash)
 	}
 
 	// Check the second block
-	if blocks[1].ID != 101 {
-		t.Errorf("Expected second block ID=101, got %d", blocks[1].ID)
+	if blocks[1].ID != "101" {
+		t.Errorf("Expected second block ID=101, got %s", blocks[1].ID)
 	}
 	if blocks[1].Hash != "0x1234567890abcdef2" {
 		t.Errorf("Expected second block Hash=0x1234567890abcdef2, got %s", blocks[1].Hash)
 	}
 
 	// Check the third block
-	if blocks[2].ID != 102 {
-		t.Errorf("Expected third block ID=102, got %d", blocks[2].ID)
+	if blocks[2].ID != "102" {
+		t.Errorf("Expected third block ID=102, got %s", blocks[2].ID)
 	}
 	if blocks[2].Hash != "0x1234567890abcdef3" {
 		t.Errorf("Expected third block Hash=0x1234567890abcdef3, got %s", blocks[2].Hash)

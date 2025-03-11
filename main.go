@@ -62,7 +62,7 @@ func main() {
 		log.Fatalf("Failed to ping PostgreSQL: %v", err)
 	}
 
-	log.Println("Successfully connected to database %s", config.DatabaseURL)
+	log.Printf("Successfully connected to database %s", config.DatabaseURL)
 
 	// ----------------------------------------------------------------------
 	// ChainReader
@@ -95,6 +95,7 @@ func main() {
 	// If in live mode, fetch the head block and update the range
 	if config.Live {
 		log.Println("Running in live mode")
+		// Convert head block ID to integer for range
 		// Set the range from 1 to the current head block
 		config.StartRange = 1
 		config.EndRange = headBlockID
