@@ -98,7 +98,7 @@ func startWorkers(
 		}
 
 		// Send block IDs to the appropriate channel, skipping ones that already exist
-		for blockID := config.StartRange; blockID <= config.EndRange; blockID++ {
+		for blockID := startRange; blockID <= endRange; blockID++ {
 			// Skip blocks that already exist in the database
 			if existingBlocks[blockID] {
 				// If we have a batch in progress, send it since we're skipping this block
