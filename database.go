@@ -64,7 +64,7 @@ func (s *SQLDatabase) CreateTable(config Config) error {
 	_, err := s.db.Exec(fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
 			block_id INTEGER NOT NULL,
-			timestamp TIMESTAMP WITHOUT TIME ZONE,
+			created_at TIMESTAMP WITHOUT TIME ZONE,
 			hash TEXT,
 			parent_hash TEXT,
 			state_root TEXT,
@@ -154,11 +154,11 @@ func (s *SQLDatabase) Save(items []BlockData, config Config) error {
 	// Prepare statement for blocks table
 	blocksStmt, err := tx.Prepare(fmt.Sprintf(`
 		INSERT INTO %s (
-			block_id, timestamp, hash, parent_hash, state_root, extrinsics_root,
+			block_id, created_at, hash, parent_hash, state_root, extrinsics_root,
 			author_id, finalized, on_initialize, on_finalize, logs, extrinsics
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (block_id) DO UPDATE SET
-			timestamp = EXCLUDED.timestamp,
+			created_at = EXCLUDED.created_at,
 			hash = EXCLUDED.hash,
 			parent_hash = EXCLUDED.parent_hash,
 			state_root = EXCLUDED.state_root,
@@ -188,10 +188,10 @@ func (s *SQLDatabase) Save(items []BlockData, config Config) error {
 
 	// Insert items
 	for _, item := range items {
-		// Insert into blocks table
+		ts := item.Timestamp.Format("2006-01-02 15:04:05")
 		_, err = blocksStmt.Exec(
 			item.ID,
-			item.Timestamp,
+			ts,
 			item.Hash,
 			item.ParentHash,
 			item.StateRoot,

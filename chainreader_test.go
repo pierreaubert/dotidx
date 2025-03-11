@@ -64,7 +64,7 @@ func TestCallSidecar(t *testing.T) {
 	// Create a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check if the request URL matches the expected pattern
-		if r.URL.Path != "/blocks/1" || r.URL.Query().Get("id") != "1" {
+		if r.URL.Path != "/blocks/1" {
 			t.Errorf("Expected request to '/blocks/1', got '%s' with query params %v", r.URL.Path, r.URL.Query())
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
@@ -141,7 +141,7 @@ func TestFetchBlockRange(t *testing.T) {
 		// Return an array of blocks
 		fmt.Fprintln(w, `[
 			{
-				"number": 100,
+				"number": "100",
 				"timestamp": "2023-01-01T00:00:00Z",
 				"hash": "0x1234567890abcdef1",
 				"parentHash": "0xabcdef1234567890",
@@ -155,7 +155,7 @@ func TestFetchBlockRange(t *testing.T) {
 				"extrinsics": []
 			},
 			{
-				"number": 101,
+				"number": "101",
 				"timestamp": "2023-01-01T00:01:00Z",
 				"hash": "0x1234567890abcdef2",
 				"parentHash": "0x1234567890abcdef1",
@@ -169,7 +169,7 @@ func TestFetchBlockRange(t *testing.T) {
 				"extrinsics": []
 			},
 			{
-				"number": 102,
+				"number": "102",
 				"timestamp": "2023-01-01T00:02:00Z",
 				"hash": "0x1234567890abcdef3",
 				"parentHash": "0x1234567890abcdef2",

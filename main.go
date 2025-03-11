@@ -90,14 +90,18 @@ func main() {
 	log.Printf("Current head block is %d", headBlockID)
 
 	// print some stats
-	go NewStats(ctx, database, reader).Print()
+	go func() {
+		if err := NewStats(ctx, database, reader).Print(); err != nil {
+			log.Fatalf("Error monitoring stats: %v", err)
+		}
+	}()
 
 	// If in live mode, fetch the head block and update the range
 	if config.Live {
 		log.Println("Running in live mode")
 		// Convert head block ID to integer for range
 		// Set the range from 1 to the current head block
-		config.StartRange = 1
+		config.StartRange = max(1, headBlockID-100000)
 		config.EndRange = headBlockID
 
 		// Start workers to process existing blocks
