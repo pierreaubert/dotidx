@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -117,6 +119,25 @@ func (s *SQLDatabase) CreateTable(config Config) error {
 	return nil
 }
 
+func extractTimestamp(extrinsics []byte) (ts string, err error) {
+	const defaultTimestamp = "0001-01-01 00:00:00"
+	re := regexp.MustCompile("\"now\"[ ]*[:][ ]*\"[0-9]+\"")
+	texts := re.FindAllString(string(extrinsics), 1)
+	if len(texts) == 0 {
+		return defaultTimestamp, fmt.Errorf("cannot find \"now\" in extrinsics: %w", err)
+	}
+	stexts := strings.Split(texts[0], "\"")
+	if len(stexts) != 5 {
+		return defaultTimestamp, fmt.Errorf("cannot find timestamp in extrinsics: len is %d", len(stexts))
+	}
+	millis, err := strconv.ParseInt(stexts[3], 10, 64)
+	if err != nil {
+		return defaultTimestamp, fmt.Errorf("cannot convert timestamp to milliseconds: %w", err)
+	}
+	ts = time.UnixMilli(millis).Format("2006-01-02 15:04:05")
+	return
+}
+
 // Save saves the given items to the database
 func (s *SQLDatabase) Save(items []BlockData, config Config) error {
 	if len(items) == 0 {
@@ -188,7 +209,10 @@ func (s *SQLDatabase) Save(items []BlockData, config Config) error {
 
 	// Insert items
 	for _, item := range items {
-		ts := item.Timestamp.Format("2006-01-02 15:04:05")
+		ts, err := extractTimestamp(item.Extrinsics)
+		if err != nil {
+			log.Printf("warning: blockID %s could not find timestamp %v", item.ID, err)
+		}
 		_, err = blocksStmt.Exec(
 			item.ID,
 			ts,
@@ -210,7 +234,7 @@ func (s *SQLDatabase) Save(items []BlockData, config Config) error {
 		// Extract addresses from extrinsics
 		addresses, err := extractAddressesFromExtrinsics(item.Extrinsics)
 		if err != nil {
-			log.Printf("Warning: error extracting addresses from extrinsics: %v", err)
+			log.Printf("warning: error extracting addresses from extrinsics: %v", err)
 			continue
 		}
 

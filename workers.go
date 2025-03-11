@@ -14,6 +14,8 @@ func startWorkers(
 	reader ChainReader,
 	headID int) {
 
+	config.EndRange = min(config.EndRange, headID)
+
 	log.Printf("Starting %d workers to process blocks %d to %d head is at %d",
 		config.MaxWorkers, config.StartRange, config.EndRange, headID)
 
@@ -36,11 +38,9 @@ func startWorkers(
 			for {
 				select {
 				case <-ctx.Done():
-					log.Printf("Worker %d stopped due to context cancellation", workerID)
 					return
 				case blockID, ok := <-blockCh:
 					if !ok {
-						log.Printf("Worker %d finished", workerID)
 						return
 					}
 
@@ -60,11 +60,9 @@ func startWorkers(
 			for {
 				select {
 				case <-ctx.Done():
-					log.Printf("Batch worker %d stopped due to context cancellation", workerID)
 					return
 				case blockIDs, ok := <-batchCh:
 					if !ok {
-						// log.Printf("Batch worker %d finished", workerID)
 						return
 					}
 
@@ -79,20 +77,17 @@ func startWorkers(
 	var currentBatch []int
 	var lastBlockID = -1
 
-	// Get existing blocks from the database
+	// Get existing blocks from the database, limited to 100k in one go
 	const stepRange = 100000
 	startRange := config.StartRange
-	endRange := config.StartRange + stepRange
-	if endRange > config.EndRange {
-		endRange = config.EndRange
-	}
+	endRange := min(config.StartRange+stepRange, config.EndRange)
 
 	for endRange <= config.EndRange {
 
 		log.Printf(
 			"Processing %d-%d blocks full range %d-%d done %4.1f%%",
 			startRange, endRange, config.StartRange, config.EndRange,
-			float64((startRange-config.StartRange)/(config.EndRange-config.StartRange)),
+			float64((startRange-config.StartRange)/(1+config.EndRange-config.StartRange)),
 		)
 
 		existingBlocks, err := db.GetExistingBlocks(startRange, endRange, config)
@@ -106,8 +101,6 @@ func startWorkers(
 		for blockID := config.StartRange; blockID <= config.EndRange; blockID++ {
 			// Skip blocks that already exist in the database
 			if existingBlocks[blockID] {
-				// log.Printf("Skipping block %d as it already exists in the database", blockID)
-
 				// If we have a batch in progress, send it since we're skipping this block
 				if len(currentBatch) > 0 {
 					select {
@@ -181,13 +174,10 @@ func startWorkers(
 		}
 
 		startRange = endRange
-		if startRange == config.EndRange {
+		if startRange >= config.EndRange {
 			break
 		}
-		endRange += stepRange
-		if endRange >= config.EndRange {
-			endRange = config.EndRange
-		}
+		endRange = min(endRange+stepRange, config.EndRange)
 	}
 
 	// Close the channels to signal that no more blocks will be sent
@@ -321,17 +311,19 @@ func (s *Stats) Print() error {
 		case <-s.tickerInfo.C:
 			rs := s.reader.GetStats().bucketsStats
 			ds := s.db.GetStats().bucketsStats
+			rs_rate := float64(rs[0].failures) / float64(rs[0].count+rs[0].failures) * 100
+			ds_rate := float64(ds[0].failures) / float64(ds[0].count+ds[0].failures) * 100
 			log.Printf("| %6d %4.1f %4.1f %4.1f | %3d %3d %4d    %3.0f%%   |  %3.1f  %3d %3d %4d    %3.0f%%  |",
 				rs[0].count, rs[0].rate, rs[1].rate, rs[2].rate,
 				rs[0].avg.Milliseconds(),
 				rs[0].min.Milliseconds(),
 				rs[0].max.Milliseconds(),
-				float64(rs[0].failures)/float64(rs[0].count+rs[0].failures)*100,
+				rs_rate,
 				ds[0].rate,
 				ds[0].avg.Milliseconds(),
 				ds[0].min.Milliseconds(),
 				ds[0].max.Milliseconds(),
-				float64(ds[0].failures)/float64(ds[0].count+ds[0].failures)*100)
+				ds_rate)
 		}
 	}
 }

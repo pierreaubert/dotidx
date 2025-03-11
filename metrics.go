@@ -63,15 +63,16 @@ func (m *Bucket) RecordLatency(start time.Time, countOK int, countError int, err
 	}
 	m.totalTime += duration
 
-	relativeDuration := time.Duration(int64(duration) / int64(countOK+countError))
-	if relativeDuration < m.minTime {
-		m.minTime = relativeDuration
-	}
+	if count := int64(countOK + countError); count > 0 {
+		relativeDuration := time.Duration(int64(duration) / count)
+		if relativeDuration < m.minTime {
+			m.minTime = relativeDuration
+		}
 
-	if relativeDuration > m.maxTime {
-		m.maxTime = relativeDuration
+		if relativeDuration > m.maxTime {
+			m.maxTime = relativeDuration
+		}
 	}
-
 }
 
 // GetStats returns the current metrics statistics
@@ -86,7 +87,9 @@ func (m *Bucket) GetStats() (bs BucketStats) {
 		bs.avg = (m.totalTime / time.Duration(bs.count)).Round(time.Millisecond)
 		bs.min = m.minTime.Round(time.Millisecond)
 		bs.max = m.maxTime.Round(time.Millisecond)
-		bs.rate = float64(bs.count+bs.failures) / m.totalTime.Seconds()
+		if tt := m.totalTime.Seconds(); tt > 0 {
+			bs.rate = float64(bs.count+bs.failures) / tt
+		}
 	}
 
 	return
