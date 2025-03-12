@@ -73,10 +73,6 @@ func startWorkers(
 		}(i)
 	}
 
-	// Collect blocks to process, identifying continuous ranges for batch processing
-	var currentBatch []int
-	var lastBlockID = -1
-
 	// Get existing blocks from the database, limited to 100k in one go
 	const stepRange = 100000
 	startRange := config.StartRange
@@ -84,11 +80,9 @@ func startWorkers(
 
 	for endRange <= config.EndRange {
 
-		log.Printf(
-			"Processing %d-%d blocks full range %d-%d done %4.1f%%",
-			startRange, endRange, config.StartRange, config.EndRange,
-			float64((startRange-config.StartRange)/(1+config.EndRange-config.StartRange)),
-		)
+		// Collect blocks to process, identifying continuous ranges for batch processing
+		var currentBatch []int
+		var lastBlockID = -1
 
 		existingBlocks, err := db.GetExistingBlocks(startRange, endRange, config)
 		if err != nil {
@@ -97,9 +91,24 @@ func startWorkers(
 			existingBlocks = make(map[int]bool)
 		}
 
+		known := 0
+		for _, b:= range existingBlocks {
+			if b {
+				known += 1
+			}
+		}
+		toProcess := 1+endRange-startRange-known
+		if toProcess > 0 {
+			log.Printf(
+				"Processing %d blocks in range %d-%d blocks (full range %d-%d) %4.1f%% done!",
+				1+endRange-startRange-known,
+				startRange, endRange, config.StartRange, config.EndRange,
+				float64((startRange-config.StartRange)/(1+config.EndRange-config.StartRange)),
+			)
+		}
+
 		// Send block IDs to the appropriate channel, skipping ones that already exist
 		for blockID := startRange; blockID <= endRange; blockID++ {
-			// Skip blocks that already exist in the database
 			if existingBlocks[blockID] {
 				// If we have a batch in progress, send it since we're skipping this block
 				if len(currentBatch) > 0 {
@@ -304,24 +313,24 @@ func (s *Stats) Print() error {
 		case <-s.context.Done():
 			return nil
 		case <-s.tickerHeader.C:
-			log.Printf("+-- Blocks -------------|------ Chain Reader ----|------- DBwriter -------------+")
-			log.Printf("| #----#  b/s  b/s  b/s | Latency          Error |  tr/s Latency          Error |")
-			log.Printf("|          1d   1h   5m | avg min max (ms)     %% |       avg min max (ms)    %%  |")
-			log.Printf("+-----------------------|------------------------|------------------------------|")
+			log.Printf("+-- Blocks -------------|------ Chain Reader --|------- DBwriter -------------+")
+			log.Printf("| #----#  b/s  b/s  b/s | Latency (ms)   Error |  tr/s   Latency (ms)   Error |")
+			log.Printf("|          1d   1h   5m | min  avg  max      %% |         min  avg  max     %%  |")
+			log.Printf("+-----------------------|----------------------|------------------------------|")
 		case <-s.tickerInfo.C:
 			rs := s.reader.GetStats().bucketsStats
 			ds := s.db.GetStats().bucketsStats
 			rs_rate := float64(rs[0].failures) / float64(rs[0].count+rs[0].failures) * 100
 			ds_rate := float64(ds[0].failures) / float64(ds[0].count+ds[0].failures) * 100
-			log.Printf("| %6d %4.1f %4.1f %4.1f | %3d %3d %4d    %3.0f%%   |  %3.1f  %3d %3d %4d    %3.0f%%  |",
+			log.Printf("| %6d %4.1f %4.1f %4.1f | %4d %4d %5d %3.0f%% | %6.1f  %4d %4d %5d %3.0f%% |",
 				rs[0].count, rs[0].rate, rs[1].rate, rs[2].rate,
-				rs[0].avg.Milliseconds(),
 				rs[0].min.Milliseconds(),
+				rs[0].avg.Milliseconds(),
 				rs[0].max.Milliseconds(),
 				rs_rate,
 				ds[0].rate,
-				ds[0].avg.Milliseconds(),
 				ds[0].min.Milliseconds(),
+				ds[0].avg.Milliseconds(),
 				ds[0].max.Milliseconds(),
 				ds_rate)
 		}
