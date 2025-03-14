@@ -13,6 +13,7 @@ import (
 // Database defines the interface for database operations
 type Database interface {
 	CreateTable(config Config) error
+	CreateIndex(config Config) error
 	Save(items []BlockData, config Config) error
 	GetExistingBlocks(startRange, endRange int, config Config) (map[int]bool, error)
 	Ping() error
@@ -29,6 +30,12 @@ type SQLDatabase struct {
 	metrics *Metrics
 }
 
+const schemaName = "chain"
+const fastTablespaceRoot = "/dotlake/fast"
+const fastTablespaceNumber = 4
+const slowTablespaceRoot = "/dotlake/slow"
+const slowTablespaceNumber = 6
+
 // NewSQLDatabase creates a new Database instance
 func NewSQLDatabase(db *sql.DB) *SQLDatabase {
 	return &SQLDatabase{
@@ -41,11 +48,11 @@ func (s *SQLDatabase) DoUpgrade(config Config) error {
 
 	// create dotlake version table to track migrations
 	_, err := s.db.Exec(`
-		CREATE TABLE IF NOT EXISTS dotlake_version (
-			version_id INTEGER NOT NULL,
-			timestamp TIMESTAMP WITHOUT TIME ZONE,
-                        CONSTRAINT dotlake_version_pkey PRIMARY KEY (version_id)
-		)
+    CREATE TABLE IF NOT EXISTS dotlake_version (
+	version_id INTEGER NOT NULL,
+	timestamp TIMESTAMP(4) WITHOUT TIME ZONE,
+        CONSTRAINT dotlake_version_pkey PRIMARY KEY (version_id)
+    )
         `)
 	if err != nil {
 		return fmt.Errorf("error creating table: %w", err)
@@ -56,36 +63,138 @@ func (s *SQLDatabase) DoUpgrade(config Config) error {
 
 // CreateTable creates the necessary tables if they don't exist
 func (s *SQLDatabase) CreateTable(config Config) error {
-	const schemaName = "public"
 	chainName := sanitizeChainName(config.Chain, config.Relaychain)
 
-	// Create blocks table
 	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 
 	// Create the blocks table
-	_, err := s.db.Exec(fmt.Sprintf(`
-		CREATE TABLE IF NOT EXISTS %s (
-			block_id INTEGER NOT NULL,
-			created_at TIMESTAMP WITHOUT TIME ZONE,
-			hash TEXT,
-			parent_hash TEXT,
-			state_root TEXT,
-			extrinsics_root TEXT,
-			author_id TEXT,
-			finalized BOOLEAN,
-			on_initialize JSONB,
-			on_finalize JSONB,
-			logs JSONB,
-			extrinsics JSONB,
-                        CONSTRAINT blocks_polkadot_polkadot_pkey PRIMARY KEY (block_id)
-		)
-	`, blocksTable))
+	stmt := fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %[1]s
+(
+  block_id        integer NOT NULL,
+  created_at      timestamp(4) without time zone NOT NULL,
+  hash            text COLLATE pg_catalog."default" NOT NULL,
+  parent_hash     text COLLATE pg_catalog."default" NOT NULL,
+  state_root      text COLLATE pg_catalog."default" NOT NULL,
+  extrinsics_root text COLLATE pg_catalog."default" NOT NULL,
+  author_id       text COLLATE pg_catalog."default" NOT NULL,
+  finalized       boolean NOT NULL,
+  on_initialize   jsonb,
+  on_finalize     jsonb,
+  logs            jsonb,
+  extrinsics      jsonb,
+  CONSTRAINT      block_pk PRIMARY KEY (block_id, created_at)
+) PARTITION BY RANGE (created_at);
+ALTER TABLE IF EXISTS %[1]s OWNER to dotlake;
+REVOKE ALL ON TABLE %[1]s FROM PUBLIC;
+GRANT SELECT ON TABLE %[1]s TO PUBLIC;
+GRANT ALL ON TABLE %[1]s TO dotlake;
+	`, blocksTable)
+	// log.Println(stmt)
+	_, err := s.db.Exec(stmt)
 	if err != nil {
-		return fmt.Errorf("error creating blocks table: %w", err)
+		return fmt.Errorf("error creating blocks table: %s %w", stmt, err)
 	}
 
-	// Create index on address column
+	// CREATE PARTITIONS
+	// Spread by month across the partition
+	slow := 0
+	fast := 0
+	slow_or_fast := ""
+	for year_idx := range 6 {
+		year := 2020+year_idx
+		if year >= time.Now().Year() {
+			slow_or_fast = fmt.Sprintf("fast%d", fast);
+			fast = min(fast+1,fastTablespaceNumber-1)
+		} else {
+			slow_or_fast = fmt.Sprintf("slow%d", slow);
+			slow = min(slow+1,slowTablespaceNumber-1)
+		}
+		for month := range 12 {
+			from_date := fmt.Sprintf("%04d-%02d-01 00:00:00.0000", year, month+1)
+			to_date := fmt.Sprintf("%04d-%02d-01 00:00:00.0000", year, month+2)
+			if month == 11 {
+				to_date = fmt.Sprintf("%04d-%02d-01 00:00:00.0000", year+1, 1)
+			}
+			parts := fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %[1]s_%04[2]d_%02[3]d PARTITION OF %[1]s
+  FOR VALUES FROM (timestamp '%[5]s') TO (timestamp '%[6]s')
+  TABLESPACE dotidx_%[7]s;
+ALTER TABLE IF EXISTS %[1]s_%04[2]d_%02[3]d OWNER to dotlake;
+REVOKE ALL ON TABLE %[1]s_%04[2]d_%02[3]d FROM PUBLIC;
+GRANT SELECT ON TABLE %[1]s_%04[2]d_%02[3]d TO PUBLIC;
+GRANT ALL ON TABLE %[1]s_%04[2]d_%02[3]d TO dotlake;
+	`,
+				blocksTable, // 1
+				year,        // 2
+				month+1,     // 3
+				month+2,     // 4
+				from_date,   // 5
+				to_date,     // 6
+				slow_or_fast,// 7
+			)
+			// log.Println(parts)
+			_, err = s.db.Exec(parts)
+			if err != nil {
+				return fmt.Errorf("error : %w", err)
+			}
+		}
+	}
+
+	address2blocksTable := fmt.Sprintf(
+		"%s.address2blocks_%s_%s",
+		schemaName,
+		strings.ToLower(config.Relaychain),
+		chainName,
+	)
 	_, err = s.db.Exec(fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %s (
+     address TEXT,
+     block_id INTEGER,
+     PRIMARY KEY (address, block_id)
+) PARTITION BY HASH(address);
+ALTER TABLE IF EXISTS %[1]s OWNER to dotlake;
+REVOKE ALL ON TABLE %[1]s FROM PUBLIC;
+GRANT SELECT ON TABLE %[1]s TO PUBLIC;
+GRANT ALL ON TABLE %[1]s TO dotlake;
+	`, address2blocksTable))
+	if err != nil {
+		return fmt.Errorf("error creating address2blocks table: %w", err)
+	}
+
+	// CREATE PARTITIONS
+	// spread across fast disks to improve access time
+	for fast := range fastTablespaceNumber {
+		parts := fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %[1]s_%1[2]d PARTITION OF %[1]s
+  FOR VALUES WITH (modulus %[3]d, remainder %[2]d)
+  TABLESPACE dotidx_fast%[2]d;
+ALTER TABLE IF EXISTS %[1]s_%1[2]d OWNER to dotlake;
+REVOKE ALL ON TABLE %[1]s_%1[2]d FROM PUBLIC;
+GRANT SELECT ON TABLE %[1]s_%1[2]d TO PUBLIC;
+GRANT ALL ON TABLE %[1]s_%1[2]d TO dotlake;
+	`,
+			address2blocksTable,  // 1
+			fast        ,         // 2
+			fastTablespaceNumber, // 3
+			)
+		// log.Println(parts)
+		_, err = s.db.Exec(parts)
+		if err != nil {
+			return fmt.Errorf("error : %w", err)
+		}
+	}
+
+	return nil
+}
+
+// TODO: adapt to the new partionning
+// when tables are full (a month) they are immutable so we can write the index once and forall
+func (s *SQLDatabase) CreateIndex(config Config) error {
+	chainName := sanitizeChainName(config.Chain, config.Relaychain)
+
+	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
+	_, err := s.db.Exec(fmt.Sprintf(`
                 CREATE INDEX IF NOT EXISTS extrinsincs_idx
                 ON %s USING gin(extrinsics jsonb_path_ops)
                 WITH (fastupdate=True)
@@ -95,20 +204,7 @@ func (s *SQLDatabase) CreateTable(config Config) error {
 		return fmt.Errorf("error creating index on address column: %w", err)
 	}
 
-	// Create address to blocks mapping table
 	address2blocksTable := fmt.Sprintf("address2blocks_%s_%s", strings.ToLower(config.Relaychain), chainName)
-	_, err = s.db.Exec(fmt.Sprintf(`
-		CREATE TABLE IF NOT EXISTS %s (
-			address TEXT,
-			block_id INTEGER,
-			PRIMARY KEY (address, block_id)
-		)
-	`, address2blocksTable))
-	if err != nil {
-		return fmt.Errorf("error creating address2blocks table: %w", err)
-	}
-
-	// Create index on address column
 	_, err = s.db.Exec(fmt.Sprintf(`
 		CREATE INDEX IF NOT EXISTS %s_address_idx ON %s (address)
 	`, address2blocksTable, address2blocksTable))
@@ -120,7 +216,7 @@ func (s *SQLDatabase) CreateTable(config Config) error {
 }
 
 func extractTimestamp(extrinsics []byte) (ts string, err error) {
-	const defaultTimestamp = "0001-01-01 00:00:00"
+	const defaultTimestamp = "0001-01-01 00:00:00.0000"
 	re := regexp.MustCompile("\"now\"[ ]*[:][ ]*\"[0-9]+\"")
 	texts := re.FindAllString(string(extrinsics), 1)
 	if len(texts) == 0 {
@@ -134,7 +230,7 @@ func extractTimestamp(extrinsics []byte) (ts string, err error) {
 	if err != nil {
 		return defaultTimestamp, fmt.Errorf("cannot convert timestamp to milliseconds: %w", err)
 	}
-	ts = time.UnixMilli(millis).Format("2006-01-02 15:04:05")
+	ts = time.UnixMilli(millis).Format("2006-01-02 15:04:05.0000")
 	return
 }
 
@@ -155,8 +251,8 @@ func (s *SQLDatabase) Save(items []BlockData, config Config) error {
 	chainName := sanitizeChainName(config.Chain, config.Relaychain)
 
 	// Get table names
-	blocksTable := fmt.Sprintf("blocks_%s_%s", strings.ToLower(config.Relaychain), chainName)
-	address2blocksTable := fmt.Sprintf("address2blocks_%s_%s", strings.ToLower(config.Relaychain), chainName)
+	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
+	address2blocksTable := fmt.Sprintf("%s.address2blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 
 	// Begin transaction
 	tx, err := s.db.Begin()
@@ -178,7 +274,7 @@ func (s *SQLDatabase) Save(items []BlockData, config Config) error {
 			block_id, created_at, hash, parent_hash, state_root, extrinsics_root,
 			author_id, finalized, on_initialize, on_finalize, logs, extrinsics
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-		ON CONFLICT (block_id) DO UPDATE SET
+		ON CONFLICT (block_id, created_at) DO UPDATE SET
 			created_at = EXCLUDED.created_at,
 			hash = EXCLUDED.hash,
 			parent_hash = EXCLUDED.parent_hash,
@@ -213,6 +309,7 @@ func (s *SQLDatabase) Save(items []BlockData, config Config) error {
 		if err != nil {
 			log.Printf("warning: blockID %s could not find timestamp %v", item.ID, err)
 		}
+		// log.Printf("Inserting item %s at %s", item.ID, ts)
 		_, err = blocksStmt.Exec(
 			item.ID,
 			ts,
@@ -261,7 +358,7 @@ func (s *SQLDatabase) GetExistingBlocks(startRange, endRange int, config Config)
 	chainName := sanitizeChainName(config.Chain, config.Relaychain)
 
 	// Create blocks table name
-	blocksTable := fmt.Sprintf("blocks_%s_%s", strings.ToLower(config.Relaychain), chainName)
+	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 
 	// Query for existing blocks
 	rows, err := s.db.Query(fmt.Sprintf("SELECT block_id FROM %s WHERE block_id BETWEEN $1 AND $2", blocksTable), startRange, endRange)

@@ -67,10 +67,10 @@ func TestSaveToDatabase(t *testing.T) {
 	mock.ExpectBegin()
 
 	// Expect prepared statement for blocks table
-	mock.ExpectPrepare("INSERT INTO blocks_polkadot_chain")
+	mock.ExpectPrepare("INSERT INTO chain.blocks_polkadot_chain")
 
 	// Expect prepared statement for address2blocks table
-	mock.ExpectPrepare("INSERT INTO address2blocks")
+	mock.ExpectPrepare("INSERT INTO chain.address2blocks_polkadot_chain")
 
 	// Expect executions for each item in blocks table
 	mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(0, 1))

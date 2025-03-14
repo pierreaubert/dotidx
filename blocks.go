@@ -1,4 +1,3 @@
-// Package dotidx BlockData represents the data of a block
 package main
 
 import (

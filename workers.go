@@ -103,7 +103,7 @@ func startWorkers(
 				"Processing %d blocks in range %d-%d blocks (full range %d-%d) %4.1f%% done!",
 				1+endRange-startRange-known,
 				startRange, endRange, config.StartRange, config.EndRange,
-				float64((startRange-config.StartRange)/(1+config.EndRange-config.StartRange)),
+				float64((startRange-config.StartRange)/(1+config.EndRange-config.StartRange)*100),
 			)
 		}
 

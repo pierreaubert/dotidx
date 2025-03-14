@@ -65,13 +65,8 @@ func (m *Bucket) RecordLatency(start time.Time, countOK int, countError int, err
 
 	if count := int64(countOK + countError); count > 0 {
 		relativeDuration := time.Duration(int64(duration) / count)
-		if relativeDuration < m.minTime {
-			m.minTime = relativeDuration
-		}
-
-		if relativeDuration > m.maxTime {
-			m.maxTime = relativeDuration
-		}
+		m.minTime = min(relativeDuration, m.minTime)
+		m.maxTime = max(relativeDuration, m.maxTime)
 	}
 }
 
