@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	_ "github.com/lib/pq"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestExtractAddressesFromExtrinsics(t *testing.T) {
@@ -109,6 +110,11 @@ func TestExtractAddressesFromRealData(t *testing.T) {
 
 	t.Logf("Found %d JSON files to test", len(jsonFiles))
 
+	// Address we specifically want to check for
+	specificAddress := "14ices1G5qTmqhMfDVBECh4jotNDGTLu8fhE9YktWT3cLF2F"
+	addressFound := false
+	fileThatContainsAddress := ""
+
 	// Process each JSON file
 	for _, jsonFile := range jsonFiles {
 		t.Run(jsonFile, func(t *testing.T) {
@@ -137,6 +143,13 @@ func TestExtractAddressesFromRealData(t *testing.T) {
 			t.Logf("Extracted %d addresses from %s", len(addresses), jsonFile)
 			for i, addr := range addresses {
 				t.Logf("  Address %d: %s", i+1, addr)
+
+				// Check if this is our specific address
+				if addr == specificAddress {
+					addressFound = true
+					fileThatContainsAddress = jsonFile
+					t.Logf("Found specific address %s in file %s", specificAddress, jsonFile)
+				}
 			}
 
 			// Count Polkadot addresses
@@ -150,5 +163,11 @@ func TestExtractAddressesFromRealData(t *testing.T) {
 				}
 			}
 		})
+	}
+
+	// After processing all files, verify that the specific address was found
+	assert.True(t, addressFound, "The specific address %s should be found in at least one of the test files", specificAddress)
+	if addressFound {
+		t.Logf("Successfully found address %s in file %s", specificAddress, fileThatContainsAddress)
 	}
 }
