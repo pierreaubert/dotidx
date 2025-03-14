@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
+	// gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
 )
 
 type ChainReader interface {

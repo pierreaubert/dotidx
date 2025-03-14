@@ -19,6 +19,25 @@ type Database interface {
 	Ping() error
 	GetStats() *MetricsStats
 	DoUpgrade(config Config) error
+	Close() error
+}
+
+// DBPoolConfig contains the configuration for the database connection pool
+type DBPoolConfig struct {
+	MaxOpenConns    int           // Maximum number of open connections
+	MaxIdleConns    int           // Maximum number of idle connections
+	ConnMaxLifetime time.Duration // Maximum lifetime of a connection
+	ConnMaxIdleTime time.Duration // Maximum idle time of a connection
+}
+
+// DefaultDBPoolConfig returns a default configuration for the database connection pool
+func DefaultDBPoolConfig() DBPoolConfig {
+	return DBPoolConfig{
+		MaxOpenConns:    25,
+		MaxIdleConns:    5,
+		ConnMaxLifetime: 5 * time.Minute,
+		ConnMaxIdleTime: 1 * time.Minute,
+	}
 }
 
 // version of schema for upgrade
@@ -28,6 +47,7 @@ const SQLDatabaseSchemaVersion = 2
 type SQLDatabase struct {
 	db      *sql.DB
 	metrics *Metrics
+	poolCfg DBPoolConfig
 }
 
 const schemaName = "chain"
@@ -38,10 +58,27 @@ const slowTablespaceNumber = 6
 
 // NewSQLDatabase creates a new Database instance
 func NewSQLDatabase(db *sql.DB) *SQLDatabase {
+	return NewSQLDatabaseWithPool(db, DefaultDBPoolConfig())
+}
+
+// NewSQLDatabaseWithPool creates a new Database instance with custom connection pool settings
+func NewSQLDatabaseWithPool(db *sql.DB, poolCfg DBPoolConfig) *SQLDatabase {
+	// Configure connection pool
+	db.SetMaxOpenConns(poolCfg.MaxOpenConns)
+	db.SetMaxIdleConns(poolCfg.MaxIdleConns)
+	db.SetConnMaxLifetime(poolCfg.ConnMaxLifetime)
+	db.SetConnMaxIdleTime(poolCfg.ConnMaxIdleTime)
+	
 	return &SQLDatabase{
 		db:      db,
 		metrics: NewMetrics("Postgres"),
+		poolCfg: poolCfg,
 	}
+}
+
+// Close closes the database connection pool
+func (s *SQLDatabase) Close() error {
+	return s.db.Close()
 }
 
 func (s *SQLDatabase) DoUpgrade(config Config) error {
