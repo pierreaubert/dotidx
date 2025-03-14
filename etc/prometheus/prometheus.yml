@@ -1,0 +1,4 @@
+  # monitoring DOTLAKE database
+  - job_name: postgres
+    static_configs:
+      - targets: ["192.168.1.36:9187"]
