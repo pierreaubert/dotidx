@@ -1,6 +1,6 @@
 #!/bin/sh
 
-/data/dot-node/polkadot-sdk/target/release/polkadot \
+/polkadot/bin/polkadot \
     --chain polkadot \
     --name SpinIT \
     --state-pruning archive \
@@ -16,7 +16,7 @@
     --rpc-external \
     --prometheus-external \
     --allow-private-ip \
-    --base-path /data/dot-node/polkadot-node-archive
+    --base-path /polkadot/polkadot-node-archive
 
 #    --listen-addr /ip4/192.168.1.37/tcp/9943 \
 #    --listen-addr /ip4/192.168.1.37/tcp/9944/ws \

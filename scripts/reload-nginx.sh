@@ -1,4 +1,4 @@
 #!/bin/bash
 
-nginx -p `pwd` -c ./etc/nginx/nginx.conf -s reload
+nginx -p `pwd` -c ./conf/nginx.conf -s reload
 
