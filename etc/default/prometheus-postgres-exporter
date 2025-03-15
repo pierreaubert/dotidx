@@ -4,7 +4,7 @@
 
 # DATA_SOURCE_NAME='postgresql://login:password@hostname:port/'
 # DATA_SOURCE_NAME='user=prometheus host=/run/postgresql dbname=postgres'
-DATA_SOURCE_NAME='user=prometheus host=/tmp dbname=dotlake port=5434'
+DATA_SOURCE_NAME='user=prometheus host=/tmp dbname=dotidx port=5434'
 
 # Set the command-line arguments to pass to the server.
 # Due to shell escaping, to pass backslashes for regexes, you need to double

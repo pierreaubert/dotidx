@@ -15,22 +15,22 @@ ns1=$(nvme id-ctrl /dev/nvme1 | grep nn)
 echo "Number of namespace ${ns1} on disk 1"
 
 
-VOLUME=dotlake
+VOLUME=dotidx
 
 zpool destroy ${VOLUME}
 zpool create -o ashift=9 -o autoexpand=on ${VOLUME} /dev/nvme0n1 /dev/nvme1n1
 zfs create ${VOLUME}/data -o mountpoint=/polkadot/postgresql
 # zfs create ${VOLUME}/wal-16 -o mountpoint=/polkadot/postgresql/16/polkadot/pg_wal
 
-zfs create ${VOLUME}/ts_slow0 -o mountpoint=/dotlake/slow0
-zfs create ${VOLUME}/ts_slow1 -o mountpoint=/dotlake/slow1
-zfs create ${VOLUME}/ts_slow2 -o mountpoint=/dotlake/slow2
-zfs create ${VOLUME}/ts_slow3 -o mountpoint=/dotlake/slow3
+zfs create ${VOLUME}/ts_slow0 -o mountpoint=/dotidx/slow0
+zfs create ${VOLUME}/ts_slow1 -o mountpoint=/dotidx/slow1
+zfs create ${VOLUME}/ts_slow2 -o mountpoint=/dotidx/slow2
+zfs create ${VOLUME}/ts_slow3 -o mountpoint=/dotidx/slow3
 
-zfs create ${VOLUME}/ts_fast0 -o mountpoint=/dotlake/fast0
-zfs create ${VOLUME}/ts_fast1 -o mountpoint=/dotlake/fast1
-zfs create ${VOLUME}/ts_fast2 -o mountpoint=/dotlake/fast2
-zfs create ${VOLUME}/ts_fast3 -o mountpoint=/dotlake/fast3
+zfs create ${VOLUME}/ts_fast0 -o mountpoint=/dotidx/fast0
+zfs create ${VOLUME}/ts_fast1 -o mountpoint=/dotidx/fast1
+zfs create ${VOLUME}/ts_fast2 -o mountpoint=/dotidx/fast2
+zfs create ${VOLUME}/ts_fast3 -o mountpoint=/dotidx/fast3
 
 zfs set recordsize=16k ${VOLUME}
 zfs set compression=zstd-3 ${VOLUME}

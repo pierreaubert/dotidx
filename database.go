@@ -49,11 +49,11 @@ type SQLDatabase struct {
 	db      *sql.DB
 	metrics *Metrics
 	poolCfg DBPoolConfig
-	
+
 	// Query templates cache to avoid rebuilding queries each time
 	queryTemplates     map[string]string
 	queryTemplatesMutex sync.RWMutex
-	
+
 	// Batch processing
 	batchMutex    sync.Mutex
 	batchItems    []BlockData
@@ -63,9 +63,9 @@ type SQLDatabase struct {
 }
 
 const schemaName = "chain"
-const fastTablespaceRoot = "/dotlake/fast"
+const fastTablespaceRoot = "/dotidx/fast"
 const fastTablespaceNumber = 4
-const slowTablespaceRoot = "/dotlake/slow"
+const slowTablespaceRoot = "/dotidx/slow"
 const slowTablespaceNumber = 6
 
 // NewSQLDatabase creates a new Database instance
@@ -80,7 +80,7 @@ func NewSQLDatabaseWithPool(db *sql.DB, poolCfg DBPoolConfig) *SQLDatabase {
 	db.SetMaxIdleConns(poolCfg.MaxIdleConns)
 	db.SetConnMaxLifetime(poolCfg.ConnMaxLifetime)
 	db.SetConnMaxIdleTime(poolCfg.ConnMaxIdleTime)
-	
+
 	return &SQLDatabase{
 		db:      db,
 		metrics: NewMetrics("Postgres"),
@@ -94,15 +94,15 @@ func NewSQLDatabaseWithPool(db *sql.DB, poolCfg DBPoolConfig) *SQLDatabase {
 func (s *SQLDatabase) Close() error {
 	// Flush any pending batch and shut down the batch processor
 	s.batchMutex.Lock()
-	
+
 	// Flush any remaining items
 	if len(s.batchItems) > 0 && s.batchConfig != nil {
 		items := s.batchItems
 		config := *s.batchConfig
-		
+
 		s.batchItems = nil
 		s.batchMutex.Unlock()
-		
+
 		// Process remaining items synchronously before closing
 		err := s.saveBatch(items, config)
 		if err != nil {
@@ -111,12 +111,12 @@ func (s *SQLDatabase) Close() error {
 	} else {
 		s.batchMutex.Unlock()
 	}
-	
+
 	// Signal the batch processor to stop
 	if s.batchShutdown != nil {
 		close(s.batchShutdown)
 	}
-	
+
 	// Close the database
 	return s.db.Close()
 }
@@ -127,21 +127,21 @@ func (s *SQLDatabase) getQueryTemplate(tableName, query string) (string, error) 
 	s.queryTemplatesMutex.RLock()
 	template, exists := s.queryTemplates[tableName]
 	s.queryTemplatesMutex.RUnlock()
-	
+
 	if exists {
 		return template, nil
 	}
-	
+
 	// If not in cache, prepare a new template
 	s.queryTemplatesMutex.Lock()
 	defer s.queryTemplatesMutex.Unlock()
-	
+
 	// Check again after acquiring write lock (double-checked locking)
 	template, exists = s.queryTemplates[tableName]
 	if exists {
 		return template, nil
 	}
-	
+
 	// Prepare the template
 	template = query
 	s.queryTemplates[tableName] = template
@@ -150,12 +150,12 @@ func (s *SQLDatabase) getQueryTemplate(tableName, query string) (string, error) 
 
 func (s *SQLDatabase) DoUpgrade(config Config) error {
 
-	// create dotlake version table to track migrations
+	// create dotidx version table to track migrations
 	_, err := s.db.Exec(`
-    CREATE TABLE IF NOT EXISTS dotlake_version (
+    CREATE TABLE IF NOT EXISTS dotidx_version (
 	version_id INTEGER NOT NULL,
 	timestamp TIMESTAMP(4) WITHOUT TIME ZONE,
-        CONSTRAINT dotlake_version_pkey PRIMARY KEY (version_id)
+        CONSTRAINT dotidx_version_pkey PRIMARY KEY (version_id)
     )
         `)
 	if err != nil {
@@ -189,10 +189,10 @@ CREATE TABLE IF NOT EXISTS %[1]s
   extrinsics      jsonb,
   CONSTRAINT      block_pk PRIMARY KEY (block_id, created_at)
 ) PARTITION BY RANGE (created_at);
-ALTER TABLE IF EXISTS %[1]s OWNER to dotlake;
+ALTER TABLE IF EXISTS %[1]s OWNER to dotidx;
 REVOKE ALL ON TABLE %[1]s FROM PUBLIC;
 GRANT SELECT ON TABLE %[1]s TO PUBLIC;
-GRANT ALL ON TABLE %[1]s TO dotlake;
+GRANT ALL ON TABLE %[1]s TO dotidx;
 	`, blocksTable))
 	if err != nil {
 		return err
@@ -226,10 +226,10 @@ GRANT ALL ON TABLE %[1]s TO dotlake;
 CREATE TABLE IF NOT EXISTS %[1]s_%04[2]d_%02[3]d PARTITION OF %[1]s
   FOR VALUES FROM (timestamp '%[5]s') TO (timestamp '%[6]s')
   TABLESPACE dotidx_%[7]s;
-ALTER TABLE IF EXISTS %[1]s_%04[2]d_%02[3]d OWNER to dotlake;
+ALTER TABLE IF EXISTS %[1]s_%04[2]d_%02[3]d OWNER to dotidx;
 REVOKE ALL ON TABLE %[1]s_%04[2]d_%02[3]d FROM PUBLIC;
 GRANT SELECT ON TABLE %[1]s_%04[2]d_%02[3]d TO PUBLIC;
-GRANT ALL ON TABLE %[1]s_%04[2]d_%02[3]d TO dotlake;
+GRANT ALL ON TABLE %[1]s_%04[2]d_%02[3]d TO dotidx;
 	`,
 				blocksTable, // 1
 				year,        // 2
@@ -262,10 +262,10 @@ CREATE TABLE IF NOT EXISTS %s (
      block_id INTEGER,
      PRIMARY KEY (address, block_id)
 ) PARTITION BY HASH(address);
-ALTER TABLE IF EXISTS %[1]s OWNER to dotlake;
+ALTER TABLE IF EXISTS %[1]s OWNER to dotidx;
 REVOKE ALL ON TABLE %[1]s FROM PUBLIC;
 GRANT SELECT ON TABLE %[1]s TO PUBLIC;
-GRANT ALL ON TABLE %[1]s TO dotlake;
+GRANT ALL ON TABLE %[1]s TO dotidx;
 	`, address2blocksTable))
 	if err != nil {
 		return err
@@ -282,10 +282,10 @@ GRANT ALL ON TABLE %[1]s TO dotlake;
 CREATE TABLE IF NOT EXISTS %[1]s_%1[2]d PARTITION OF %[1]s
   FOR VALUES WITH (modulus %[3]d, remainder %[2]d)
   TABLESPACE dotidx_fast%[2]d;
-ALTER TABLE IF EXISTS %[1]s_%1[2]d OWNER to dotlake;
+ALTER TABLE IF EXISTS %[1]s_%1[2]d OWNER to dotidx;
 REVOKE ALL ON TABLE %[1]s_%1[2]d FROM PUBLIC;
 GRANT SELECT ON TABLE %[1]s_%1[2]d TO PUBLIC;
-GRANT ALL ON TABLE %[1]s_%1[2]d TO dotlake;
+GRANT ALL ON TABLE %[1]s_%1[2]d TO dotidx;
 	`,
 			address2blocksTable,  // 1
 			fast        ,         // 2
@@ -365,37 +365,37 @@ func (s *SQLDatabase) Save(items []BlockData, config Config) error {
 	}
 
 	s.batchMutex.Lock()
-	
+
 	// Initialize batch if this is the first call
 	if s.batchConfig == nil {
 		configCopy := config
 		s.batchConfig = &configCopy
-		
+
 		// Start a background goroutine to flush the batch after the timeout
 		go s.startBatchProcessor()
 	}
-	
+
 	// Add items to the batch
 	s.batchItems = append(s.batchItems, items...)
-	
+
 	// Check if we've reached the batch size
 	flushRequired := len(s.batchItems) >= config.BatchSize
-	
+
 	// Handle timer reset logic
 	if !flushRequired && s.batchTimer == nil {
 		s.batchTimer = time.AfterFunc(config.FlushTimeout, func() {
 			s.flushBatch()
 		})
 	}
-	
+
 	// Unlock before potentially flushing to avoid deadlocks
 	s.batchMutex.Unlock()
-	
+
 	// Flush if needed after unlocking
 	if flushRequired {
 		return s.flushBatch()
 	}
-	
+
 	return nil
 }
 
@@ -410,12 +410,12 @@ func (s *SQLDatabase) startBatchProcessor() {
 			if !s.tryLock(100 * time.Millisecond) {
 				continue
 			}
-			
+
 			// Only flush if we have items and no active timer
 			if len(s.batchItems) > 0 && s.batchTimer == nil {
 				// Unlock before flushing to avoid deadlocks
 				s.batchMutex.Unlock()
-				
+
 				err := s.flushBatch()
 				if err != nil {
 					log.Printf("Error in periodic batch flush: %v", err)
@@ -434,7 +434,7 @@ func (s *SQLDatabase) tryLock(timeout time.Duration) bool {
 		s.batchMutex.Lock()
 		c <- struct{}{}
 	}()
-	
+
 	select {
 	case <-c:
 		return true
@@ -449,28 +449,28 @@ func (s *SQLDatabase) flushBatch() error {
 	if !s.tryLock(100 * time.Millisecond) {
 		return fmt.Errorf("could not acquire lock for flushing batch")
 	}
-	
+
 	// If there are no items or no config, return early
 	if len(s.batchItems) == 0 || s.batchConfig == nil {
 		s.batchMutex.Unlock()
 		return nil
 	}
-	
+
 	items := s.batchItems
 	config := *s.batchConfig
-	
+
 	// Clear the batch
 	s.batchItems = nil
-	
+
 	// Stop the timer if it's running
 	if s.batchTimer != nil {
 		s.batchTimer.Stop()
 		s.batchTimer = nil
 	}
-	
+
 	// Unlock before processing to avoid deadlocks
 	s.batchMutex.Unlock()
-	
+
 	// Process the items in a separate goroutine
 	go func(items []BlockData, config Config) {
 		err := s.saveBatch(items, config)
@@ -478,7 +478,7 @@ func (s *SQLDatabase) flushBatch() error {
 			log.Printf("Error saving batch: %v", err)
 		}
 	}(items, config)
-	
+
 	return nil
 }
 
@@ -524,7 +524,7 @@ func (s *SQLDatabase) saveBatch(items []BlockData, config Config) error {
 	if err != nil {
 		return err
 	}
-	
+
 	template2, err := s.getQueryTemplate(address2blocksTable, fmt.Sprintf(`
 		INSERT INTO %s (address, block_id)
 		VALUES ($1, $2)

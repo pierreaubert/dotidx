@@ -31,9 +31,9 @@ go get github.com/pierreaubert/dotidx
 - Find 4 free TB of disk ideally SSD. It also works on SATA but is sloooow. A mix is also working well.
 - Prepare your storage
   - ZFS or not: if ZFS then have a look at `./scripts/prep_zfs.sh`
-  - Create a `/dotlake` directory owned by the database owner
+  - Create a `/dotidx` directory owned by the database owner
   - Database uses more that 1 tablespace to optimise for permanance and cost. It expect 4 fast tablespaces and 6 slow ones.
-  - Create links in `/dotlake` for each tablespace: it should look like this:
+  - Create links in `/dotidx` for each tablespace: it should look like this:
 ```
 total 8
 4 drwxr-xr-x  2 pierre pierre 4096 Mar 13 10:04 .
@@ -42,18 +42,18 @@ total 8
 0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 fast1 -> /data/dot-node/pg/16/fast1
 0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 fast2 -> /data/dot-node/pg/16/fast2
 0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 fast3 -> /data/dot-node/pg/16/fast3
-0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow0 -> /data/backup/dotlake/slow0
-0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow1 -> /data/backup/dotlake/slow1
-0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow2 -> /data/backup/dotlake/slow2
-0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow3 -> /data/backup/dotlake/slow3
-0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow4 -> /data/backup/dotlake/slow4
-0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow5 -> /data/backup/dotlake/slow5
+0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow0 -> /data/backup/dotidx/slow0
+0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow1 -> /data/backup/dotidx/slow1
+0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow2 -> /data/backup/dotidx/slow2
+0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow3 -> /data/backup/dotidx/slow3
+0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow4 -> /data/backup/dotidx/slow4
+0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow5 -> /data/backup/dotidx/slow5
 ```
   - If you only have 1 disk have all the links point to the same disk.
 - Create a database:
   - See `./scripts/setup-postgres.sh` for inspiration
   - Note the setup if you use ZFS.
-  - Test that it is working with psql and that user dotlake can create a table.
+  - Test that it is working with psql and that user dotidx can create a table.
 - Start an archive Node
   - See `./scripts/start-archive.sh` for inspiration
   - It takes a few days to get all the data for the Relay Chain
