@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -48,6 +49,17 @@ type SQLDatabase struct {
 	db      *sql.DB
 	metrics *Metrics
 	poolCfg DBPoolConfig
+	
+	// Query templates cache to avoid rebuilding queries each time
+	queryTemplates     map[string]string
+	queryTemplatesMutex sync.RWMutex
+	
+	// Batch processing
+	batchMutex    sync.Mutex
+	batchItems    []BlockData
+	batchConfig   *Config
+	batchTimer    *time.Timer
+	batchShutdown chan struct{}
 }
 
 const schemaName = "chain"
@@ -73,12 +85,67 @@ func NewSQLDatabaseWithPool(db *sql.DB, poolCfg DBPoolConfig) *SQLDatabase {
 		db:      db,
 		metrics: NewMetrics("Postgres"),
 		poolCfg: poolCfg,
+		queryTemplates: make(map[string]string),
+		batchShutdown: make(chan struct{}),
 	}
 }
 
 // Close closes the database connection pool
 func (s *SQLDatabase) Close() error {
+	// Flush any pending batch and shut down the batch processor
+	s.batchMutex.Lock()
+	
+	// Flush any remaining items
+	if len(s.batchItems) > 0 && s.batchConfig != nil {
+		items := s.batchItems
+		config := *s.batchConfig
+		
+		s.batchItems = nil
+		s.batchMutex.Unlock()
+		
+		// Process remaining items synchronously before closing
+		err := s.saveBatch(items, config)
+		if err != nil {
+			log.Printf("Error flushing batch during shutdown: %v", err)
+		}
+	} else {
+		s.batchMutex.Unlock()
+	}
+	
+	// Signal the batch processor to stop
+	if s.batchShutdown != nil {
+		close(s.batchShutdown)
+	}
+	
+	// Close the database
 	return s.db.Close()
+}
+
+// getQueryTemplate returns a cached query template or creates a new one if it doesn't exist
+func (s *SQLDatabase) getQueryTemplate(tableName, query string) (string, error) {
+	// Try to get from cache first
+	s.queryTemplatesMutex.RLock()
+	template, exists := s.queryTemplates[tableName]
+	s.queryTemplatesMutex.RUnlock()
+	
+	if exists {
+		return template, nil
+	}
+	
+	// If not in cache, prepare a new template
+	s.queryTemplatesMutex.Lock()
+	defer s.queryTemplatesMutex.Unlock()
+	
+	// Check again after acquiring write lock (double-checked locking)
+	template, exists = s.queryTemplates[tableName]
+	if exists {
+		return template, nil
+	}
+	
+	// Prepare the template
+	template = query
+	s.queryTemplates[tableName] = template
+	return template, nil
 }
 
 func (s *SQLDatabase) DoUpgrade(config Config) error {
@@ -105,7 +172,7 @@ func (s *SQLDatabase) CreateTable(config Config) error {
 	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 
 	// Create the blocks table
-	stmt := fmt.Sprintf(`
+	template, err := s.getQueryTemplate(blocksTable, fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %[1]s
 (
   block_id        integer NOT NULL,
@@ -126,11 +193,13 @@ ALTER TABLE IF EXISTS %[1]s OWNER to dotlake;
 REVOKE ALL ON TABLE %[1]s FROM PUBLIC;
 GRANT SELECT ON TABLE %[1]s TO PUBLIC;
 GRANT ALL ON TABLE %[1]s TO dotlake;
-	`, blocksTable)
-	// log.Println(stmt)
-	_, err := s.db.Exec(stmt)
+	`, blocksTable))
 	if err != nil {
-		return fmt.Errorf("error creating blocks table: %s %w", stmt, err)
+		return err
+	}
+	_, err = s.db.Exec(template)
+	if err != nil {
+		return fmt.Errorf("error creating blocks table: %s %w", template, err)
 	}
 
 	// CREATE PARTITIONS
@@ -170,8 +239,11 @@ GRANT ALL ON TABLE %[1]s_%04[2]d_%02[3]d TO dotlake;
 				to_date,     // 6
 				slow_or_fast,// 7
 			)
-			// log.Println(parts)
-			_, err = s.db.Exec(parts)
+			template, err = s.getQueryTemplate(blocksTable, parts)
+			if err != nil {
+				return err
+			}
+			_, err = s.db.Exec(template)
 			if err != nil {
 				return fmt.Errorf("error : %w", err)
 			}
@@ -184,7 +256,7 @@ GRANT ALL ON TABLE %[1]s_%04[2]d_%02[3]d TO dotlake;
 		strings.ToLower(config.Relaychain),
 		chainName,
 	)
-	_, err = s.db.Exec(fmt.Sprintf(`
+	template, err = s.getQueryTemplate(address2blocksTable, fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %s (
      address TEXT,
      block_id INTEGER,
@@ -195,6 +267,10 @@ REVOKE ALL ON TABLE %[1]s FROM PUBLIC;
 GRANT SELECT ON TABLE %[1]s TO PUBLIC;
 GRANT ALL ON TABLE %[1]s TO dotlake;
 	`, address2blocksTable))
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(template)
 	if err != nil {
 		return fmt.Errorf("error creating address2blocks table: %w", err)
 	}
@@ -215,8 +291,11 @@ GRANT ALL ON TABLE %[1]s_%1[2]d TO dotlake;
 			fast        ,         // 2
 			fastTablespaceNumber, // 3
 			)
-		// log.Println(parts)
-		_, err = s.db.Exec(parts)
+		template, err = s.getQueryTemplate(address2blocksTable, parts)
+		if err != nil {
+			return err
+		}
+		_, err = s.db.Exec(template)
 		if err != nil {
 			return fmt.Errorf("error : %w", err)
 		}
@@ -231,20 +310,28 @@ func (s *SQLDatabase) CreateIndex(config Config) error {
 	chainName := sanitizeChainName(config.Chain, config.Relaychain)
 
 	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
-	_, err := s.db.Exec(fmt.Sprintf(`
+	template, err := s.getQueryTemplate(blocksTable, fmt.Sprintf(`
                 CREATE INDEX IF NOT EXISTS extrinsincs_idx
                 ON %s USING gin(extrinsics jsonb_path_ops)
                 WITH (fastupdate=True)
                 TABLESPACE pg_default;
 	`, blocksTable))
 	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(template)
+	if err != nil {
 		return fmt.Errorf("error creating index on address column: %w", err)
 	}
 
 	address2blocksTable := fmt.Sprintf("address2blocks_%s_%s", strings.ToLower(config.Relaychain), chainName)
-	_, err = s.db.Exec(fmt.Sprintf(`
+	template, err = s.getQueryTemplate(address2blocksTable, fmt.Sprintf(`
 		CREATE INDEX IF NOT EXISTS %s_address_idx ON %s (address)
 	`, address2blocksTable, address2blocksTable))
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(template)
 	if err != nil {
 		return fmt.Errorf("error creating index on address column: %w", err)
 	}
@@ -271,8 +358,132 @@ func extractTimestamp(extrinsics []byte) (ts string, err error) {
 	return
 }
 
-// Save saves the given items to the database
+// Save adds the given items to the batch for asynchronous processing
 func (s *SQLDatabase) Save(items []BlockData, config Config) error {
+	if len(items) == 0 {
+		return nil
+	}
+
+	s.batchMutex.Lock()
+	
+	// Initialize batch if this is the first call
+	if s.batchConfig == nil {
+		configCopy := config
+		s.batchConfig = &configCopy
+		
+		// Start a background goroutine to flush the batch after the timeout
+		go s.startBatchProcessor()
+	}
+	
+	// Add items to the batch
+	s.batchItems = append(s.batchItems, items...)
+	
+	// Check if we've reached the batch size
+	flushRequired := len(s.batchItems) >= config.BatchSize
+	
+	// Handle timer reset logic
+	if !flushRequired && s.batchTimer == nil {
+		s.batchTimer = time.AfterFunc(config.FlushTimeout, func() {
+			s.flushBatch()
+		})
+	}
+	
+	// Unlock before potentially flushing to avoid deadlocks
+	s.batchMutex.Unlock()
+	
+	// Flush if needed after unlocking
+	if flushRequired {
+		return s.flushBatch()
+	}
+	
+	return nil
+}
+
+// startBatchProcessor runs a goroutine that periodically flushes the batch
+func (s *SQLDatabase) startBatchProcessor() {
+	for {
+		select {
+		case <-s.batchShutdown:
+			return
+		case <-time.After(5 * time.Second): // Check periodically
+			// Try to acquire lock - don't block indefinitely
+			if !s.tryLock(100 * time.Millisecond) {
+				continue
+			}
+			
+			// Only flush if we have items and no active timer
+			if len(s.batchItems) > 0 && s.batchTimer == nil {
+				// Unlock before flushing to avoid deadlocks
+				s.batchMutex.Unlock()
+				
+				err := s.flushBatch()
+				if err != nil {
+					log.Printf("Error in periodic batch flush: %v", err)
+				}
+			} else {
+				s.batchMutex.Unlock()
+			}
+		}
+	}
+}
+
+// tryLock attempts to acquire the mutex lock with a timeout
+func (s *SQLDatabase) tryLock(timeout time.Duration) bool {
+	c := make(chan struct{}, 1)
+	go func() {
+		s.batchMutex.Lock()
+		c <- struct{}{}
+	}()
+	
+	select {
+	case <-c:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
+}
+
+// flushBatch processes all batched items and saves them to the database
+func (s *SQLDatabase) flushBatch() error {
+	// Try to acquire lock with a timeout
+	if !s.tryLock(100 * time.Millisecond) {
+		return fmt.Errorf("could not acquire lock for flushing batch")
+	}
+	
+	// If there are no items or no config, return early
+	if len(s.batchItems) == 0 || s.batchConfig == nil {
+		s.batchMutex.Unlock()
+		return nil
+	}
+	
+	items := s.batchItems
+	config := *s.batchConfig
+	
+	// Clear the batch
+	s.batchItems = nil
+	
+	// Stop the timer if it's running
+	if s.batchTimer != nil {
+		s.batchTimer.Stop()
+		s.batchTimer = nil
+	}
+	
+	// Unlock before processing to avoid deadlocks
+	s.batchMutex.Unlock()
+	
+	// Process the items in a separate goroutine
+	go func(items []BlockData, config Config) {
+		err := s.saveBatch(items, config)
+		if err != nil {
+			log.Printf("Error saving batch: %v", err)
+		}
+	}(items, config)
+	
+	return nil
+}
+
+// saveBatch saves the given items to the database immediately
+func (s *SQLDatabase) saveBatch(items []BlockData, config Config) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -291,22 +502,8 @@ func (s *SQLDatabase) Save(items []BlockData, config Config) error {
 	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 	address2blocksTable := fmt.Sprintf("%s.address2blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 
-	// Begin transaction
-	tx, err := s.db.Begin()
-	if err != nil {
-		return fmt.Errorf("error beginning transaction: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			rbErr := tx.Rollback()
-			if rbErr != nil {
-				log.Printf("Error rolling back transaction: %v", rbErr)
-			}
-		}
-	}()
-
-	// Prepare statement for blocks table
-	blocksStmt, err := tx.Prepare(fmt.Sprintf(`
+	// Create insert query templates
+	template, err := s.getQueryTemplate(blocksTable, fmt.Sprintf(`
 		INSERT INTO %s (
 			block_id, created_at, hash, parent_hash, state_root, extrinsics_root,
 			author_id, finalized, on_initialize, on_finalize, logs, extrinsics
@@ -325,20 +522,45 @@ func (s *SQLDatabase) Save(items []BlockData, config Config) error {
 			extrinsics = EXCLUDED.extrinsics
 	`, blocksTable))
 	if err != nil {
-		return fmt.Errorf("error preparing statement for blocks table: %w", err)
+		return err
 	}
-	defer blocksStmt.Close()
-
-	// Prepare statement for address2blocks table
-	address2blocksStmt, err := tx.Prepare(fmt.Sprintf(`
+	
+	template2, err := s.getQueryTemplate(address2blocksTable, fmt.Sprintf(`
 		INSERT INTO %s (address, block_id)
 		VALUES ($1, $2)
 		ON CONFLICT (address, block_id) DO NOTHING
 	`, address2blocksTable))
 	if err != nil {
+		return err
+	}
+
+	// Begin transaction
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("error beginning transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			rbErr := tx.Rollback()
+			if rbErr != nil {
+				log.Printf("Error rolling back transaction: %v", rbErr)
+			}
+		}
+	}()
+
+	// Prepare statement for blocks table within the transaction
+	stmt, err := tx.Prepare(template)
+	if err != nil {
+		return fmt.Errorf("error preparing statement for blocks table: %w", err)
+	}
+	defer stmt.Close()
+
+	// Prepare statement for address2blocks table within the transaction
+	stmt2, err := tx.Prepare(template2)
+	if err != nil {
 		return fmt.Errorf("error preparing statement for address2blocks table: %w", err)
 	}
-	defer address2blocksStmt.Close()
+	defer stmt2.Close()
 
 	// Insert items
 	for _, item := range items {
@@ -347,7 +569,7 @@ func (s *SQLDatabase) Save(items []BlockData, config Config) error {
 			log.Printf("warning: blockID %s could not find timestamp %v", item.ID, err)
 		}
 		// log.Printf("Inserting item %s at %s", item.ID, ts)
-		_, err = blocksStmt.Exec(
+		_, err = stmt.Exec(
 			item.ID,
 			ts,
 			item.Hash,
@@ -374,7 +596,7 @@ func (s *SQLDatabase) Save(items []BlockData, config Config) error {
 
 		// Insert into address2blocks table
 		for _, address := range addresses {
-			_, err = address2blocksStmt.Exec(address, item.ID)
+			_, err = stmt2.Exec(address, item.ID)
 			if err != nil {
 				return fmt.Errorf("error inserting into address2blocks table: %w", err)
 			}
@@ -398,7 +620,11 @@ func (s *SQLDatabase) GetExistingBlocks(startRange, endRange int, config Config)
 	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 
 	// Query for existing blocks
-	rows, err := s.db.Query(fmt.Sprintf("SELECT block_id FROM %s WHERE block_id BETWEEN $1 AND $2", blocksTable), startRange, endRange)
+	template, err := s.getQueryTemplate(blocksTable, fmt.Sprintf("SELECT block_id FROM %s WHERE block_id BETWEEN $1 AND $2", blocksTable))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.db.Query(template, startRange, endRange)
 	if err != nil {
 		return nil, fmt.Errorf("error querying for existing blocks: %w", err)
 	}

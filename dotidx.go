@@ -99,20 +99,22 @@ func main() {
 	// If in live mode, fetch the head block and update the range
 	if config.Live {
 		log.Println("Running in live mode")
-		// Convert head block ID to integer for range
-		// Set the range from 1 to the current head block
 		config.StartRange = max(1, headBlockID-100000)
 		config.EndRange = headBlockID
 
+		// Create a separate context for workers that can complete independently
+		workerCtx, workerCancel := context.WithCancel(ctx)
+		defer workerCancel() // Ensure proper cleanup
+        
 		// Start workers to process existing blocks
-		startWorkers(ctx, config, database, reader, headBlockID)
+		startWorkers(workerCtx, config, database, reader, headBlockID)
 
-		// Start monitoring for new blocks
-		go func() {
-			if err := monitorNewBlocks(ctx, config, database, reader, headBlockID); err != nil {
-				log.Fatalf("Error monitoring blocks: %v", err)
-			}
-		}()
+		// Start monitoring for new blocks with the main context
+		// This will keep running even after startWorkers completes
+		log.Println("Starting monitoring for new blocks...")
+		if err := monitorNewBlocks(ctx, config, database, reader, headBlockID); err != nil {
+			log.Fatalf("Error monitoring blocks: %v", err)
+		}
 	} else {
 		// Start workers and wait for completion in normal mode
 		startWorkers(ctx, config, database, reader, headBlockID)

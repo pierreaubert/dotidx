@@ -92,12 +92,12 @@ func startWorkers(
 		}
 
 		known := 0
-		for _, b:= range existingBlocks {
+		for _, b := range existingBlocks {
 			if b {
 				known += 1
 			}
 		}
-		toProcess := 1+endRange-startRange-known
+		toProcess := 1 + endRange - startRange - known
 		if toProcess > 0 {
 			log.Printf(
 				"Processing %d blocks in range %d-%d blocks (full range %d-%d) %4.1f%% done!",
@@ -189,14 +189,10 @@ func startWorkers(
 		endRange = min(endRange+stepRange, config.EndRange)
 	}
 
-	// Close the channels to signal that no more blocks will be sent
 	close(blockCh)
 	close(batchCh)
 
-	// Wait for all workers to finish
-	if !config.Live {
-		wg.Wait()
-	}
+	wg.Wait()
 }
 
 // processBlockBatch fetches and processes a batch of blocks using fetchBlockRange
