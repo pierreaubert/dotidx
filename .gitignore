@@ -2,6 +2,7 @@ dotidx
 data
 logs
 run
+conf
 .*~
 *~
 #*

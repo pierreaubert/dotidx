@@ -1,6 +1,7 @@
 #!/bin/bash
 
-ROOT=`pwd`
+ROOT=$(pwd)
+OS=$(uname)
 
 mkdir -p logs run
 
@@ -12,6 +13,8 @@ elif test "$OS" = "Darwin"; then
     ulimit -n 10240
     # IP=$(/sbin/ifconfig| grep 'inet ' | grep broadcast | cut -d ' ' -f 2 | head -1)
 fi
+
+echo "Using: ip=$IP"
 
 SAS_EXPRESS_PORT_START=10800
 SAS_SUBSTRATE_TYPES_BUNDLE=undefined
