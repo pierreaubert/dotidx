@@ -4,17 +4,15 @@ A command-line tool for fetching block data from a Polkadot archive node via Sid
 
 ## Features
 
-- Fetches block data from a Polkadot sidecar API
+- Fetches block data from a Polkadot parachain via a sidecar API
 - Stores data in a PostgreSQL database
 - Supports concurrent processing of multiple blocks
-- Configurable batch size and worker count
 - Graceful shutdown on interrupt
-- Performance metrics for API calls
 
 ## Requirements
 
-- Go 1.18 or higher
-- PostgreSQL database
+- Go 1.20 or higher
+- PostgreSQL database version 16 or higher
 
 ## Design
 
@@ -28,12 +26,12 @@ go get github.com/pierreaubert/dotidx
 
 ## Prework
 
-- Find 4 free TB of disk ideally SSD. It also works on SATA but is sloooow. A mix is also working well.
+- Find 4 free TB of disk ideally on SSD disks. It also works on SATA but is sloooow. A mix is also working well. The more disks you have the faster this will be.
 - Prepare your storage
   - ZFS or not: if ZFS then have a look at `./scripts/prep_zfs.sh`
   - Create a `/dotidx` directory owned by the database owner
   - Database uses more that 1 tablespace to optimise for permanance and cost. It expect 4 fast tablespaces and 6 slow ones.
-  - Create links in `/dotidx` for each tablespace: it should look like this:
+  - Create links in `/dotidx` for each tablespace: it should look like this where each directory points to a different disk or partition. If you only have 1 disk, point all the links to the same disk.
 ```
 total 8
 4 drwxr-xr-x  2 pierre pierre 4096 Mar 13 10:04 .
@@ -45,11 +43,10 @@ total 8
 0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow0 -> /data/backup/dotidx/slow0
 0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow1 -> /data/backup/dotidx/slow1
 0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow2 -> /data/backup/dotidx/slow2
-0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow3 -> /data/backup/dotidx/slow3
-0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow4 -> /data/backup/dotidx/slow4
-0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow5 -> /data/backup/dotidx/slow5
+0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow3 -> /data/media1/dotidx/slow3
+0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow4 -> /data/media2/dotidx/slow4
+0 lrwxrwxrwx  1 pierre pierre   26 Mar 13 10:04 slow5 -> /data/media3/dotidx/slow5
 ```
-  - If you only have 1 disk have all the links point to the same disk.
 - Create a database:
   - See `./scripts/setup-postgres.sh` for inspiration
   - Note the setup if you use ZFS.
@@ -58,13 +55,20 @@ total 8
   - See `./scripts/start-archive.sh` for inspiration
   - It takes a few days to get all the data for the Relay Chain
   - Parity provides dump to go faster if you have enough bandwidth to get them.
-  - Test that it is working by connecting it to polkadot.js for ex.
+  - Test that it is working by connecting it to via polkadot.js for ex.
 - Start a set of Sidecar API servers
   - See `./scripts/setup-sidecar.sh` for inspiration
   - Test that they are working by running some queries: `curl http://localhost:10801/blocks/head` should return a json file.
 - Start a reverse proxy that also do load balancing
   - See `./scripts/start-nginx.sh` for inspiration
   - Test that they are working by running some queries: `curl http://localhost:10800/blocks/head` should return the same json file.
+
+## Strategy to optimise for time
+
+1. If your archive is on a SATA disks, make a copy on an SSD disk. It will take a few hours to make the copy but then indexing will be faster.
+2. If you want an index mostly for yourself, you can let the database on SATA disks. If you plan to have a lot of requests, you can move some tablespace to an SSD and the index should definitively be on SSD.
+3. You can delete the archive node on SSD when indexing is finished.
+4. If you need to restart from scratch the indexer will produce monthly dumped that the database can restart from and it is significantly faster to start from dumps than loading the blocks from the archive node.
 
 
 ## Usage
@@ -122,11 +126,12 @@ You should see something like:
 2025/03/11 18:01:09 workers.go:319: |  80191 49.6 49.6 50.8 |  20  10   74      0%   |  575.8    2   1  141      0%  |
 ```
 This machine can read ~50 blocks per second and write them to the database so roughly a week to get up to date with 25_000_000 blocks.
+With a larger machine (32 CPUs, 256GB RAM, 8x 1TB NVMe SSD) the indexer took 20h to get up to date.
 The speed at which the node can read the blocks is the limiting factor.
 
 Notes:
-- I dont understand yet why it is so slow.
-- If you can put the database on a diffent set of disks it does help a bit.
+- I still dont understand yet why it is so slow.
+- If you can put the database on a diffent set of disks it does help.
 - M2 SSD will thermal throttle hard if they are not properly cooled.
 
 ## Testing

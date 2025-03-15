@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -28,8 +30,34 @@ func startWorkers(
 	// Create a wait group to wait for all workers to finish
 	var wg sync.WaitGroup
 
+	// Create month tracker to detect completed months for database dumps
+	// Use the current directory or a specified dump directory from environment
+	dumpDir := os.Getenv("DOTIDX_DUMP_DIR")
+	if dumpDir == "" {
+		dumpDir = "." // Default to current directory
+	}
+	// Ensure dump directory exists
+	if err := os.MkdirAll(dumpDir, 0755); err != nil {
+		log.Printf("Warning: Could not create dump directory %s: %v", dumpDir, err)
+		// Fall back to current directory
+		dumpDir = "."
+	}
+	dumpDir = filepath.Join(dumpDir, "dumps")
+	if err := os.MkdirAll(dumpDir, 0755); err != nil {
+		log.Printf("Warning: Could not create dumps subdirectory %s: %v", dumpDir, err)
+	}
+
+	monthTracker := NewMonthTracker(db, config, dumpDir)
+
+	// Initialize month tracker with approximate ranges
+	err := monthTracker.InitializeMonthRanges(config.StartRange, config.EndRange, reader)
+	if err != nil {
+		log.Printf("Warning: Failed to initialize month ranges: %v", err)
+		// Continue anyway, month tracking will be less efficient but still work
+	}
+
 	// Start single block workers
-	for i := range config.MaxWorkers / 2 {
+	for i := 0; i < config.MaxWorkers/2; i++ {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
@@ -45,7 +73,7 @@ func startWorkers(
 					}
 
 					// Process a single block
-					processSingleBlock(ctx, blockID, config, db, reader, workerID)
+					processSingleBlockWithMonthTracking(ctx, blockID, config, db, reader, workerID, monthTracker)
 				}
 			}
 		}(i)
@@ -67,7 +95,7 @@ func startWorkers(
 					}
 
 					// Process a batch of blocks
-					processBlockBatch(ctx, blockIDs, config, db, reader, workerID)
+					processBlockBatchWithMonthTracking(ctx, blockIDs, config, db, reader, workerID, monthTracker)
 				}
 			}
 		}(i)
@@ -195,96 +223,186 @@ func startWorkers(
 	wg.Wait()
 }
 
-// processBlockBatch fetches and processes a batch of blocks using fetchBlockRange
+// processBlockBatchWithMonthTracking fetches and processes a batch of blocks using fetchBlockRange
+// and updates the month tracker with the processed blocks
+func processBlockBatchWithMonthTracking(ctx context.Context, blockIDs []int, config Config, db Database, reader ChainReader, workerID int, monthTracker *MonthTracker) {
+	if len(blockIDs) == 0 {
+		return
+	}
+
+	// Create the array of block IDs from the range
+	ids := make([]int, 0, blockIDs[len(blockIDs)-1] - blockIDs[0] + 1)
+	for i := blockIDs[0]; i <= blockIDs[len(blockIDs)-1]; i++ {
+		ids = append(ids, i)
+	}
+
+	blockRange, err := reader.FetchBlockRange(ctx, ids)
+	if err != nil {
+		log.Printf("Error fetching blocks %d-%d: %v", blockIDs[0], blockIDs[len(blockIDs)-1], err)
+		return
+	}
+
+	if len(blockRange) == 0 {
+		log.Printf("No blocks returned for range %d-%d", blockIDs[0], blockIDs[len(blockIDs)-1])
+		return
+	}
+
+	// Group blocks by month for updating the month tracker
+	blocksByMonth := make(map[string]int)
+
+	// Save blocks to database
+	err = db.Save(blockRange, config)
+	if err != nil {
+		log.Printf("Error saving blocks %d-%d: %v", blockIDs[0], blockIDs[len(blockIDs)-1], err)
+		return
+	}
+
+	// Count blocks by month and update progress tracking
+	for _, block := range blockRange {
+		monthKey := GetMonthKey(block.Timestamp)
+		blocksByMonth[monthKey]++
+	}
+
+	// Update the month tracker for each month
+	for month, count := range blocksByMonth {
+		monthTracker.UpdateProgress(month, count)
+	}
+}
+
+// processSingleBlockWithMonthTracking fetches and processes a single block using fetchBlock
+// and updates the month tracker with the processed block
+func processSingleBlockWithMonthTracking(ctx context.Context, blockID int, config Config, db Database, reader ChainReader, workerID int, monthTracker *MonthTracker) {
+	block, err := reader.FetchBlock(ctx, blockID)
+	if err != nil {
+		log.Printf("Error fetching block %d: %v", blockID, err)
+		return
+	}
+
+	// Save block to database
+	err = db.Save([]BlockData{block}, config)
+	if err != nil {
+		log.Printf("Error saving block %d: %v", blockID, err)
+		return
+	}
+
+	// Update month tracker for this block
+	monthKey := GetMonthKey(block.Timestamp)
+	monthTracker.UpdateProgress(monthKey, 1)
+}
+
+// ProcessSingleBlock fetches and processes a single block using fetchBlock
+func processSingleBlock(ctx context.Context, blockID int, config Config, db Database, reader ChainReader, workerID int) {
+	block, err := reader.FetchBlock(ctx, blockID)
+	if err != nil {
+		log.Printf("Error fetching block %d: %v", blockID, err)
+		return
+	}
+
+	// Save block to database
+	err = db.Save([]BlockData{block}, config)
+	if err != nil {
+		log.Printf("Error saving block %d: %v", blockID, err)
+		return
+	}
+}
+
+// ProcessBlockBatch fetches and processes a batch of blocks using fetchBlockRange
 func processBlockBatch(ctx context.Context, blockIDs []int, config Config, db Database, reader ChainReader, workerID int) {
 	if len(blockIDs) == 0 {
 		return
 	}
 
-	// log.Printf("Worker %d processing batch of %d blocks from %d to %d", workerID, len(blockIDs), blockIDs[0], blockIDs[len(blockIDs)-1])
+	// Create the array of block IDs from the range
+	ids := make([]int, 0, blockIDs[len(blockIDs)-1] - blockIDs[0] + 1)
+	for i := blockIDs[0]; i <= blockIDs[len(blockIDs)-1]; i++ {
+		ids = append(ids, i)
+	}
 
-	// Fetch the blocks using fetchBlockRange
-	blocks, err := reader.FetchBlockRange(ctx, blockIDs)
+	blockRange, err := reader.FetchBlockRange(ctx, ids)
 	if err != nil {
-		log.Printf("Worker %d error fetching blocks %v: %v", workerID, blockIDs, err)
+		log.Printf("Error fetching blocks %d-%d: %v", blockIDs[0], blockIDs[len(blockIDs)-1], err)
 		return
 	}
 
-	// Save the blocks to the database
-	if err := db.Save(blocks, config); err != nil {
-		log.Printf("Worker %d error saving blocks to database: %v", workerID, err)
+	if len(blockRange) == 0 {
+		log.Printf("No blocks returned for range %d-%d", blockIDs[0], blockIDs[len(blockIDs)-1])
 		return
 	}
 
-}
-
-// processSingleBlock fetches and processes a single block using fetchBlock
-func processSingleBlock(ctx context.Context, blockID int, config Config, db Database, reader ChainReader, workerID int) {
-	log.Printf("Worker %d processing single block %d", workerID, blockID)
-
-	// Fetch the block data using fetchBlock
-	block, err := reader.FetchBlock(ctx, blockID)
+	// Save blocks to database
+	err = db.Save(blockRange, config)
 	if err != nil {
-		log.Printf("Worker %d error fetching block %d: %v", workerID, blockID, err)
+		log.Printf("Error saving blocks %d-%d: %v", blockIDs[0], blockIDs[len(blockIDs)-1], err)
 		return
 	}
-
-	// Save the block to the database
-	if err := db.Save([]BlockData{block}, config); err != nil {
-		// log.Printf("Worker %d error saving block %d to database: %v", workerID, blockID, err)
-		return
-	}
-
 }
 
 // MonitorNewBlocks continuously monitors for new blocks and adds them to the database
 func monitorNewBlocks(ctx context.Context, config Config, db Database, reader ChainReader, lastProcessedBlock int) error {
-	// Create a ticker that ticks every second
-	ticker := time.NewTicker(1 * time.Second)
+	// Create month tracker to detect completed months for database dumps
+	dumpDir := os.Getenv("DOTIDX_DUMP_DIR")
+	if dumpDir == "" {
+		dumpDir = "." // Default to current directory
+	}
+	dumpDir = filepath.Join(dumpDir, "dumps")
+	if err := os.MkdirAll(dumpDir, 0755); err != nil {
+		log.Printf("Warning: Could not create dumps directory %s: %v", dumpDir, err)
+	}
+	monthTracker := NewMonthTracker(db, config, dumpDir)
+
+	log.Printf("Starting to monitor new blocks from block %d", lastProcessedBlock)
+
+	nextBlockID := lastProcessedBlock + 1
+	currentHeadID := lastProcessedBlock
+
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("Block monitor stopped due to context cancellation")
-			return nil
+			return ctx.Err()
 		case <-ticker.C:
 			// Fetch the current head block
-			headBlock, err := reader.GetChainHeadID()
+			headID, err := reader.GetChainHeadID()
 			if err != nil {
 				log.Printf("Error fetching head block: %v", err)
 				continue
 			}
 
-			if headBlock > lastProcessedBlock {
-				log.Printf("New blocks detected: %d to %d", lastProcessedBlock+1, headBlock)
+			// Log progress if head has moved
+			if headID > currentHeadID {
+				log.Printf("Current head is at block %d, next to process is block %d", headID, nextBlockID)
+				currentHeadID = headID
+			}
 
-				// Create array of block IDs to fetch
-				blockIDs := make([]int, 0, headBlock-lastProcessedBlock)
-				for id := lastProcessedBlock + 1; id <= headBlock; id++ {
-					blockIDs = append(blockIDs, id)
-				}
-
-				// Fetch and process the new blocks
-				blocks, err := reader.FetchBlockRange(ctx, blockIDs)
+			// Process blocks from nextBlockID up to the head
+			for nextBlockID <= headID {
+				block, err := reader.FetchBlock(ctx, nextBlockID)
 				if err != nil {
-					log.Printf("Error fetching block range: %v", err)
-					continue
+					log.Printf("Error fetching block %d: %v", nextBlockID, err)
+					break
 				}
 
-				// Save the blocks to the database
-				if err := db.Save(blocks, config); err != nil {
-					log.Printf("Error saving blocks to database: %v", err)
-					continue
+				// Save block to database
+				err = db.Save([]BlockData{block}, config)
+				if err != nil {
+					log.Printf("Error saving block %d: %v", nextBlockID, err)
+					break
 				}
 
-				// Update the last processed block
-				lastProcessedBlock = headBlock
+				// Update month tracker
+				monthKey := GetMonthKey(block.Timestamp)
+				monthTracker.UpdateProgress(monthKey, 1)
+
+				log.Printf("Processed block %d", nextBlockID)
+				nextBlockID++
 			}
 		}
 	}
 }
 
+// Stats struct to track and print statistics
 type Stats struct {
 	db           Database
 	reader       ChainReader
@@ -293,42 +411,79 @@ type Stats struct {
 	context      context.Context
 }
 
+// NewStats creates a new Stats instance
 func NewStats(ctx context.Context, db Database, reader ChainReader) *Stats {
 	return &Stats{
 		db:           db,
 		reader:       reader,
-		tickerHeader: time.NewTicker(300 * time.Second),
-		tickerInfo:   time.NewTicker(15 * time.Second),
+		tickerHeader: time.NewTicker(5 * time.Minute),
+		tickerInfo:   time.NewTicker(5 * time.Second),
 		context:      ctx,
 	}
 }
 
+// Print prints statistics
 func (s *Stats) Print() error {
 	for {
 		select {
 		case <-s.context.Done():
-			return nil
+			return s.context.Err()
 		case <-s.tickerHeader.C:
-			log.Printf("+-- Blocks -------------|------ Chain Reader --|------- DBwriter -------------+")
-			log.Printf("| #----#  b/s  b/s  b/s | Latency (ms)   Error |  tr/s   Latency (ms)   Error |")
-			log.Printf("|          1d   1h   5m | min  avg  max      %% |         min  avg  max     %%  |")
-			log.Printf("+-----------------------|----------------------|------------------------------|")
+			headID, err := s.reader.GetChainHeadID()
+			if err != nil {
+				log.Printf("Error fetching head block: %v", err)
+				continue
+			}
+			log.Printf("Chain Head is at block %d", headID)
+			// Run a ping to check database connection
+			err = s.db.Ping()
+			if err != nil {
+				log.Printf("Error pinging database: %v", err)
+				continue
+			}
 		case <-s.tickerInfo.C:
-			rs := s.reader.GetStats().bucketsStats
-			ds := s.db.GetStats().bucketsStats
-			rs_rate := float64(rs[0].failures) / float64(rs[0].count+rs[0].failures) * 100
-			ds_rate := float64(ds[0].failures) / float64(ds[0].count+ds[0].failures) * 100
-			log.Printf("| %6d %4.1f %4.1f %4.1f | %4d %4d %5d %3.0f%% | %6.1f  %4d %4d %5d %3.0f%% |",
-				rs[0].count, rs[0].rate, rs[1].rate, rs[2].rate,
-				rs[0].min.Milliseconds(),
-				rs[0].avg.Milliseconds(),
-				rs[0].max.Milliseconds(),
-				rs_rate,
-				ds[0].rate,
-				ds[0].min.Milliseconds(),
-				ds[0].avg.Milliseconds(),
-				ds[0].max.Milliseconds(),
-				ds_rate)
+			// Print database statistics
+			stats := s.db.GetStats()
+			s.printStats(stats)
 		}
+	}
+}
+
+// printStats prints the database statistics
+func (s *Stats) printStats(stats *MetricsStats) {
+	if stats == nil {
+		return
+	}
+	
+	log.Printf("+-- Blocks -------------|------ Chain Reader --|------- DBwriter -------------+")
+	log.Printf("| #----#  b/s  b/s  b/s | Latency (ms)   Error |  tr/s   Latency (ms)   Error |")
+	log.Printf("|          1d   1h   5m | min  avg  max      %% |         min  avg  max     %%  |")
+	log.Printf("+-----------------------|----------------------|------------------------------|") 
+	
+	rs := stats.bucketsStats
+	ds := stats.bucketsStats
+	
+	if len(rs) > 0 && len(ds) > 0 {
+		rs_rate := float64(0)
+		ds_rate := float64(0)
+		
+		if rs[0].count+rs[0].failures > 0 {
+			rs_rate = float64(rs[0].failures) / float64(rs[0].count+rs[0].failures) * 100
+		}
+		if ds[0].count+ds[0].failures > 0 {
+			ds_rate = float64(ds[0].failures) / float64(ds[0].count+ds[0].failures) * 100
+		}
+		
+		log.Printf("| %6d %4.1f %4.1f %4.1f | %4d %4d %5d %3.0f%% | %6.1f  %4d %4d %5d %3.0f%% |",
+			rs[0].count, rs[0].rate, rs[1].rate, rs[2].rate,
+			rs[0].min.Milliseconds(),
+			rs[0].avg.Milliseconds(),
+			rs[0].max.Milliseconds(),
+			rs_rate,
+			ds[0].rate,
+			ds[0].min.Milliseconds(),
+			ds[0].avg.Milliseconds(),
+			ds[0].max.Milliseconds(),
+			ds_rate)
 	}
 }

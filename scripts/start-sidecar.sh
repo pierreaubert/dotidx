@@ -4,6 +4,15 @@ ROOT=`pwd`
 
 mkdir -p logs run
 
+IP="127.0.0.1"
+
+if test "$OS" = "Linux"; then
+    IP=$(ip a | grep 192 | cut -d ' ' -f 6 | cut -d '/' -f 1 | head -1)
+elif test "$OS" = "Darwin"; then
+    ulimit -n 10240
+    # IP=$(/sbin/ifconfig| grep 'inet ' | grep broadcast | cut -d ' ' -f 2 | head -1)
+fi
+
 SAS_EXPRESS_PORT_START=10800
 SAS_SUBSTRATE_TYPES_BUNDLE=undefined
 SAS_SUBSTRATE_TYPES_CHAIN=undefined
@@ -18,7 +27,7 @@ for p in `seq 1 15`; do
     SAS_LOG_WRITE=true \
     SAS_WRITE_PATH="$ROOT/logs" \
     SAS_SUBSTRATE_URL="ws://127.0.0.1:9944" \
-    SAS_EXPRESS_BIND_HOST="192.168.1.37" \
+    SAS_EXPRESS_BIND_HOST="$IP" \
     SAS_EXPRESS_KEEP_ALIVE_TIMEOUT=5000 \
     SAS_EXPRESS_MAX_BODY="10mb" \
     SAS_EXPRESS_INJECTED_CONTROLLERS=false \

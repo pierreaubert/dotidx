@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+	"sync"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	_ "github.com/lib/pq"
@@ -84,19 +85,38 @@ func TestSaveToDatabase(t *testing.T) {
 	// Expect transaction commit
 	mock.ExpectCommit()
 
-	// Create a minimal config for testing
+	// Create a minimal config for testing with batch size equal to our test data length
+	// to ensure immediate flushing
 	testConfig := Config{
-		Relaychain: "polkadot",
-		Chain:      "chain",
+		Relaychain:   "polkadot",
+		Chain:        "chain",
+		BatchSize:    2, // Set batch size equal to our test data size to trigger immediate flush
+		FlushTimeout: 10 * time.Second, // Long timeout to ensure size triggers flush, not time
 	}
 
 	database := NewSQLDatabase(db)
+
+	// Create a wait group to wait for async processing
+	var wg sync.WaitGroup
+	wg.Add(1)
+	
+	// Use a timer to stop waiting after timeout
+	done := make(chan struct{})
+	go func() {
+		defer wg.Done()
+		time.Sleep(100 * time.Millisecond)
+		done <- struct{}{}
+	}()
 
 	// Call the function being tested
 	err = database.Save(testData, testConfig)
 	if err != nil {
 		t.Errorf("saveToDatabase returned an error: %v", err)
 	}
+
+	// Wait for a short time to allow async processing
+	<-done
+	wg.Wait()
 
 	// Verify that all expectations were met
 	if err := mock.ExpectationsWereMet(); err != nil {

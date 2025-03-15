@@ -46,6 +46,9 @@ EXCEPTION WHEN duplicate_object THEN RAISE NOTICE '%, skipping', SQLERRM USING E
 END
 $createRoleReader$;
 
+CREATE SCHEMA chain;
+ALTER SCHEMA chain OWNER TO dotidx;
+
 
 
 
