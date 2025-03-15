@@ -82,8 +82,9 @@ func (m *Bucket) GetStats() (bs BucketStats) {
 		bs.avg = (m.totalTime / time.Duration(bs.count)).Round(time.Millisecond)
 		bs.min = m.minTime.Round(time.Millisecond)
 		bs.max = m.maxTime.Round(time.Millisecond)
-		if tt := m.totalTime.Seconds(); tt > 0 {
-			bs.rate = float64(bs.count+bs.failures) / tt
+		delta := time.Since(m.startedAt)
+		if tt := delta.Milliseconds(); tt > 0 {
+			bs.rate = float64(bs.count) * float64(1000.0) / float64(tt)
 		}
 	}
 

@@ -105,7 +105,7 @@ func main() {
 		// Create a separate context for workers that can complete independently
 		workerCtx, workerCancel := context.WithCancel(ctx)
 		defer workerCancel() // Ensure proper cleanup
-        
+
 		// Start workers to process existing blocks
 		startWorkers(workerCtx, config, database, reader, headBlockID)
 
@@ -121,6 +121,7 @@ func main() {
 	}
 
 	if !config.Live {
+		// monthTracker := NewMonthTracker(db, config)
 		log.Println("All tasks completed")
 	}
 }

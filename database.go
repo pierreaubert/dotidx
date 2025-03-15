@@ -450,9 +450,9 @@ func (s *SQLDatabase) saveBatch(items []BlockData, config Config) error {
 	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 	address2blocksTable := fmt.Sprintf("%s.address2blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 
-	log.Printf("Saving batch of %d items to database", len(items))
-	log.Printf("Blocks table: %s", blocksTable)
-	log.Printf("Address2blocks table: %s", address2blocksTable)
+	// log.Printf("Saving batch of %d items to database", len(items))
+	// log.Printf("Blocks table: %s", blocksTable)
+	// log.Printf("Address2blocks table: %s", address2blocksTable)
 
 	// Create insert query templates without using prepared statements
 	blocksInsertQuery := fmt.Sprintf(

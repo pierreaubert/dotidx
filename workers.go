@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 )
@@ -30,32 +28,6 @@ func startWorkers(
 	// Create a wait group to wait for all workers to finish
 	var wg sync.WaitGroup
 
-	// Create month tracker to detect completed months for database dumps
-	// Use the current directory or a specified dump directory from environment
-	dumpDir := os.Getenv("DOTIDX_DUMP_DIR")
-	if dumpDir == "" {
-		dumpDir = "." // Default to current directory
-	}
-	// Ensure dump directory exists
-	if err := os.MkdirAll(dumpDir, 0755); err != nil {
-		log.Printf("Warning: Could not create dump directory %s: %v", dumpDir, err)
-		// Fall back to current directory
-		dumpDir = "."
-	}
-	dumpDir = filepath.Join(dumpDir, "dumps")
-	if err := os.MkdirAll(dumpDir, 0755); err != nil {
-		log.Printf("Warning: Could not create dumps subdirectory %s: %v", dumpDir, err)
-	}
-
-	monthTracker := NewMonthTracker(db, config, dumpDir)
-
-	// Initialize month tracker with approximate ranges
-	err := monthTracker.InitializeMonthRanges(config.StartRange, config.EndRange, reader)
-	if err != nil {
-		log.Printf("Warning: Failed to initialize month ranges: %v", err)
-		// Continue anyway, month tracking will be less efficient but still work
-	}
-
 	// Start single block workers
 	for i := 0; i < config.MaxWorkers/2; i++ {
 		wg.Add(1)
@@ -73,7 +45,7 @@ func startWorkers(
 					}
 
 					// Process a single block
-					processSingleBlockWithMonthTracking(ctx, blockID, config, db, reader, workerID, monthTracker)
+					processSingleBlock(ctx, blockID, config, db, reader, workerID)
 				}
 			}
 		}(i)
@@ -95,7 +67,7 @@ func startWorkers(
 					}
 
 					// Process a batch of blocks
-					processBlockBatchWithMonthTracking(ctx, blockIDs, config, db, reader, workerID, monthTracker)
+					processBlockBatch(ctx, blockIDs, config, db, reader, workerID)
 				}
 			}
 		}(i)
@@ -223,73 +195,6 @@ func startWorkers(
 	wg.Wait()
 }
 
-// processBlockBatchWithMonthTracking fetches and processes a batch of blocks using fetchBlockRange
-// and updates the month tracker with the processed blocks
-func processBlockBatchWithMonthTracking(ctx context.Context, blockIDs []int, config Config, db Database, reader ChainReader, workerID int, monthTracker *MonthTracker) {
-	if len(blockIDs) == 0 {
-		return
-	}
-
-	// Create the array of block IDs from the range
-	ids := make([]int, 0, blockIDs[len(blockIDs)-1] - blockIDs[0] + 1)
-	for i := blockIDs[0]; i <= blockIDs[len(blockIDs)-1]; i++ {
-		ids = append(ids, i)
-	}
-
-	blockRange, err := reader.FetchBlockRange(ctx, ids)
-	if err != nil {
-		log.Printf("Error fetching blocks %d-%d: %v", blockIDs[0], blockIDs[len(blockIDs)-1], err)
-		return
-	}
-
-	if len(blockRange) == 0 {
-		log.Printf("No blocks returned for range %d-%d", blockIDs[0], blockIDs[len(blockIDs)-1])
-		return
-	}
-
-	// Group blocks by month for updating the month tracker
-	blocksByMonth := make(map[string]int)
-
-	// Save blocks to database
-	err = db.Save(blockRange, config)
-	if err != nil {
-		log.Printf("Error saving blocks %d-%d: %v", blockIDs[0], blockIDs[len(blockIDs)-1], err)
-		return
-	}
-
-	// Count blocks by month and update progress tracking
-	for _, block := range blockRange {
-		monthKey := GetMonthKey(block.Timestamp)
-		blocksByMonth[monthKey]++
-	}
-
-	// Update the month tracker for each month
-	for month, count := range blocksByMonth {
-		monthTracker.UpdateProgress(month, count)
-	}
-}
-
-// processSingleBlockWithMonthTracking fetches and processes a single block using fetchBlock
-// and updates the month tracker with the processed block
-func processSingleBlockWithMonthTracking(ctx context.Context, blockID int, config Config, db Database, reader ChainReader, workerID int, monthTracker *MonthTracker) {
-	block, err := reader.FetchBlock(ctx, blockID)
-	if err != nil {
-		log.Printf("Error fetching block %d: %v", blockID, err)
-		return
-	}
-
-	// Save block to database
-	err = db.Save([]BlockData{block}, config)
-	if err != nil {
-		log.Printf("Error saving block %d: %v", blockID, err)
-		return
-	}
-
-	// Update month tracker for this block
-	monthKey := GetMonthKey(block.Timestamp)
-	monthTracker.UpdateProgress(monthKey, 1)
-}
-
 // ProcessSingleBlock fetches and processes a single block using fetchBlock
 func processSingleBlock(ctx context.Context, blockID int, config Config, db Database, reader ChainReader, workerID int) {
 	block, err := reader.FetchBlock(ctx, blockID)
@@ -339,17 +244,6 @@ func processBlockBatch(ctx context.Context, blockIDs []int, config Config, db Da
 
 // MonitorNewBlocks continuously monitors for new blocks and adds them to the database
 func monitorNewBlocks(ctx context.Context, config Config, db Database, reader ChainReader, lastProcessedBlock int) error {
-	// Create month tracker to detect completed months for database dumps
-	dumpDir := os.Getenv("DOTIDX_DUMP_DIR")
-	if dumpDir == "" {
-		dumpDir = "." // Default to current directory
-	}
-	dumpDir = filepath.Join(dumpDir, "dumps")
-	if err := os.MkdirAll(dumpDir, 0755); err != nil {
-		log.Printf("Warning: Could not create dumps directory %s: %v", dumpDir, err)
-	}
-	monthTracker := NewMonthTracker(db, config, dumpDir)
-
 	log.Printf("Starting to monitor new blocks from block %d", lastProcessedBlock)
 
 	nextBlockID := lastProcessedBlock + 1
@@ -372,7 +266,7 @@ func monitorNewBlocks(ctx context.Context, config Config, db Database, reader Ch
 
 			// Log progress if head has moved
 			if headID > currentHeadID {
-				log.Printf("Current head is at block %d, next to process is block %d", headID, nextBlockID)
+				// log.Printf("Current head is at block %d, next to process is block %d", headID, nextBlockID)
 				currentHeadID = headID
 			}
 
@@ -391,11 +285,7 @@ func monitorNewBlocks(ctx context.Context, config Config, db Database, reader Ch
 					break
 				}
 
-				// Update month tracker
-				monthKey := GetMonthKey(block.Timestamp)
-				monthTracker.UpdateProgress(monthKey, 1)
-
-				log.Printf("Processed block %d", nextBlockID)
+				// log.Printf("Processed block %d", nextBlockID)
 				nextBlockID++
 			}
 		}
@@ -416,8 +306,8 @@ func NewStats(ctx context.Context, db Database, reader ChainReader) *Stats {
 	return &Stats{
 		db:           db,
 		reader:       reader,
-		tickerHeader: time.NewTicker(5 * time.Minute),
-		tickerInfo:   time.NewTicker(5 * time.Second),
+		tickerHeader: time.NewTicker(2 * time.Minute),
+		tickerInfo:   time.NewTicker(15 * time.Second),
 		context:      ctx,
 	}
 }
@@ -429,20 +319,11 @@ func (s *Stats) Print() error {
 		case <-s.context.Done():
 			return s.context.Err()
 		case <-s.tickerHeader.C:
-			headID, err := s.reader.GetChainHeadID()
-			if err != nil {
-				log.Printf("Error fetching head block: %v", err)
-				continue
-			}
-			log.Printf("Chain Head is at block %d", headID)
-			// Run a ping to check database connection
-			err = s.db.Ping()
-			if err != nil {
-				log.Printf("Error pinging database: %v", err)
-				continue
-			}
+			log.Printf("+-- Blocks -------------|------ Chain Reader --|------- DBwriter -------------+")
+			log.Printf("| #----#  b/s  b/s  b/s | Latency (ms)   Error |  tr/s   Latency (ms)   Error |")
+			log.Printf("|          1d   1h   5m | min  avg  max      %% |         min  avg  max     %%  |")
+			log.Printf("+-----------------------|----------------------|------------------------------|")
 		case <-s.tickerInfo.C:
-			// Print database statistics
 			stats := s.db.GetStats()
 			s.printStats(stats)
 		}
@@ -454,26 +335,21 @@ func (s *Stats) printStats(stats *MetricsStats) {
 	if stats == nil {
 		return
 	}
-	
-	log.Printf("+-- Blocks -------------|------ Chain Reader --|------- DBwriter -------------+")
-	log.Printf("| #----#  b/s  b/s  b/s | Latency (ms)   Error |  tr/s   Latency (ms)   Error |")
-	log.Printf("|          1d   1h   5m | min  avg  max      %% |         min  avg  max     %%  |")
-	log.Printf("+-----------------------|----------------------|------------------------------|") 
-	
+
 	rs := stats.bucketsStats
 	ds := stats.bucketsStats
-	
+
 	if len(rs) > 0 && len(ds) > 0 {
 		rs_rate := float64(0)
 		ds_rate := float64(0)
-		
+
 		if rs[0].count+rs[0].failures > 0 {
-			rs_rate = float64(rs[0].failures) / float64(rs[0].count+rs[0].failures) * 100
+			rs_rate = float64(rs[0].count) / float64(rs[0].count+rs[0].failures) * 100
 		}
 		if ds[0].count+ds[0].failures > 0 {
-			ds_rate = float64(ds[0].failures) / float64(ds[0].count+ds[0].failures) * 100
+			ds_rate = float64(ds[0].count) / float64(ds[0].count+ds[0].failures) * 100
 		}
-		
+
 		log.Printf("| %6d %4.1f %4.1f %4.1f | %4d %4d %5d %3.0f%% | %6.1f  %4d %4d %5d %3.0f%% |",
 			rs[0].count, rs[0].rate, rs[1].rate, rs[2].rate,
 			rs[0].min.Milliseconds(),
