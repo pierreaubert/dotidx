@@ -2,9 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
-	"sync"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	_ "github.com/lib/pq"
@@ -19,7 +19,7 @@ func TestSaveToDatabase(t *testing.T) {
 	}
 	defer db.Close()
 
-	// Create test data
+	// Create test data with valid Polkadot addresses that will be found
 	testData := []BlockData{
 		{
 			ID:             "1",
@@ -33,14 +33,7 @@ func TestSaveToDatabase(t *testing.T) {
 			OnInitialize:   json.RawMessage(`{"test": true}`),
 			OnFinalize:     json.RawMessage(`{"test": true}`),
 			Logs:           json.RawMessage(`{"test": true}`),
-			Extrinsics: json.RawMessage(`[
-				{
-					"method": "transfer",
-					"params": {
-						"id": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
-					}
-				}
-			]`),
+			Extrinsics:     json.RawMessage(`[{"method": "timestamp.set","now": 1234567890,"signer_id": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"}]`),
 		},
 		{
 			ID:             "2",
@@ -54,33 +47,24 @@ func TestSaveToDatabase(t *testing.T) {
 			OnInitialize:   json.RawMessage(`{"test": false}`),
 			OnFinalize:     json.RawMessage(`{"test": false}`),
 			Logs:           json.RawMessage(`{"test": false}`),
-			Extrinsics: json.RawMessage(`[
-				{
-					"method": "transfer",
-					"params": {
-						"data": ["0x1234567890abcdef", "normal_string"]
-					}
-				}
-			]`),
+			Extrinsics:     json.RawMessage(`[{"method": "timestamp.set","now": 1234567890,"account_id": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"}]`),
 		},
 	}
 
 	// Set up expectations for transaction
 	mock.ExpectBegin()
 
-	// Expect prepared statement for blocks table
-	mock.ExpectPrepare("INSERT INTO chain.blocks_polkadot_chain")
+	// For first item: first blocks table insert with correct column names
+	mock.ExpectExec("^INSERT INTO chain\\.blocks_polkadot_chain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES.*ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
+	
+	// Then address2blocks table
+	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_polkadot_chain\\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "1").WillReturnResult(sqlmock.NewResult(0, 1))
 
-	// Expect prepared statement for address2blocks table
-	mock.ExpectPrepare("INSERT INTO chain.address2blocks_polkadot_chain")
-
-	// Expect executions for each item in blocks table
-	mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(0, 1))
-
-	// Expect executions for addresses in address2blocks table
-	// First block has one address from id field
-	mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(0, 1))
+	// For second item: first blocks table with correct column names
+	mock.ExpectExec("^INSERT INTO chain\\.blocks_polkadot_chain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES.*ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
+	
+	// Then address2blocks table
+	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_polkadot_chain\\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty", "2").WillReturnResult(sqlmock.NewResult(0, 1))
 
 	// Expect transaction commit
 	mock.ExpectCommit()
@@ -90,7 +74,7 @@ func TestSaveToDatabase(t *testing.T) {
 	testConfig := Config{
 		Relaychain:   "polkadot",
 		Chain:        "chain",
-		BatchSize:    2, // Set batch size equal to our test data size to trigger immediate flush
+		BatchSize:    2,                // Set batch size equal to our test data size to trigger immediate flush
 		FlushTimeout: 10 * time.Second, // Long timeout to ensure size triggers flush, not time
 	}
 
@@ -99,35 +83,32 @@ func TestSaveToDatabase(t *testing.T) {
 	// Create a wait group to wait for async processing
 	var wg sync.WaitGroup
 	wg.Add(1)
-	
-	// Use a timer to stop waiting after timeout
+
+	// Use a channel to signal when we should check results
 	done := make(chan struct{})
 	go func() {
 		defer wg.Done()
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(300 * time.Millisecond) // Give time for batch processing
 		done <- struct{}{}
 	}()
 
-	// Call the function being tested
+	// Save data to database (should trigger immediate batch flush due to matching batch size)
 	err = database.Save(testData, testConfig)
-	if err != nil {
-		t.Errorf("saveToDatabase returned an error: %v", err)
-	}
+	assert.NoError(t, err, "Should not error when saving data")
 
-	// Wait for a short time to allow async processing
+	// Wait for batch processing to complete
 	<-done
 	wg.Wait()
 
-	// Verify that all expectations were met
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("Unfulfilled expectations: %v", err)
-	}
+	// Verify all expectations were met
+	err = mock.ExpectationsWereMet()
+	assert.NoError(t, err, "All expectations should be met")
 }
 
 func TestDatabasePoolConfig(t *testing.T) {
 	// Test the default connection pool config
 	defaultConfig := DefaultDBPoolConfig()
-	
+
 	assert.Equal(t, 25, defaultConfig.MaxOpenConns, "Default max open connections should be 25")
 	assert.Equal(t, 5, defaultConfig.MaxIdleConns, "Default max idle connections should be 5")
 	assert.Equal(t, 5*time.Minute, defaultConfig.ConnMaxLifetime, "Default connection max lifetime should be 5 minutes")

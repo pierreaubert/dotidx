@@ -50,10 +50,6 @@ type SQLDatabase struct {
 	metrics *Metrics
 	poolCfg DBPoolConfig
 
-	// Query templates cache to avoid rebuilding queries each time
-	queryTemplates     map[string]string
-	queryTemplatesMutex sync.RWMutex
-
 	// Batch processing
 	batchMutex    sync.Mutex
 	batchItems    []BlockData
@@ -82,11 +78,10 @@ func NewSQLDatabaseWithPool(db *sql.DB, poolCfg DBPoolConfig) *SQLDatabase {
 	db.SetConnMaxIdleTime(poolCfg.ConnMaxIdleTime)
 
 	return &SQLDatabase{
-		db:      db,
-		metrics: NewMetrics("Postgres"),
-		poolCfg: poolCfg,
-		queryTemplates: make(map[string]string),
-		batchShutdown: make(chan struct{}),
+		db:             db,
+		metrics:        NewMetrics("Postgres"),
+		poolCfg:        poolCfg,
+		batchShutdown:  make(chan struct{}),
 	}
 }
 
@@ -121,33 +116,6 @@ func (s *SQLDatabase) Close() error {
 	return s.db.Close()
 }
 
-// getQueryTemplate returns a cached query template or creates a new one if it doesn't exist
-func (s *SQLDatabase) getQueryTemplate(tableName, query string) (string, error) {
-	// Try to get from cache first
-	s.queryTemplatesMutex.RLock()
-	template, exists := s.queryTemplates[tableName]
-	s.queryTemplatesMutex.RUnlock()
-
-	if exists {
-		return template, nil
-	}
-
-	// If not in cache, prepare a new template
-	s.queryTemplatesMutex.Lock()
-	defer s.queryTemplatesMutex.Unlock()
-
-	// Check again after acquiring write lock (double-checked locking)
-	template, exists = s.queryTemplates[tableName]
-	if exists {
-		return template, nil
-	}
-
-	// Prepare the template
-	template = query
-	s.queryTemplates[tableName] = template
-	return template, nil
-}
-
 func (s *SQLDatabase) DoUpgrade(config Config) error {
 
 	// create dotidx version table to track migrations
@@ -172,7 +140,7 @@ func (s *SQLDatabase) CreateTable(config Config) error {
 	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 
 	// Create the blocks table
-	template, err := s.getQueryTemplate(blocksTable, fmt.Sprintf(`
+	template := fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %[1]s
 (
   block_id        integer NOT NULL,
@@ -193,11 +161,8 @@ ALTER TABLE IF EXISTS %[1]s OWNER to dotidx;
 REVOKE ALL ON TABLE %[1]s FROM PUBLIC;
 GRANT SELECT ON TABLE %[1]s TO PUBLIC;
 GRANT ALL ON TABLE %[1]s TO dotidx;
-	`, blocksTable))
-	if err != nil {
-		return err
-	}
-	_, err = s.db.Exec(template)
+	`, blocksTable)
+	_, err := s.db.Exec(template)
 	if err != nil {
 		return fmt.Errorf("error creating blocks table: %s %w", template, err)
 	}
@@ -208,13 +173,13 @@ GRANT ALL ON TABLE %[1]s TO dotidx;
 	fast := 0
 	slow_or_fast := ""
 	for year_idx := range 6 {
-		year := 2020+year_idx
+		year := 2020 + year_idx
 		if year >= time.Now().Year() {
-			slow_or_fast = fmt.Sprintf("fast%d", fast);
-			fast = min(fast+1,fastTablespaceNumber-1)
+			slow_or_fast = fmt.Sprintf("fast%d", fast)
+			fast = min(fast+1, fastTablespaceNumber-1)
 		} else {
-			slow_or_fast = fmt.Sprintf("slow%d", slow);
-			slow = min(slow+1,slowTablespaceNumber-1)
+			slow_or_fast = fmt.Sprintf("slow%d", slow)
+			slow = min(slow+1, slowTablespaceNumber-1)
 		}
 		for month := range 12 {
 			from_date := fmt.Sprintf("%04d-%02d-01 00:00:00.0000", year, month+1)
@@ -231,19 +196,15 @@ REVOKE ALL ON TABLE %[1]s_%04[2]d_%02[3]d FROM PUBLIC;
 GRANT SELECT ON TABLE %[1]s_%04[2]d_%02[3]d TO PUBLIC;
 GRANT ALL ON TABLE %[1]s_%04[2]d_%02[3]d TO dotidx;
 	`,
-				blocksTable, // 1
-				year,        // 2
-				month+1,     // 3
-				month+2,     // 4
-				from_date,   // 5
-				to_date,     // 6
-				slow_or_fast,// 7
+				blocksTable,  // 1
+				year,         // 2
+				month+1,      // 3
+				month+2,      // 4
+				from_date,    // 5
+				to_date,      // 6
+				slow_or_fast, // 7
 			)
-			template, err = s.getQueryTemplate(blocksTable, parts)
-			if err != nil {
-				return err
-			}
-			_, err = s.db.Exec(template)
+			_, err = s.db.Exec(parts)
 			if err != nil {
 				return fmt.Errorf("error : %w", err)
 			}
@@ -256,7 +217,7 @@ GRANT ALL ON TABLE %[1]s_%04[2]d_%02[3]d TO dotidx;
 		strings.ToLower(config.Relaychain),
 		chainName,
 	)
-	template, err = s.getQueryTemplate(address2blocksTable, fmt.Sprintf(`
+	template = fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %s (
      address TEXT,
      block_id INTEGER,
@@ -266,10 +227,7 @@ ALTER TABLE IF EXISTS %[1]s OWNER to dotidx;
 REVOKE ALL ON TABLE %[1]s FROM PUBLIC;
 GRANT SELECT ON TABLE %[1]s TO PUBLIC;
 GRANT ALL ON TABLE %[1]s TO dotidx;
-	`, address2blocksTable))
-	if err != nil {
-		return err
-	}
+	`, address2blocksTable)
 	_, err = s.db.Exec(template)
 	if err != nil {
 		return fmt.Errorf("error creating address2blocks table: %w", err)
@@ -288,14 +246,10 @@ GRANT SELECT ON TABLE %[1]s_%1[2]d TO PUBLIC;
 GRANT ALL ON TABLE %[1]s_%1[2]d TO dotidx;
 	`,
 			address2blocksTable,  // 1
-			fast        ,         // 2
+			fast,                 // 2
 			fastTablespaceNumber, // 3
-			)
-		template, err = s.getQueryTemplate(address2blocksTable, parts)
-		if err != nil {
-			return err
-		}
-		_, err = s.db.Exec(template)
+		)
+		_, err = s.db.Exec(parts)
 		if err != nil {
 			return fmt.Errorf("error : %w", err)
 		}
@@ -310,27 +264,21 @@ func (s *SQLDatabase) CreateIndex(config Config) error {
 	chainName := sanitizeChainName(config.Chain, config.Relaychain)
 
 	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
-	template, err := s.getQueryTemplate(blocksTable, fmt.Sprintf(`
+	template := fmt.Sprintf(`
                 CREATE INDEX IF NOT EXISTS extrinsincs_idx
                 ON %s USING gin(extrinsics jsonb_path_ops)
                 WITH (fastupdate=True)
                 TABLESPACE pg_default;
-	`, blocksTable))
-	if err != nil {
-		return err
-	}
-	_, err = s.db.Exec(template)
+	`, blocksTable)
+	_, err := s.db.Exec(template)
 	if err != nil {
 		return fmt.Errorf("error creating index on address column: %w", err)
 	}
 
 	address2blocksTable := fmt.Sprintf("address2blocks_%s_%s", strings.ToLower(config.Relaychain), chainName)
-	template, err = s.getQueryTemplate(address2blocksTable, fmt.Sprintf(`
+	template = fmt.Sprintf(`
 		CREATE INDEX IF NOT EXISTS %s_address_idx ON %s (address)
-	`, address2blocksTable, address2blocksTable))
-	if err != nil {
-		return err
-	}
+	`, address2blocksTable, address2blocksTable)
 	_, err = s.db.Exec(template)
 	if err != nil {
 		return fmt.Errorf("error creating index on address column: %w", err)
@@ -502,37 +450,34 @@ func (s *SQLDatabase) saveBatch(items []BlockData, config Config) error {
 	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 	address2blocksTable := fmt.Sprintf("%s.address2blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 
-	// Create insert query templates
-	template, err := s.getQueryTemplate(blocksTable, fmt.Sprintf(`
-		INSERT INTO %s (
-			block_id, created_at, hash, parent_hash, state_root, extrinsics_root,
-			author_id, finalized, on_initialize, on_finalize, logs, extrinsics
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-		ON CONFLICT (block_id, created_at) DO UPDATE SET
-			created_at = EXCLUDED.created_at,
-			hash = EXCLUDED.hash,
-			parent_hash = EXCLUDED.parent_hash,
-			state_root = EXCLUDED.state_root,
-			extrinsics_root = EXCLUDED.extrinsics_root,
-			author_id = EXCLUDED.author_id,
-			finalized = EXCLUDED.finalized,
-			on_initialize = EXCLUDED.on_initialize,
-			on_finalize = EXCLUDED.on_finalize,
-			logs = EXCLUDED.logs,
-			extrinsics = EXCLUDED.extrinsics
-	`, blocksTable))
-	if err != nil {
-		return err
-	}
+	log.Printf("Saving batch of %d items to database", len(items))
+	log.Printf("Blocks table: %s", blocksTable)
+	log.Printf("Address2blocks table: %s", address2blocksTable)
 
-	template2, err := s.getQueryTemplate(address2blocksTable, fmt.Sprintf(`
-		INSERT INTO %s (address, block_id)
-		VALUES ($1, $2)
-		ON CONFLICT (address, block_id) DO NOTHING
-	`, address2blocksTable))
-	if err != nil {
-		return err
-	}
+	// Create insert query templates without using prepared statements
+	blocksInsertQuery := fmt.Sprintf(
+		"INSERT INTO %s ("+
+			"block_id, created_at, hash, parent_hash, state_root, extrinsics_root, "+
+			"author_id, finalized, on_initialize, on_finalize, logs, extrinsics"+
+			") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) "+
+			"ON CONFLICT (block_id, created_at) DO UPDATE SET "+
+			"created_at = EXCLUDED.created_at, "+
+			"hash = EXCLUDED.hash, "+
+			"parent_hash = EXCLUDED.parent_hash, "+
+			"state_root = EXCLUDED.state_root, "+
+			"extrinsics_root = EXCLUDED.extrinsics_root, "+
+			"author_id = EXCLUDED.author_id, "+
+			"finalized = EXCLUDED.finalized, "+
+			"on_initialize = EXCLUDED.on_initialize, "+
+			"on_finalize = EXCLUDED.on_finalize, "+
+			"logs = EXCLUDED.logs, "+
+			"extrinsics = EXCLUDED.extrinsics",
+		blocksTable)
+
+	addressInsertQuery := fmt.Sprintf(
+		"INSERT INTO %s (address, block_id) VALUES ($1, $2) "+
+			"ON CONFLICT (address, block_id) DO NOTHING",
+		address2blocksTable)
 
 	// Begin transaction
 	tx, err := s.db.Begin()
@@ -548,28 +493,16 @@ func (s *SQLDatabase) saveBatch(items []BlockData, config Config) error {
 		}
 	}()
 
-	// Prepare statement for blocks table within the transaction
-	stmt, err := tx.Prepare(template)
-	if err != nil {
-		return fmt.Errorf("error preparing statement for blocks table: %w", err)
-	}
-	defer stmt.Close()
-
-	// Prepare statement for address2blocks table within the transaction
-	stmt2, err := tx.Prepare(template2)
-	if err != nil {
-		return fmt.Errorf("error preparing statement for address2blocks table: %w", err)
-	}
-	defer stmt2.Close()
-
-	// Insert items
+	// Insert items directly without using prepared statements
 	for _, item := range items {
 		ts, err := extractTimestamp(item.Extrinsics)
 		if err != nil {
 			log.Printf("warning: blockID %s could not find timestamp %v", item.ID, err)
 		}
-		// log.Printf("Inserting item %s at %s", item.ID, ts)
-		_, err = stmt.Exec(
+
+		// Insert into blocks table using direct execution
+		_, err = tx.Exec(
+			blocksInsertQuery,
 			item.ID,
 			ts,
 			item.Hash,
@@ -596,7 +529,7 @@ func (s *SQLDatabase) saveBatch(items []BlockData, config Config) error {
 
 		// Insert into address2blocks table
 		for _, address := range addresses {
-			_, err = stmt2.Exec(address, item.ID)
+			_, err = tx.Exec(addressInsertQuery, address, item.ID)
 			if err != nil {
 				return fmt.Errorf("error inserting into address2blocks table: %w", err)
 			}
@@ -619,12 +552,11 @@ func (s *SQLDatabase) GetExistingBlocks(startRange, endRange int, config Config)
 	// Create blocks table name
 	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 
-	// Query for existing blocks
-	template, err := s.getQueryTemplate(blocksTable, fmt.Sprintf("SELECT block_id FROM %s WHERE block_id BETWEEN $1 AND $2", blocksTable))
-	if err != nil {
-		return nil, err
-	}
-	rows, err := s.db.Query(template, startRange, endRange)
+	// Query for existing blocks - explicitly create a simple query without multiple statements
+	query := fmt.Sprintf("SELECT block_id FROM %s WHERE block_id BETWEEN $1 AND $2", blocksTable)
+
+	// Execute the query directly without using getQueryTemplate to avoid potential issues with multiple statements
+	rows, err := s.db.Query(query, startRange, endRange)
 	if err != nil {
 		return nil, fmt.Errorf("error querying for existing blocks: %w", err)
 	}
@@ -638,6 +570,10 @@ func (s *SQLDatabase) GetExistingBlocks(startRange, endRange int, config Config)
 			return nil, fmt.Errorf("error scanning block ID: %w", err)
 		}
 		existingBlocks[blockID] = true
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over blocks: %w", err)
 	}
 
 	return existingBlocks, nil

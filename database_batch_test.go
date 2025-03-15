@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 	"sync"
@@ -17,80 +18,120 @@ func TestAsynchronousBatchProcessing(t *testing.T) {
 	}
 	defer db.Close()
 
-	// Create test configuration
-	config := Config{
-		BatchSize:    5,
-		FlushTimeout: 500 * time.Millisecond,
-		Relaychain:   "test_relay",
-		Chain:        "test_chain",
-	}
-
-	// Create an SQLDatabase instance with the mock
-	sqlDB := NewSQLDatabase(db)
-
-	// Setup expectations for the prepared statements and executions
-	mock.ExpectBegin()
-	mock.ExpectPrepare("INSERT INTO")
-	mock.ExpectPrepare("INSERT INTO")
-
-	// Expect executions for batch items
-	for i := 0; i < 3; i++ {
-		mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(1, 1))
-	}
-
-	mock.ExpectCommit()
-
-	// Create test block data
-	testBlocks := []BlockData{
+	// Create test data
+	testData := []BlockData{
 		{
 			ID:             "1",
-			Hash:           "0x1234567890abcdef1234567890abcdef",
-			ParentHash:     "0xabcdef1234567890abcdef1234567890",
-			StateRoot:      "0x1234567890abcdef1234567890abcdef",
-			ExtrinsicsRoot: "0xabcdef1234567890abcdef1234567890",
-			AuthorID:       "0x1234567890",
+			Timestamp:      time.Now(),
+			Hash:           "hash1",
+			ParentHash:     "parenthash1",
+			StateRoot:      "stateroot1",
+			ExtrinsicsRoot: "extrinsicsroot1",
+			AuthorID:       "author1",
 			Finalized:      true,
-			Extrinsics:     []byte(`{"timestamp": "2023-01-01T00:00:00Z"}`),
+			OnInitialize:   json.RawMessage(`{"test": true}`),
+			OnFinalize:     json.RawMessage(`{"test": true}`),
+			Logs:           json.RawMessage(`{"test": true}`),
+			Extrinsics: json.RawMessage(`[
+				{
+					"method": "timestamp.set",
+					"now": 1234567890,
+					"signer_id": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+				}
+			]`),
 		},
 		{
 			ID:             "2",
-			Hash:           "0x2345678901abcdef2345678901abcdef",
-			ParentHash:     "0x1234567890abcdef1234567890abcdef",
-			StateRoot:      "0x2345678901abcdef2345678901abcdef",
-			ExtrinsicsRoot: "0x2345678901abcdef2345678901abcdef",
-			AuthorID:       "0x2345678901",
+			Timestamp:      time.Now(),
+			Hash:           "hash2",
+			ParentHash:     "parenthash2",
+			StateRoot:      "stateroot2",
+			ExtrinsicsRoot: "extrinsicsroot2",
+			AuthorID:       "author2",
 			Finalized:      true,
-			Extrinsics:     []byte(`{"timestamp": "2023-01-01T00:00:01Z"}`),
+			OnInitialize:   json.RawMessage(`{"test": true}`),
+			OnFinalize:     json.RawMessage(`{"test": true}`),
+			Logs:           json.RawMessage(`{"test": true}`),
+			Extrinsics: json.RawMessage(`[
+				{
+					"method": "timestamp.set",
+					"now": 1234567890,
+					"account_id": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+				}
+			]`),
 		},
 		{
 			ID:             "3",
-			Hash:           "0x3456789012abcdef3456789012abcdef",
-			ParentHash:     "0x2345678901abcdef2345678901abcdef",
-			StateRoot:      "0x3456789012abcdef3456789012abcdef",
-			ExtrinsicsRoot: "0x3456789012abcdef3456789012abcdef",
-			AuthorID:       "0x3456789012",
+			Timestamp:      time.Now(),
+			Hash:           "hash3",
+			ParentHash:     "parenthash3",
+			StateRoot:      "stateroot3",
+			ExtrinsicsRoot: "extrinsicsroot3",
+			AuthorID:       "author3",
 			Finalized:      true,
-			Extrinsics:     []byte(`{"timestamp": "2023-01-01T00:00:02Z"}`),
+			OnInitialize:   json.RawMessage(`{"test": true}`),
+			OnFinalize:     json.RawMessage(`{"test": true}`),
+			Logs:           json.RawMessage(`{"test": true}`),
+			Extrinsics: json.RawMessage(`[
+				{
+					"method": "timestamp.set",
+					"now": 1234567890,
+					"validator_id": "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+				}
+			]`),
 		},
 	}
 
-	// Setup a wait group to wait for async operations
+	// Create config with specified batch size to control number of items per batch
+	testConfig := Config{
+		Relaychain:   "test_relay",
+		Chain:        "testchain",
+		BatchSize:    2, // Set batch size to 2 to split our 3 items into two batches
+		FlushTimeout: 10 * time.Second,
+	}
+
+	// Set up expectations for batches
+	mock.ExpectBegin()
+	
+	// First batch (items 0 and 1)
+	// For item 0: first blocks table, then address2blocks table
+	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES.*ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain\\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "1").WillReturnResult(sqlmock.NewResult(0, 1))
+	
+	// For item 1: first blocks table, then address2blocks table
+	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES.*ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain\\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty", "2").WillReturnResult(sqlmock.NewResult(0, 1))
+	
+	mock.ExpectCommit()
+
+	// Second batch (item 2)
+	mock.ExpectBegin()
+	// For item 2: first blocks table, then address2blocks table
+	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES.*ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain\\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy", "3").WillReturnResult(sqlmock.NewResult(0, 1))
+	
+	mock.ExpectCommit()
+
+	// Create database with mock
+	database := NewSQLDatabase(db)
+
+	// Create a wait group to wait for async processing
 	var wg sync.WaitGroup
 	wg.Add(1)
-	
-	// Use a timer to stop waiting after timeout
+
+	// Use a channel to signal when we should check results
 	done := make(chan struct{})
 	go func() {
 		defer wg.Done()
-		time.Sleep(700 * time.Millisecond)
+		time.Sleep(300 * time.Millisecond) // Give time for batch processing
 		done <- struct{}{}
 	}()
 
-	// Add items to the batch (not enough to trigger auto-flush)
-	err = sqlDB.Save(testBlocks, config)
-	assert.NoError(t, err, "Should not error when adding items to batch")
+	// Save data to database
+	err = database.Save(testData, testConfig)
+	assert.NoError(t, err, "Should not error when saving data")
 
-	// Wait for the flush timeout
+	// Wait for batch processing to complete
 	<-done
 	wg.Wait()
 
@@ -107,70 +148,91 @@ func TestBatchFlushOnSize(t *testing.T) {
 	}
 	defer db.Close()
 
-	// Create test configuration with small batch size
-	config := Config{
-		BatchSize:    2, // Small batch size to trigger flush
-		FlushTimeout: 10 * time.Second, // Long timeout to ensure size triggers flush, not time
-		Relaychain:   "test_relay",
-		Chain:        "test_chain",
-	}
-
-	// Create an SQLDatabase instance with the mock
-	sqlDB := NewSQLDatabase(db)
-
-	// Setup expectations for the prepared statements and executions
-	mock.ExpectBegin()
-	mock.ExpectPrepare("INSERT INTO")
-	mock.ExpectPrepare("INSERT INTO")
-
-	// Expect executions for batch items
-	for i := 0; i < 2; i++ {
-		mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(1, 1))
-	}
-
-	mock.ExpectCommit()
-
-	// Create test block data that will exceed batch size
-	testBlocks := []BlockData{
+	// Create test data
+	testData := []BlockData{
 		{
 			ID:             "1",
-			Hash:           "0x1234567890abcdef1234567890abcdef",
-			ParentHash:     "0xabcdef1234567890abcdef1234567890",
-			StateRoot:      "0x1234567890abcdef1234567890abcdef",
-			ExtrinsicsRoot: "0xabcdef1234567890abcdef1234567890",
-			AuthorID:       "0x1234567890",
+			Timestamp:      time.Now(),
+			Hash:           "hash1",
+			ParentHash:     "parenthash1",
+			StateRoot:      "stateroot1",
+			ExtrinsicsRoot: "extrinsicsroot1",
+			AuthorID:       "author1",
 			Finalized:      true,
-			Extrinsics:     []byte(`{"timestamp": "2023-01-01T00:00:00Z"}`),
+			OnInitialize:   json.RawMessage(`{"test": true}`),
+			OnFinalize:     json.RawMessage(`{"test": true}`),
+			Logs:           json.RawMessage(`{"test": true}`),
+			Extrinsics: json.RawMessage(`[
+				{
+					"method": "timestamp.set",
+					"now": 1234567890,
+					"signer_id": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+				}
+			]`),
 		},
 		{
 			ID:             "2",
-			Hash:           "0x2345678901abcdef2345678901abcdef",
-			ParentHash:     "0x1234567890abcdef1234567890abcdef",
-			StateRoot:      "0x2345678901abcdef2345678901abcdef",
-			ExtrinsicsRoot: "0x2345678901abcdef2345678901abcdef",
-			AuthorID:       "0x2345678901",
+			Timestamp:      time.Now(),
+			Hash:           "hash2",
+			ParentHash:     "parenthash2",
+			StateRoot:      "stateroot2",
+			ExtrinsicsRoot: "extrinsicsroot2",
+			AuthorID:       "author2",
 			Finalized:      true,
-			Extrinsics:     []byte(`{"timestamp": "2023-01-01T00:00:01Z"}`),
+			OnInitialize:   json.RawMessage(`{"test": true}`),
+			OnFinalize:     json.RawMessage(`{"test": true}`),
+			Logs:           json.RawMessage(`{"test": true}`),
+			Extrinsics: json.RawMessage(`[
+				{
+					"method": "timestamp.set",
+					"now": 1234567890,
+					"account_id": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+				}
+			]`),
 		},
 	}
 
-	// Setup a wait group to wait for async operations
+	// Create config with small batch size to ensure size triggers the flush
+	testConfig := Config{
+		Relaychain:   "test_relay",
+		Chain:        "testchain",
+		BatchSize:    2, // Set batch size to 2 to force a flush after items 0 and 1
+		FlushTimeout: 10 * time.Second, // Long timeout to ensure size triggers flush, not time
+	}
+
+	// Set up expectations for the batch
+	mock.ExpectBegin()
+	
+	// For item 0: first blocks table, then address2blocks table
+	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES.*ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain\\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "1").WillReturnResult(sqlmock.NewResult(0, 1))
+	
+	// For item 1: first blocks table, then address2blocks table
+	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES.*ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain\\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty", "2").WillReturnResult(sqlmock.NewResult(0, 1))
+	
+	mock.ExpectCommit()
+
+	// Create database with mock
+	database := NewSQLDatabase(db)
+
+	// Create a wait group to wait for async processing
 	var wg sync.WaitGroup
 	wg.Add(1)
-	
-	// Use a timer to stop waiting after timeout
+
+	// Use a channel to signal when we should check results
 	done := make(chan struct{})
 	go func() {
 		defer wg.Done()
-		time.Sleep(300 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond) // Give time for batch processing
 		done <- struct{}{}
 	}()
 
-	// Add items to the batch (should trigger auto-flush based on size)
-	err = sqlDB.Save(testBlocks, config)
-	assert.NoError(t, err, "Should not error when adding items to batch")
+	// Save first two items to trigger a batch flush due to size
+	err = database.Save(testData, testConfig)
+	assert.NoError(t, err, "Should not error when saving data")
 
-	// Wait for a short time to allow async processing
+	// Wait for batch processing to complete
 	<-done
 	wg.Wait()
 
@@ -185,52 +247,76 @@ func TestFlushOnClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating mock database: %v", err)
 	}
+	defer db.Close()
 
-	// Create test configuration
-	config := Config{
-		BatchSize:    10, // Large batch size to prevent auto-flush
-		FlushTimeout: 10 * time.Second, // Long timeout to prevent timeout flush
-		Relaychain:   "test_relay",
-		Chain:        "test_chain",
-	}
-
-	// Create an SQLDatabase instance with the mock
-	sqlDB := NewSQLDatabase(db)
-
-	// Setup expectations for the prepared statements and executions
-	mock.ExpectBegin()
-	mock.ExpectPrepare("INSERT INTO")
-	mock.ExpectPrepare("INSERT INTO")
-
-	// Expect executions for batch item
-	mock.ExpectExec("").WillReturnResult(sqlmock.NewResult(1, 1))
-
-	mock.ExpectCommit()
-	
-	// Expect database close
-	mock.ExpectClose()
-
-	// Create test block data
-	testBlocks := []BlockData{
+	// Create test data with a single item
+	testData := []BlockData{
 		{
 			ID:             "1",
-			Hash:           "0x1234567890abcdef1234567890abcdef",
-			ParentHash:     "0xabcdef1234567890abcdef1234567890",
-			StateRoot:      "0x1234567890abcdef1234567890abcdef",
-			ExtrinsicsRoot: "0xabcdef1234567890abcdef1234567890",
-			AuthorID:       "0x1234567890",
+			Timestamp:      time.Now(),
+			Hash:           "hash1",
+			ParentHash:     "parenthash1",
+			StateRoot:      "stateroot1",
+			ExtrinsicsRoot: "extrinsicsroot1",
+			AuthorID:       "author1",
 			Finalized:      true,
-			Extrinsics:     []byte(`{"timestamp": "2023-01-01T00:00:00Z"}`),
+			OnInitialize:   json.RawMessage(`{"test": true}`),
+			OnFinalize:     json.RawMessage(`{"test": true}`),
+			Logs:           json.RawMessage(`{"test": true}`),
+			Extrinsics: json.RawMessage(`[
+				{
+					"method": "timestamp.set",
+					"now": 1234567890,
+					"signer_id": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+				}
+			]`),
 		},
 	}
 
-	// Add item to the batch (not enough to trigger auto-flush)
-	err = sqlDB.Save(testBlocks, config)
-	assert.NoError(t, err, "Should not error when adding items to batch")
+	// Create config with large batch size to ensure no automatic flushing
+	testConfig := Config{
+		Relaychain:   "test_relay",
+		Chain:        "testchain",
+		BatchSize:    100, // Large batch size to prevent automatic flushing
+		FlushTimeout: 10 * time.Second,
+	}
 
-	// Close the database (should flush remaining items)
-	err = sqlDB.Close()
+	// Set up expectations for the batch
+	mock.ExpectBegin()
+	
+	// For item 0: first blocks table, then address2blocks table
+	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES.*ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain\\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "1").WillReturnResult(sqlmock.NewResult(0, 1))
+	
+	mock.ExpectCommit()
+	mock.ExpectClose()
+
+	// Create database with mock
+	database := NewSQLDatabase(db)
+
+	// Create a wait group to wait for async processing
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Use a channel to signal when we should check results
+	done := make(chan struct{})
+	go func() {
+		defer wg.Done()
+		time.Sleep(300 * time.Millisecond) // Give time for batch processing
+		done <- struct{}{}
+	}()
+
+	// Save data to database (shouldn't trigger flush yet due to large batch size)
+	err = database.Save(testData, testConfig)
+	assert.NoError(t, err, "Should not error when saving data")
+
+	// Close database to trigger flush
+	err = database.Close()
 	assert.NoError(t, err, "Should not error when closing database")
+
+	// Wait for batch processing to complete
+	<-done
+	wg.Wait()
 
 	// Verify all expectations were met
 	err = mock.ExpectationsWereMet()
