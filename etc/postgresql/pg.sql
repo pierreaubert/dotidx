@@ -1,6 +1,6 @@
 -- if data are on ZFS
--- ALTER SYSTEM SET full_page_writes=off;
--- CHECKPOINT;
+ALTER SYSTEM SET full_page_writes=off;
+CHECKPOINT;
 
 DO $createRolePolkadot$
 BEGIN
@@ -13,7 +13,7 @@ $createRolePolkadot$;
 
 ALTER USER dotlake with ENCRYPTED PASSWORD 'YOURPASSWORD';
 
-# 6 sata disks
+--  6 sata disks
 CREATE TABLESPACE dotidx_slow0 LOCATION '/dotlake/slow0';
 CREATE TABLESPACE dotidx_slow1 LOCATION '/dotlake/slow1';
 CREATE TABLESPACE dotidx_slow2 LOCATION '/dotlake/slow2';
@@ -28,7 +28,7 @@ ALTER TABLESPACE dotlake_slow3  OWNER TO dotlake;
 ALTER TABLESPACE dotlake_slow4  OWNER TO dotlake;
 ALTER TABLESPACE dotlake_slow5  OWNER TO dotlake;
 
-# 4 ssd disks
+--  4 ssd disks
 CREATE TABLESPACE dotidx_fast0 LOCATION '/dotlake/fast0';
 CREATE TABLESPACE dotidx_fast1 LOCATION '/dotlake/fast1';
 CREATE TABLESPACE dotidx_fast2 LOCATION '/dotlake/fast2';
