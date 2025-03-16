@@ -83,6 +83,25 @@ func main() {
 	// Handle OS signals for graceful shutdown
 	setupSignalHandler(cancel)
 
+	// ----------------------------------------------------------------------
+	// REST Frontend
+	// ----------------------------------------------------------------------
+	frontendAddr := ":8080"
+	if len(os.Getenv("FRONTEND_ADDR")) > 0 {
+		frontendAddr = os.Getenv("FRONTEND_ADDR")
+	}
+
+	// Initialize the frontend server
+	frontend := NewFrontend(db, config, frontendAddr)
+
+	// Start the frontend server in a goroutine
+	log.Printf("Starting REST API frontend on %s", frontendAddr)
+	go func() {
+		if err := frontend.Start(ctx.Done()); err != nil {
+			log.Printf("Error starting frontend server: %v", err)
+		}
+	}()
+
 	headBlockID, err := reader.GetChainHeadID()
 	if err != nil {
 		log.Fatalf("Failed to fetch head block: %v", err)

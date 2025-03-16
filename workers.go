@@ -306,7 +306,7 @@ func NewStats(ctx context.Context, db Database, reader ChainReader) *Stats {
 	return &Stats{
 		db:           db,
 		reader:       reader,
-		tickerHeader: time.NewTicker(2 * time.Minute),
+		tickerHeader: time.NewTicker(5 * time.Minute),
 		tickerInfo:   time.NewTicker(15 * time.Second),
 		context:      ctx,
 	}
@@ -319,10 +319,7 @@ func (s *Stats) Print() error {
 		case <-s.context.Done():
 			return s.context.Err()
 		case <-s.tickerHeader.C:
-			log.Printf("+-- Blocks -------------|------ Chain Reader --|------- DBwriter -------------+")
-			log.Printf("| #----#  b/s  b/s  b/s | Latency (ms)   Error |  tr/s   Latency (ms)   Error |")
-			log.Printf("|          1d   1h   5m | min  avg  max      %% |         min  avg  max     %%  |")
-			log.Printf("+-----------------------|----------------------|------------------------------|")
+			s.printHeader()
 		case <-s.tickerInfo.C:
 			stats := s.db.GetStats()
 			s.printStats(stats)
@@ -331,6 +328,13 @@ func (s *Stats) Print() error {
 }
 
 // printStats prints the database statistics
+func (s *Stats) printHeader() {
+	log.Printf("+--- Blocks ---------------|------ Chain Reader ----|------- DBwriter ---------------+")
+	log.Printf("| #-----#  b/s   b/s   b/s | Latency (ms)     Error |  tr/s   Latency (ms)     Error |")
+	log.Printf("|          1d    1h    5m  | min  avg  max        %% |         min  avg  max       %%  |")
+	log.Printf("+--------------------------|------------------------|--------------------------------|")
+}
+
 func (s *Stats) printStats(stats *MetricsStats) {
 	if stats == nil {
 		return
@@ -344,13 +348,13 @@ func (s *Stats) printStats(stats *MetricsStats) {
 		ds_rate := float64(0)
 
 		if rs[0].count+rs[0].failures > 0 {
-			rs_rate = float64(rs[0].count) / float64(rs[0].count+rs[0].failures) * 100
+			rs_rate = float64(rs[0].failures) / float64(rs[0].count+rs[0].failures) * 100
 		}
 		if ds[0].count+ds[0].failures > 0 {
-			ds_rate = float64(ds[0].count) / float64(ds[0].count+ds[0].failures) * 100
+			ds_rate = float64(ds[0].failures) / float64(ds[0].count+ds[0].failures) * 100
 		}
 
-		log.Printf("| %6d %4.1f %4.1f %4.1f | %4d %4d %5d %3.0f%% | %6.1f  %4d %4d %5d %3.0f%% |",
+		log.Printf("| %7d %5.1f %5.1f %5.1f | %4d %4d %5d %5.0f%% | %6.1f  %4d %4d %5d %5.0f%% |",
 			rs[0].count, rs[0].rate, rs[1].rate, rs[2].rate,
 			rs[0].min.Milliseconds(),
 			rs[0].avg.Milliseconds(),

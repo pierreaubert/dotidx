@@ -38,7 +38,7 @@ func (s *Sidecar) GetChainHeadID() (int, error) {
 	start := time.Now()
 	defer func(start time.Time) {
 		go func(start time.Time, err error) {
-			s.metrics.RecordLatency(start, 1, 0, err)
+			s.metrics.RecordLatency(start, 1, err)
 		}(start, nil)
 	}(start)
 
@@ -86,7 +86,7 @@ func (s *Sidecar) FetchBlockRange(ctx context.Context, blockIDs []int) ([]BlockD
 	start := time.Now()
 	defer func(start time.Time) {
 		go func(start time.Time, err error) {
-			s.metrics.RecordLatency(start, len(blockIDs), 0, err)
+			s.metrics.RecordLatency(start, len(blockIDs), err)
 		}(start, nil)
 	}(start)
 
@@ -157,7 +157,7 @@ func (s *Sidecar) FetchBlock(ctx context.Context, id int) (BlockData, error) {
 	start := time.Now()
 	defer func(start time.Time) {
 		go func(start time.Time, err error) {
-			s.metrics.RecordLatency(start, 1, 0, err)
+			s.metrics.RecordLatency(start, 1, err)
 		}(start, nil)
 	}(start)
 
@@ -244,7 +244,7 @@ func (s *Sidecar) GetStats() *MetricsStats {
 // 	start := time.Now()
 // 	defer func(start time.Time) {
 // 		go func(start time.Time, err error) {
-// 			s.metrics.RecordLatency(start, 1, 0, err)
+// 			s.metrics.RecordLatency(start, 1, err)
 // 		}(start, nil)
 // 	}(start)
 
@@ -269,7 +269,7 @@ func (s *Sidecar) GetStats() *MetricsStats {
 // 	start := time.Now()
 // 	defer func(start time.Time) {
 // 		go func(start time.Time, err error) {
-// 			s.metrics.RecordLatency(start, len(blockIDs), 0, err)
+// 			s.metrics.RecordLatency(start, len(blockIDs), err)
 // 		}(start, nil)
 // 	}(start)
 
@@ -289,7 +289,7 @@ func (s *Sidecar) GetStats() *MetricsStats {
 // 	start := time.Now()
 // 	defer func(start time.Time) {
 // 		go func(start time.Time, err error) {
-// 			s.metrics.RecordLatency(start, 1, 0, err)
+// 			s.metrics.RecordLatency(start, 1, err)
 // 		}(start, nil)
 // 	}(start)
 

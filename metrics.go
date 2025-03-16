@@ -40,7 +40,7 @@ func NewBucketStats() BucketStats {
 }
 
 // RecordLatency records the latency of a sidecar API call
-func (m *Bucket) RecordLatency(start time.Time, countOK int, countError int, err error) {
+func (m *Bucket) RecordLatency(start time.Time, count int, err error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -55,16 +55,14 @@ func (m *Bucket) RecordLatency(start time.Time, countOK int, countError int, err
 		m.startedAt = time.Now()
 	}
 	if err != nil {
-		m.callCount += countError
-		m.failures += countOK
+		m.failures += count
 	} else {
-		m.callCount += countOK
-		m.failures += countError
+		m.callCount += count
 	}
 	m.totalTime += duration
 
-	if count := int64(countOK + countError); count > 0 {
-		relativeDuration := time.Duration(int64(duration) / count)
+	if count > 0 {
+		relativeDuration := time.Duration(int64(duration) / int64(count))
 		m.minTime = min(relativeDuration, m.minTime)
 		m.maxTime = max(relativeDuration, m.maxTime)
 	}
@@ -125,9 +123,9 @@ func NewMetrics(name string) *Metrics {
 }
 
 // RecordLatency records the latency of a sidecar API call
-func (m *Metrics) RecordLatency(start time.Time, countOK int, countError int, err error) {
+func (m *Metrics) RecordLatency(start time.Time, count int, err error) {
 	for i := range m.buckets {
-		m.buckets[i].RecordLatency(start, countOK, countError, err)
+		m.buckets[i].RecordLatency(start, count, err)
 	}
 }
 

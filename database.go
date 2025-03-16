@@ -4,8 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -31,7 +29,12 @@ type DBPoolConfig struct {
 	ConnMaxIdleTime time.Duration // Maximum idle time of a connection
 }
 
-// DefaultDBPoolConfig returns a default configuration for the database connection pool
+const schemaName = "chain"
+const fastTablespaceRoot = "/dotidx/fast"
+const fastTablespaceNumber = 4
+const slowTablespaceRoot = "/dotidx/slow"
+const slowTablespaceNumber = 6
+
 func DefaultDBPoolConfig() DBPoolConfig {
 	return DBPoolConfig{
 		MaxOpenConns:    25,
@@ -57,12 +60,6 @@ type SQLDatabase struct {
 	batchTimer    *time.Timer
 	batchShutdown chan struct{}
 }
-
-const schemaName = "chain"
-const fastTablespaceRoot = "/dotidx/fast"
-const fastTablespaceNumber = 4
-const slowTablespaceRoot = "/dotidx/slow"
-const slowTablespaceNumber = 6
 
 // NewSQLDatabase creates a new Database instance
 func NewSQLDatabase(db *sql.DB) *SQLDatabase {
@@ -133,11 +130,41 @@ func (s *SQLDatabase) DoUpgrade(config Config) error {
 	return nil
 }
 
+// sanitizeChainName removes non-alphanumeric characters and the relaychain name from the chain name
+func sanitizeChainName(initialChainName, initialRelaychainName string) string {
+	chainName := strings.ToLower(initialChainName)
+	relaychainName := strings.ToLower(initialRelaychainName)
+
+	// Remove non-alphanumeric characters (like hyphens)
+	var result strings.Builder
+	for _, char := range chainName {
+		if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') {
+			result.WriteRune(char)
+		}
+	}
+	chainName = result.String()
+
+	// Remove relaychain name if it's included in the chain name
+	if initialChainName != initialRelaychainName {
+		chainName = strings.ReplaceAll(chainName, relaychainName, "")
+	}
+	return chainName
+}
+func getBlocksTableName(config Config) (name string) {
+	chainName := sanitizeChainName(config.Chain, config.Relaychain)
+	name = fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
+	return
+}
+
+func getAddressTableName(config Config) (name string) {
+	chainName := sanitizeChainName(config.Chain, config.Relaychain)
+	name = fmt.Sprintf("%s.address2blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
+	return
+}
+
 // CreateTable creates the necessary tables if they don't exist
 func (s *SQLDatabase) CreateTable(config Config) error {
-	chainName := sanitizeChainName(config.Chain, config.Relaychain)
-
-	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
+	blocksTable := getBlocksTableName(config)
 
 	// Create the blocks table
 	template := fmt.Sprintf(`
@@ -211,12 +238,7 @@ GRANT ALL ON TABLE %[1]s_%04[2]d_%02[3]d TO dotidx;
 		}
 	}
 
-	address2blocksTable := fmt.Sprintf(
-		"%s.address2blocks_%s_%s",
-		schemaName,
-		strings.ToLower(config.Relaychain),
-		chainName,
-	)
+	address2blocksTable := getAddressTableName(config)
 	template = fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %s (
      address TEXT,
@@ -261,9 +283,9 @@ GRANT ALL ON TABLE %[1]s_%1[2]d TO dotidx;
 // TODO: adapt to the new partionning
 // when tables are full (a month) they are immutable so we can write the index once and forall
 func (s *SQLDatabase) CreateIndex(config Config) error {
-	chainName := sanitizeChainName(config.Chain, config.Relaychain)
+	blocksTable := getBlocksTableName(config)
+	address2blocksTable := getAddressTableName(config)
 
-	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 	template := fmt.Sprintf(`
                 CREATE INDEX IF NOT EXISTS extrinsincs_idx
                 ON %s USING gin(extrinsics jsonb_path_ops)
@@ -275,7 +297,6 @@ func (s *SQLDatabase) CreateIndex(config Config) error {
 		return fmt.Errorf("error creating index on address column: %w", err)
 	}
 
-	address2blocksTable := fmt.Sprintf("address2blocks_%s_%s", strings.ToLower(config.Relaychain), chainName)
 	template = fmt.Sprintf(`
 		CREATE INDEX IF NOT EXISTS %s_address_idx ON %s (address)
 	`, address2blocksTable, address2blocksTable)
@@ -285,25 +306,6 @@ func (s *SQLDatabase) CreateIndex(config Config) error {
 	}
 
 	return nil
-}
-
-func extractTimestamp(extrinsics []byte) (ts string, err error) {
-	const defaultTimestamp = "0001-01-01 00:00:00.0000"
-	re := regexp.MustCompile("\"now\"[ ]*[:][ ]*\"[0-9]+\"")
-	texts := re.FindAllString(string(extrinsics), 1)
-	if len(texts) == 0 {
-		return defaultTimestamp, fmt.Errorf("cannot find \"now\" in extrinsics: %w", err)
-	}
-	stexts := strings.Split(texts[0], "\"")
-	if len(stexts) != 5 {
-		return defaultTimestamp, fmt.Errorf("cannot find timestamp in extrinsics: len is %d", len(stexts))
-	}
-	millis, err := strconv.ParseInt(stexts[3], 10, 64)
-	if err != nil {
-		return defaultTimestamp, fmt.Errorf("cannot convert timestamp to milliseconds: %w", err)
-	}
-	ts = time.UnixMilli(millis).Format("2006-01-02 15:04:05.0000")
-	return
 }
 
 // Save adds the given items to the batch for asynchronous processing
@@ -439,16 +441,13 @@ func (s *SQLDatabase) saveBatch(items []BlockData, config Config) error {
 	start := time.Now()
 	defer func(start time.Time) {
 		go func(start time.Time, err error) {
-			s.metrics.RecordLatency(start, len(items), 0, err)
+			s.metrics.RecordLatency(start, len(items), err)
 		}(start, nil)
 	}(start)
 
-	// Sanitize chain name
-	chainName := sanitizeChainName(config.Chain, config.Relaychain)
-
 	// Get table names
-	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
-	address2blocksTable := fmt.Sprintf("%s.address2blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
+	blocksTable := getBlocksTableName(config)
+	address2blocksTable := getAddressTableName(config)
 
 	// log.Printf("Saving batch of %d items to database", len(items))
 	// log.Printf("Blocks table: %s", blocksTable)
@@ -546,11 +545,8 @@ func (s *SQLDatabase) saveBatch(items []BlockData, config Config) error {
 
 // GetExistingBlocks retrieves a list of block IDs that already exist in the database
 func (s *SQLDatabase) GetExistingBlocks(startRange, endRange int, config Config) (map[int]bool, error) {
-	// Sanitize chain name
-	chainName := sanitizeChainName(config.Chain, config.Relaychain)
-
 	// Create blocks table name
-	blocksTable := fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
+	blocksTable := getBlocksTableName(config)
 
 	// Query for existing blocks - explicitly create a simple query without multiple statements
 	query := fmt.Sprintf("SELECT block_id FROM %s WHERE block_id BETWEEN $1 AND $2", blocksTable)
@@ -587,23 +583,3 @@ func (s *SQLDatabase) GetStats() *MetricsStats {
 	return s.metrics.GetStats()
 }
 
-// sanitizeChainName removes non-alphanumeric characters and the relaychain name from the chain name
-func sanitizeChainName(initialChainName, initialRelaychainName string) string {
-	chainName := strings.ToLower(initialChainName)
-	relaychainName := strings.ToLower(initialRelaychainName)
-
-	// Remove non-alphanumeric characters (like hyphens)
-	var result strings.Builder
-	for _, char := range chainName {
-		if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') {
-			result.WriteRune(char)
-		}
-	}
-	chainName = result.String()
-
-	// Remove relaychain name if it's included in the chain name
-	if initialChainName != initialRelaychainName {
-		chainName = strings.ReplaceAll(chainName, relaychainName, "")
-	}
-	return chainName
-}

@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -20,6 +22,25 @@ type BlockData struct {
 	OnFinalize     json.RawMessage `json:"onFinalize"`
 	Logs           json.RawMessage `json:"logs"`
 	Extrinsics     json.RawMessage `json:"extrinsics"`
+}
+
+func extractTimestamp(extrinsics []byte) (ts string, err error) {
+	const defaultTimestamp = "0001-01-01 00:00:00.0000"
+	re := regexp.MustCompile("\"now\"[ ]*[:][ ]*\"[0-9]+\"")
+	texts := re.FindAllString(string(extrinsics), 1)
+	if len(texts) == 0 {
+		return defaultTimestamp, fmt.Errorf("cannot find \"now\" in extrinsics: %w", err)
+	}
+	stexts := strings.Split(texts[0], "\"")
+	if len(stexts) != 5 {
+		return defaultTimestamp, fmt.Errorf("cannot find timestamp in extrinsics: len is %d", len(stexts))
+	}
+	millis, err := strconv.ParseInt(stexts[3], 10, 64)
+	if err != nil {
+		return defaultTimestamp, fmt.Errorf("cannot convert timestamp to milliseconds: %w", err)
+	}
+	ts = time.UnixMilli(millis).Format("2006-01-02 15:04:05.0000")
+	return
 }
 
 // extractAddressesFromExtrinsics extracts Polkadot addresses from extrinsics JSON

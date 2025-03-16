@@ -10,7 +10,7 @@ import (
 func TestMetrics_RecordLatency(t *testing.T) {
 	metrics := NewMetrics("test")
 	start := time.Now()
-	metrics.RecordLatency(start, 1, 0, nil)
+	metrics.RecordLatency(start, 1, nil)
 
 	stats := metrics.GetStats()
 	assert.NotNil(t, stats)
@@ -26,7 +26,7 @@ func TestMetrics_RecordLatency(t *testing.T) {
 func TestMetrics_GetStats(t *testing.T) {
 	metrics := NewMetrics("test")
 	start := time.Now()
-	metrics.RecordLatency(start, 1, 0, nil)
+	metrics.RecordLatency(start, 1, nil)
 
 	stats := metrics.GetStats()
 	assert.NotNil(t, stats)
@@ -41,7 +41,7 @@ func TestMetrics_GetStats(t *testing.T) {
 func TestMetrics_PrintStats(t *testing.T) {
 	metrics := NewMetrics("test")
 	start := time.Now()
-	metrics.RecordLatency(start, 1, 0, nil)
+	metrics.RecordLatency(start, 1, nil)
 
 	// This is a basic test to ensure PrintStats doesn't panic
 	metrics.PrintStats(true)
@@ -54,7 +54,7 @@ func TestBucket_Rate(t *testing.T) {
 	
 	// Record 10 successful calls over 2 seconds
 	simulatedDuration := 2 * time.Second
-	bucket.RecordLatency(start, 10, 0, nil)
+	bucket.RecordLatency(start, 10, nil)
 	
 	// Force totalTime to be exactly the simulated duration for predictable testing
 	bucket.mutex.Lock()
@@ -75,8 +75,8 @@ func TestBucket_RateWithFailures(t *testing.T) {
 	
 	// Record 5 successful calls and 5 failures
 	simulatedDuration := 5 * time.Second
-	bucket.RecordLatency(start, 5, 0, nil)
-	bucket.RecordLatency(start, 0, 5, nil)
+	bucket.RecordLatency(start, 5, nil)
+	bucket.RecordLatency(start, 5, assert.AnError)
 	
 	// Force totalTime for testing
 	bucket.mutex.Lock()
@@ -98,8 +98,8 @@ func TestBucket_RateWithError(t *testing.T) {
 	
 	// Record with error - should count as failure
 	simulatedDuration := 1 * time.Second
-	bucket.RecordLatency(start, 1, 0, nil) // 1 success
-	bucket.RecordLatency(start, 2, 0, assert.AnError) // 2 intended as success, but error provided
+	bucket.RecordLatency(start, 1, nil) // 1 success
+	bucket.RecordLatency(start, 2, assert.AnError) // 2 intended as success, but error provided
 	
 	// Force totalTime for testing
 	bucket.mutex.Lock()
@@ -126,14 +126,14 @@ func TestBucket_WindowReset(t *testing.T) {
 	
 	// Record some calls
 	start := time.Now()
-	bucket.RecordLatency(start, 5, 0, nil)
+	bucket.RecordLatency(start, 5, nil)
 	
 	// Wait for window to expire
 	time.Sleep(shortWindow * 2)
 	
 	// Record more calls after window reset
 	start = time.Now()
-	bucket.RecordLatency(start, 3, 0, nil)
+	bucket.RecordLatency(start, 3, nil)
 	
 	// Stats should only include calls after reset
 	stats := bucket.GetStats()
@@ -164,7 +164,7 @@ func TestMetrics_MultipleBuckets(t *testing.T) {
 	
 	// Record multiple calls
 	for i := 0; i < 10; i++ {
-		metrics.RecordLatency(start, 1, 0, nil)
+		metrics.RecordLatency(start, 1, nil)
 	}
 	
 	// Force a specific total time for predictable testing

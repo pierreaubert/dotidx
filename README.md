@@ -27,6 +27,8 @@ go get github.com/pierreaubert/dotidx
 ## Prework
 
 - Find 4 free TB of disk ideally on SSD disks. It also works on SATA but is sloooow. A mix is also working well. The more disks you have the faster this will be.
+  - With 2 SATA disks, indexer run around 25 blocks per second.
+  - With 4 NVME disks, indexer run around 300 blocks per second.
 - Prepare your storage
   - ZFS or not: if ZFS then have a look at `./scripts/prep_zfs.sh`
   - Create a `/dotidx` directory owned by the database owner
@@ -82,6 +84,11 @@ or if you want to index live blocks:
 ```bash
 dotidx -live -sidecar=http://localhost:8080 -postgres="postgres://user:pass@localhost:5432/db" -workers 5 -batch 10
 ```
+
+## Interface
+
+- `dotidx` do output some statistic lines.
+- It also has a web API: go to 'http://localhost:8080'
 
 ### Command Line Options
 
