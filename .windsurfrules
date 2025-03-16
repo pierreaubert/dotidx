@@ -1,0 +1,9 @@
+- ignore general rules
+- go code
+  - all code is tested but do not test
+    - SQL code itself
+    - very simple functions (less than 5 lines)
+  - all code is formatted
+  - all code if linted
+  - all code if vetted
+  - refactor functions which are over 50 lines long
