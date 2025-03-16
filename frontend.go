@@ -75,16 +75,20 @@ func (f *Frontend) Start(cancelCtx <-chan struct{}) error {
 	return nil
 }
 
-// BlocksByAddressResponse is the response for the /address2blocks endpoint
-type BlocksByAddressResponse struct {
-	Address string      `json:"address"`
-	Blocks  []BlockData `json:"blocks"`
+// BlocksResponse is the response for the /address2blocks endpoint
+type BlocksResponse struct {
+	Blocks []BlockData `json:"blocks"`
 }
 
-// CompletationRateResponse is the response for the /stats/completatiorate endpoint
+// CompletionRateResponse is the response for the /stats/completatiorate endpoint
 type CompletionRateResponse struct {
 	PercentCompletion int `json:"percent_completion"`
 	HeadID            int `json:"head_id"`
+}
+
+// MaxBlockNumberResponse is the response for the /stats/maxblockrate endpoint
+type MaxBlockNumberResponse struct {
+	MaxBlock int `json:"max_block"`
 }
 
 // MonthlyStatsResponse is the response for the /stats/per_month endpoint
@@ -94,8 +98,8 @@ type MonthlyStatsResponse struct {
 
 // MonthlyStats represents statistics for a single month
 type MonthlyStats struct {
-	Date    string `json:"date"`
-	Count   int    `json:"count"`
+	Date     string `json:"date"`
+	Count    int    `json:"count"`
 	MinBlock int    `json:"min_block"`
 	MaxBlock int    `json:"max_block"`
 }
@@ -135,10 +139,28 @@ func (f *Frontend) handleAddressToBlocks(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Prepare response
-	response := BlocksByAddressResponse{
-		Address: address,
-		Blocks:  blocks,
+	// Convert Block to BlockData for API response
+	blockData := make([]BlockData, len(blocks))
+	for i, block := range blocks {
+		blockData[i] = BlockData{
+			ID:             block.ID,
+			Timestamp:      block.Timestamp,
+			Hash:           block.Hash,
+			ParentHash:     block.ParentHash,
+			StateRoot:      block.StateRoot,
+			ExtrinsicsRoot: block.ExtrinsicsRoot,
+			AuthorID:       block.AuthorID,
+			Finalized:      block.Finalized,
+			OnInitialize:   json.RawMessage(block.OnInitialize),
+			OnFinalize:     json.RawMessage(block.OnFinalize),
+			Logs:           json.RawMessage(block.Logs),
+			Extrinsics:     json.RawMessage(block.Extrinsics),
+		}
+	}
+
+	// Prepare the response
+	response := BlocksResponse{
+		Blocks: blockData,
 	}
 
 	// Set content type and encode response as JSON
@@ -158,8 +180,8 @@ func (f *Frontend) handleCompletionRate(w http.ResponseWriter, r *http.Request) 
 		f.metricsHandler.RecordLatency(startTime, http.StatusOK, nil)
 	}()
 
-	// Only allow GET requests
-	if r.Method != http.MethodGet {
+	// Only accept GET requests
+	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -230,26 +252,26 @@ func (f *Frontend) getCachedMonthlyStats() ([]MonthlyStats, error) {
 	cachedData := f.monthlyStatsCache
 	cacheExpiration := f.monthlyStatsCacheExp
 	f.cacheMutex.RUnlock()
-	
+
 	// If cache is still valid, return it
 	if time.Now().Before(cacheExpiration) && len(cachedData) > 0 {
 		log.Printf("Using cached monthly stats (expires at %s)", cacheExpiration.Format(time.RFC3339))
 		return cachedData, nil
 	}
-	
+
 	// Cache expired or empty, query the database
 	log.Printf("Monthly stats cache expired, querying database")
 	stats, err := f.getMonthlyStats()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Update cache
 	f.cacheMutex.Lock()
 	f.monthlyStatsCache = stats
 	f.monthlyStatsCacheExp = time.Now().Add(15 * time.Minute)
 	f.cacheMutex.Unlock()
-	
+
 	log.Printf("Updated monthly stats cache (expires at %s)", f.monthlyStatsCacheExp.Format(time.RFC3339))
 	return stats, nil
 }
@@ -268,7 +290,7 @@ func (f *Frontend) getMonthlyStats() ([]MonthlyStats, error) {
 		ORDER BY date DESC;
 	`
 
-	log.Printf("%s", query)
+	// log.Printf("%s", query)
 
 	// Execute the query
 	rows, err := f.db.Query(query)
@@ -308,14 +330,15 @@ func (f *Frontend) getCompletionRate() (int, int, error) {
 	query := `
 		SELECT
 			count(distinct block_id) * 100 / max(block_id) as percentcompletion,
-			max(block_id) as headID
+			max(block_id) as head_id
 		FROM chain.blocks_polkadot_polkadot;
 	`
 
-	log.Printf("%s", query)
+	// log.Printf("%s", query)
 
 	// Execute the query
-	var percentCompletion, headID int
+	var percentCompletion int
+	var headID int
 	err := f.db.QueryRow(query).Scan(&percentCompletion, &headID)
 	if err != nil {
 		return 0, 0, fmt.Errorf("database query failed: %w", err)
@@ -326,12 +349,13 @@ func (f *Frontend) getCompletionRate() (int, int, error) {
 
 // getBlocksByAddress queries the database to find blocks associated with the given address
 func (f *Frontend) getBlocksByAddress(address string) ([]BlockData, error) {
-	blocksTable := getBlocksTableName(f.config)
-	address2blocksTable := getAddressTableName(f.config)
+	// Validate the address string before proceeding
+	if !isValidAddress(address) {
+		return nil, fmt.Errorf("invalid address format")
+	}
 
-	// SQL query to find blocks containing the address using the address2blocks table
-	query := fmt.Sprintf(`
-		SELECT
+	query := fmt.Sprintf(
+		`SELECT
 			b.block_id,
 			b.created_at,
 			b.hash,
@@ -348,63 +372,248 @@ func (f *Frontend) getBlocksByAddress(address string) ([]BlockData, error) {
 		JOIN %s a ON b.block_id = a.block_id
 		WHERE a.address = '%s'
 		ORDER BY b.block_id DESC
-		LIMIT 10;
-	`, blocksTable, address2blocksTable, address)
+		LIMIT 10;`,
+		getBlocksTableName(f.config),
+		getAddressTableName(f.config),
+		address,
+	)
 
-	log.Printf("%s", query)
-
-	// Execute the query
 	rows, err := f.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("database query failed: %w", err)
 	}
 	defer rows.Close()
 
-	// Process results
 	var blocks []BlockData
+
 	for rows.Next() {
 		var block BlockData
-		var blockID int
-		var timestamp time.Time
-		var onInitialize, onFinalize, logs, extrinsics []byte
-
-		// Scan the row into variables
-		err := rows.Scan(
-			&blockID,
-			&timestamp,
+		err = rows.Scan(
+			&block.ID,
+			&block.Timestamp,
 			&block.Hash,
 			&block.ParentHash,
 			&block.StateRoot,
 			&block.ExtrinsicsRoot,
 			&block.AuthorID,
 			&block.Finalized,
-			&onInitialize,
-			&onFinalize,
-			&logs,
-			&extrinsics,
+			&block.OnInitialize,
+			&block.OnFinalize,
+			&block.Logs,
+			&block.Extrinsics,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("error scanning row: %w", err)
+			return nil, fmt.Errorf("error scanning block: %w", err)
 		}
 
-		// Convert block ID to string and set timestamp
-		block.ID = fmt.Sprintf("%d", blockID)
-		block.Timestamp = timestamp
+		// Filter logs - only keep logs containing the address
+		block.Logs = filterArrayByAddress(block.Logs, address)
 
-		// Set JSON fields
-		block.OnInitialize = onInitialize
-		block.OnFinalize = onFinalize
-		block.Logs = logs
-		block.Extrinsics = extrinsics
+		// Filter on_initialize - only keep events containing the address
+		block.OnInitialize = filterObjectWithEvents(block.OnInitialize, address)
+
+		// Filter on_finalize - only keep events containing the address
+		block.OnFinalize = filterObjectWithEvents(block.OnFinalize, address)
+
+		// Use recursive filtering for extrinsics due to their complex structure
+		block.Extrinsics = filterExtrinsicsRecursive(block.Extrinsics, address)
 
 		blocks = append(blocks, block)
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating rows: %w", err)
+		return nil, fmt.Errorf("error iterating blocks: %w", err)
 	}
 
 	return blocks, nil
+}
+
+// filterArrayByAddress filters a JSON array to only include elements containing the specified address
+func filterArrayByAddress(data []byte, address string) []byte {
+	if len(data) == 0 || !strings.Contains(string(data), address) {
+		return []byte("[]")
+	}
+
+	// Try to unmarshal as array
+	var array []json.RawMessage
+	if err := json.Unmarshal(data, &array); err != nil {
+		return data // Return original if not a valid array
+	}
+
+	// Filter array to only include items containing the address
+	filtered := []json.RawMessage{}
+	for _, item := range array {
+		if strings.Contains(string(item), address) {
+			filtered = append(filtered, item)
+		}
+	}
+
+	result, err := json.Marshal(filtered)
+	if err != nil {
+		return data // Return original if cannot marshal
+	}
+
+	return result
+}
+
+// filterObjectWithEvents filters a JSON object, keeping only events containing the specified address
+func filterObjectWithEvents(data []byte, address string) []byte {
+	if len(data) == 0 || !strings.Contains(string(data), address) {
+		return []byte("{}")
+	}
+
+	// Parse the JSON object
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return data // Return original if not a valid object
+	}
+
+	// Check for events array
+	eventsData, ok := obj["events"]
+	if !ok {
+		return data // Return original if no events field
+	}
+
+	// Filter the events array
+	obj["events"] = filterArrayByAddress(eventsData, address)
+
+	// Marshal back to JSON
+	result, err := json.Marshal(obj)
+	if err != nil {
+		return data // Return original if cannot marshal
+	}
+
+	return result
+}
+
+// filterExtrinsicsRecursive recursively filters out extrinsics that don't contain the given address
+func filterExtrinsicsRecursive(extrinsicsJson []byte, address string) []byte {
+	empty := []byte("[]")
+	// Skip empty arrays or if address is not found at all
+	if len(extrinsicsJson) == 0 || !strings.Contains(string(extrinsicsJson), address) {
+		return empty
+	}
+
+	// Parse the JSON into a generic interface
+	var extrinsics interface{}
+	err := json.Unmarshal(extrinsicsJson, &extrinsics)
+	if err != nil {
+		log.Printf("Error unmarshaling extrinsics: %v", err)
+		return empty
+	}
+
+	// Define a recursive function to filter values
+	var filterValue func(val interface{}) interface{}
+	filterValue = func(val interface{}) interface{} {
+		switch val := val.(type) {
+		case []interface{}: // Handle array
+			result := make([]interface{}, 0)
+
+			// Process each item in the array
+			for _, item := range val {
+				// Convert item to JSON string to check for direct address match
+				jsonData, err := json.Marshal(item)
+				if err == nil && strings.Contains(string(jsonData), address) {
+					// If item directly contains the address, add it
+					result = append(result, item)
+					continue
+				}
+
+				// Recursively filter the item
+				filtered := filterValue(item)
+				if filtered != nil {
+					// Check if the filtered item contains the address
+					jsonData, err := json.Marshal(filtered)
+					if err == nil && strings.Contains(string(jsonData), address) {
+						result = append(result, filtered)
+					}
+				}
+			}
+
+			// If nothing matched, return nil
+			if len(result) == 0 {
+				return nil
+			}
+			return result
+
+		case map[string]interface{}: // Handle object/map
+			result := make(map[string]interface{})
+			hasAddress := false
+
+			// First, check if any value directly contains the address as a string
+			for _, itemValue := range val {
+				if str, ok := itemValue.(string); ok {
+					if strings.Contains(str, address) {
+						hasAddress = true
+						// Copy all fields from the original map
+						for k, v := range val {
+							result[k] = v
+						}
+						return result
+					}
+				}
+			}
+
+			// Otherwise, recursively filter nested structures (arrays/maps)
+			for _, itemValue := range val {
+				switch itemValue.(type) {
+				case map[string]interface{}, []interface{}:
+					// Recursively filter this complex value
+					filtered := filterValue(itemValue)
+
+					// If filtered result is not nil, include it and mark this map as containing the address
+					if filtered != nil {
+						jsonData, err := json.Marshal(filtered)
+						if err == nil && strings.Contains(string(jsonData), address) {
+							result[""] = filtered
+							hasAddress = true
+						}
+					}
+				}
+			}
+
+			// If we found the address somewhere in the nested structures, copy all fields from the original map
+			if hasAddress {
+				// Copy all fields that haven't been added yet
+				for k, v := range val {
+					if _, exists := result[k]; !exists {
+						result[k] = v
+					}
+				}
+				return result
+			}
+
+			// If no values contain the address, return nil
+			return nil
+
+		default: // Handle primitive values (string, number, boolean, null)
+			if str, ok := val.(string); ok {
+				// For strings, check direct containment
+				if strings.Contains(str, address) {
+					return str
+				}
+			}
+			return nil
+		}
+	}
+
+	// Apply the filter function to the root object
+	filtered := filterValue(extrinsics)
+	if filtered == nil {
+		// If nothing matched, return empty array
+		log.Println("Filtered JSON array: null")
+		return empty
+	}
+
+	// Convert back to JSON
+	result, err := json.Marshal(filtered)
+	if err != nil {
+		log.Printf("Error marshaling filtered extrinsics: %v", err)
+		return extrinsicsJson // Return original if cannot marshal
+	}
+
+	log.Printf("Filtered extrinsics: %s", result)
+	return result
 }
 
 // isValidAddress validates a Polkadot address format

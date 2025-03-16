@@ -78,7 +78,7 @@ func startWorkers(
 	startRange := config.StartRange
 	endRange := min(config.StartRange+stepRange, config.EndRange)
 
-	for endRange <= config.EndRange {
+	for startRange <= config.EndRange {
 
 		// Collect blocks to process, identifying continuous ranges for batch processing
 		var currentBatch []int
@@ -96,15 +96,6 @@ func startWorkers(
 			if b {
 				known += 1
 			}
-		}
-		toProcess := 1 + endRange - startRange - known
-		if toProcess > 0 {
-			log.Printf(
-				"Processing %d blocks in range %d-%d blocks (full range %d-%d) %4.1f%% done!",
-				1+endRange-startRange-known,
-				startRange, endRange, config.StartRange, config.EndRange,
-				float64((startRange-config.StartRange)/(1+config.EndRange-config.StartRange)*100),
-			)
 		}
 
 		// Send block IDs to the appropriate channel, skipping ones that already exist
@@ -329,10 +320,10 @@ func (s *Stats) Print() error {
 
 // printStats prints the database statistics
 func (s *Stats) printHeader() {
-	log.Printf("+--- Blocks ---------------|------ Chain Reader ----|------- DBwriter ---------------+")
-	log.Printf("| #-----#  b/s   b/s   b/s | Latency (ms)     Error |  tr/s   Latency (ms)     Error |")
-	log.Printf("|          1d    1h    5m  | min  avg  max        %% |         min  avg  max       %%  |")
-	log.Printf("+--------------------------|------------------------|--------------------------------|")
+	log.Printf("+--- Blocks ----------------|------ Chain Reader ----|------- DBwriter ---------------+")
+	log.Printf("| #-----#  b/s   b/s   b/s  | Latency (ms)     Error |  tr/s   Latency (ms)     Error |")
+	log.Printf("|           1d    1h    5m  | min  avg  max        %% |         min  avg  max       %%  |")
+	log.Printf("+---------------------------|------------------------|--------------------------------|")
 }
 
 func (s *Stats) printStats(stats *MetricsStats) {

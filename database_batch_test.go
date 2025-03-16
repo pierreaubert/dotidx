@@ -95,20 +95,20 @@ func TestAsynchronousBatchProcessing(t *testing.T) {
 	
 	// First batch (items 0 and 1)
 	// For item 0: first blocks table, then address2blocks table
-	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES.*ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain\\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "1").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES \\(.*\\) ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain \\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "1").WillReturnResult(sqlmock.NewResult(0, 1))
 	
 	// For item 1: first blocks table, then address2blocks table
-	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES.*ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain\\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty", "2").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES \\(.*\\) ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain \\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty", "2").WillReturnResult(sqlmock.NewResult(0, 1))
 	
 	mock.ExpectCommit()
 
 	// Second batch (item 2)
 	mock.ExpectBegin()
 	// For item 2: first blocks table, then address2blocks table
-	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES.*ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain\\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy", "3").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES \\(.*\\) ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain \\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy", "3").WillReturnResult(sqlmock.NewResult(0, 1))
 	
 	mock.ExpectCommit()
 
@@ -204,12 +204,12 @@ func TestBatchFlushOnSize(t *testing.T) {
 	mock.ExpectBegin()
 	
 	// For item 0: first blocks table, then address2blocks table
-	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES.*ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain\\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "1").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES \\(.*\\) ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain \\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "1").WillReturnResult(sqlmock.NewResult(0, 1))
 	
 	// For item 1: first blocks table, then address2blocks table
-	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES.*ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain\\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty", "2").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES \\(.*\\) ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain \\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty", "2").WillReturnResult(sqlmock.NewResult(0, 1))
 	
 	mock.ExpectCommit()
 
@@ -285,8 +285,8 @@ func TestFlushOnClose(t *testing.T) {
 	mock.ExpectBegin()
 	
 	// For item 0: first blocks table, then address2blocks table
-	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES.*ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain\\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "1").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.blocks_test_relay_testchain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES \\(.*\\) ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_test_relay_testchain \\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "1").WillReturnResult(sqlmock.NewResult(0, 1))
 	
 	mock.ExpectCommit()
 	mock.ExpectClose()
