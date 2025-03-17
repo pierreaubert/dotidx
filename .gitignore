@@ -5,7 +5,8 @@ run
 conf
 .*~
 *~
-#*
+\#*
+.#*
 node_modules
 .idea
 TAGS
