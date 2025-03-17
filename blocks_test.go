@@ -171,6 +171,7 @@ func TestExtractAddressesFromRealData(t *testing.T) {
 		t.Logf("Successfully found address %s in file %s", specificAddress, fileThatContainsAddress)
 	}
 }
+
 func TestIsValidAddress(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -218,27 +219,4 @@ func TestIsValidAddress(t *testing.T) {
 	}
 }
 
-func TestFilterJson(t *testing.T) {
-	tests := []struct {
-		input    string
-		names    []string
-		want     bool
-	}{
-		{
-			input:    "",
-			address: "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
-			want:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			func pred(names []string) bool {
-			}
-			if got := filterJson(tt.input); got != tt.want {
-				t.Errorf("isValidAddress() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 

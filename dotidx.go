@@ -24,6 +24,7 @@ func main() {
 	if err := validateConfig(config); err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
+	log.Printf("Relay chain: %s chain: %s", config.Relaychain, config.Chain)
 
 	// ----------------------------------------------------------------------
 	// ChainReader
@@ -33,7 +34,7 @@ func main() {
 	if err := reader.Ping(); err != nil {
 		log.Fatalf("Sidecar service test failed: %v", err)
 	}
-	log.Println("Sidecar service is working properly")
+	log.Println("Successfully connected to Sidecar service")
 
 	headBlockID, err := reader.GetChainHeadID()
 	if err != nil {

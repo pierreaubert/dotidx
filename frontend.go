@@ -46,7 +46,6 @@ func (f *Frontend) Start(cancelCtx <-chan struct{}) error {
 
 	// Start server in a goroutine
 	go func() {
-		log.Printf("Frontend REST API listening on %s", f.listenAddr)
 		if err := server.ListenAndServe(); err != http.ErrServerClosed {
 			log.Printf("HTTP server error: %v", err)
 		}
@@ -67,18 +66,79 @@ func (f *Frontend) Start(cancelCtx <-chan struct{}) error {
 	return nil
 }
 
-// BlocksResponse is the response for the /address2blocks endpoint
-type BlocksResponse struct {
-	Blocks []BlockData `json:"blocks"`
-}
-
+// ----------------------------------------------------------------------
+// stats/completion_rate
+// ----------------------------------------------------------------------
 // CompletionRateResponse is the response for the /stats/completatiorate endpoint
 type CompletionRateResponse struct {
 	RelayChain        string
 	Chain             string
 	PercentCompletion float64 `json:"percent_completion"`
-	HeadID            int `json:"head_id"`
+	HeadID            int     `json:"head_id"`
 }
+
+// getCompletionRate queries the database to get the completion rate
+func (f *Frontend) getCompletionRate() (float64, int, error) {
+
+	query := fmt.Sprintf(`SELECT sum(total*100)/max(max_block_id), max(max_block_id) FROM %s;`,
+		getStatsPerMonthTableName(f.config))
+
+	log.Printf("%s", query)
+
+	// Execute the query
+	var percentCompletion float64
+	var headID int
+	err := f.db.QueryRow(query).Scan(&percentCompletion, &headID)
+	if err != nil {
+		return float64(0.0), 0, fmt.Errorf("database query failed: %w", err)
+	}
+
+	return percentCompletion, headID, nil
+}
+
+func (f *Frontend) handleCompletionRate(w http.ResponseWriter, r *http.Request) {
+       // Start timing the request
+       startTime := time.Now()
+       defer func() {
+               f.metricsHandler.RecordLatency(startTime, http.StatusOK, nil)
+       }()
+
+       // Only accept GET requests
+       if r.Method != "GET" {
+               http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+               return
+       }
+
+       // Query the database to get the completion rate
+       percentCompletion, headID, err := f.getCompletionRate()
+       if err != nil {
+               log.Printf("Error getting completion rate: %v", err)
+               http.Error(w, "Error retrieving completion rate", http.StatusInternalServerError)
+               return
+       }
+
+       // Prepare response
+       response := CompletionRateResponse{
+               RelayChain: f.config.Relaychain,
+               Chain: f.config.Chain,
+               PercentCompletion: percentCompletion,
+               HeadID:            headID,
+       }
+
+       // Set content type and encode response as JSON
+       w.Header().Set("Content-Type", "application/json")
+       if err := json.NewEncoder(w).Encode(response); err != nil {
+               log.Printf("Error encoding response: %v", err)
+               http.Error(w, "Error encoding response", http.StatusInternalServerError)
+               return
+       }
+}
+
+
+
+// ----------------------------------------------------------------------
+// stats/per_month
+// ----------------------------------------------------------------------
 
 // MaxBlockNumberResponse is the response for the /stats/maxblockrate endpoint
 type MaxBlockNumberResponse struct {
@@ -96,89 +156,6 @@ type MonthlyStats struct {
 	Count    int    `json:"count"`
 	MinBlock int    `json:"min_block"`
 	MaxBlock int    `json:"max_block"`
-}
-
-// handleAddressToBlocks handles the /address2blocks endpoint
-func (f *Frontend) handleAddressToBlocks(w http.ResponseWriter, r *http.Request) {
-	// Start timing the request
-	startTime := time.Now()
-	defer func() {
-		f.metricsHandler.RecordLatency(startTime, http.StatusOK, nil)
-	}()
-
-	// Only allow GET requests
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Get address from query parameter
-	address := r.URL.Query().Get("address")
-	if address == "" {
-		http.Error(w, "Missing address parameter", http.StatusBadRequest)
-		return
-	}
-
-	// Validate address format (simple validation)
-	if !isValidAddress(address) {
-		http.Error(w, "Invalid address format", http.StatusBadRequest)
-		return
-	}
-
-	// Get blocks for the address
-	blocks, err := f.getBlocksByAddress(address)
-	if err != nil {
-		log.Printf("Error getting blocks for address %s: %v", address, err)
-		http.Error(w, "Error retrieving blocks", http.StatusInternalServerError)
-		return
-	}
-
-	// Set content type and encode response as JSON
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(blocks); err != nil {
-		log.Printf("Error encoding response: %v", err)
-		http.Error(w, "Error encoding response", http.StatusInternalServerError)
-		return
-	}
-}
-
-// handleCompletionRate handles the /stats/completatiorate endpoint
-func (f *Frontend) handleCompletionRate(w http.ResponseWriter, r *http.Request) {
-	// Start timing the request
-	startTime := time.Now()
-	defer func() {
-		f.metricsHandler.RecordLatency(startTime, http.StatusOK, nil)
-	}()
-
-	// Only accept GET requests
-	if r.Method != "GET" {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Query the database to get the completion rate
-	percentCompletion, headID, err := f.getCompletionRate()
-	if err != nil {
-		log.Printf("Error getting completion rate: %v", err)
-		http.Error(w, "Error retrieving completion rate", http.StatusInternalServerError)
-		return
-	}
-
-	// Prepare response
-	response := CompletionRateResponse{
-		RelayChain: f.config.Relaychain,
-		Chain: f.config.Chain,
-		PercentCompletion: percentCompletion,
-		HeadID:            headID,
-	}
-
-	// Set content type and encode response as JSON
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Error encoding response: %v", err)
-		http.Error(w, "Error encoding response", http.StatusInternalServerError)
-		return
-	}
 }
 
 // handleStatsPerMonth handles the /stats/per_month endpoint
@@ -259,23 +236,59 @@ func (f *Frontend) getMonthlyStats() ([]MonthlyStats, error) {
 	return stats, nil
 }
 
-// getCompletionRate queries the database to get the completion rate
-func (f *Frontend) getCompletionRate() (float64, int, error) {
 
-	query := fmt.Sprintf(`SELECT sum(total*100)/max(max_block_id), max(max_block_id) FROM %s;`,
-		getStatsPerMonthTableName(f.config))
 
-	log.Printf("%s", query)
+// ----------------------------------------------------------------------
+// address2blocks
+// ----------------------------------------------------------------------
 
-	// Execute the query
-	var percentCompletion float64
-	var headID int
-	err := f.db.QueryRow(query).Scan(&percentCompletion, &headID)
-	if err != nil {
-		return float64(0.0), 0, fmt.Errorf("database query failed: %w", err)
+// BlocksResponse is the response for the /address2blocks endpoint
+type BlocksResponse struct {
+	Blocks []BlockData `json:"blocks"`
+}
+
+// handleAddressToBlocks handles the /address2blocks endpoint
+func (f *Frontend) handleAddressToBlocks(w http.ResponseWriter, r *http.Request) {
+	// Start timing the request
+	startTime := time.Now()
+	defer func() {
+		f.metricsHandler.RecordLatency(startTime, http.StatusOK, nil)
+	}()
+
+	// Only allow GET requests
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
 
-	return percentCompletion, headID, nil
+	// Get address from query parameter
+	address := r.URL.Query().Get("address")
+	if address == "" {
+		http.Error(w, "Missing address parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Validate address format (simple validation)
+	if !isValidAddress(address) {
+		http.Error(w, "Invalid address format", http.StatusBadRequest)
+		return
+	}
+
+	// Get blocks for the address
+	blocks, err := f.getBlocksByAddress(address)
+	if err != nil {
+		log.Printf("Error getting blocks for address %s: %v", address, err)
+		http.Error(w, "Error retrieving blocks", http.StatusInternalServerError)
+		return
+	}
+
+	// Set content type and encode response as JSON
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(blocks); err != nil {
+		log.Printf("Error encoding response: %v", err)
+		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+		return
+	}
 }
 
 // getBlocksByAddress queries the database to find blocks associated with the given address

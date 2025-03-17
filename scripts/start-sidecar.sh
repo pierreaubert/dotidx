@@ -30,7 +30,7 @@ for p in `seq 1 32`; do
     SAS_LOG_JSON=false \
     SAS_LOG_WRITE=true \
     SAS_WRITE_PATH="$ROOT/logs" \
-    SAS_SUBSTRATE_URL="ws://127.0.0.1:9944" \
+    SAS_SUBSTRATE_URL="ws://127.0.0.1:9942" \
     SAS_EXPRESS_BIND_HOST="$IP" \
     SAS_EXPRESS_KEEP_ALIVE_TIMEOUT=5000 \
     SAS_EXPRESS_MAX_BODY="10mb" \

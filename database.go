@@ -377,7 +377,7 @@ func (s *SQLDatabase) CreateDotidxTable(config Config) error {
 	}
 
 	inserts := fmt.Sprintf(`INSERT INTO %s.dotidx (relay_chain, chain) VALUES ($1, $2)`, schemaName)
-	if _, err := s.db.Exec(inserts, strings.ToLower(config.Relaychain), sanitizeChainName(config.Chain, config.Relaychain)) ; err != nil {
+	if _, err := s.db.Exec(inserts, strings.ToLower(config.Relaychain), sanitizeChainName(config.Chain, config.Relaychain)); err != nil {
 		log.Printf("sql %s", query)
 		return fmt.Errorf("error failed to create dotidx table: %w", err)
 	}

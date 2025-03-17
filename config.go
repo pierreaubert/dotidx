@@ -28,7 +28,7 @@ func parseFlags() Config {
 	maxWorkers := flag.Int("workers", 5, "Maximum number of concurrent workers")
 	flushTimeout := flag.Duration("flush", 30*time.Second, "Maximum time to wait before flushing data to database")
 	relaychain := flag.String("relaychain", "Polkadot", "Relaychain name")
-	chain := flag.String("chain", "Polkadot", "Chain name")
+	chain := flag.String("chain", "", "Chain name")
 	live := flag.Bool("live", false, "Live mode: continuously fetch new blocks as they are produced")
 
 	flag.Parse()
