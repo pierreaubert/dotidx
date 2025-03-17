@@ -2,9 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
-	"sync"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
@@ -29,16 +29,16 @@ func TestAsynchronousBatchProcessing(t *testing.T) {
 	// Create test data with two blocks
 	testData := []BlockData{
 		{
-			ID: "2",
-			Hash: "hash2",
-			ParentHash: "parenthash2",
-			StateRoot: "stateroot2",
+			ID:             "2",
+			Hash:           "hash2",
+			ParentHash:     "parenthash2",
+			StateRoot:      "stateroot2",
 			ExtrinsicsRoot: "extrinsicsroot2",
-			AuthorID: "author2",
-			Finalized: true,
-			OnInitialize: json.RawMessage(`{"test": true}`),
-			OnFinalize: json.RawMessage(`{"test": true}`),
-			Logs: json.RawMessage(`{"test": true}`),
+			AuthorID:       "author2",
+			Finalized:      true,
+			OnInitialize:   json.RawMessage(`{"test": true}`),
+			OnFinalize:     json.RawMessage(`{"test": true}`),
+			Logs:           json.RawMessage(`{"test": true}`),
 			Extrinsics: json.RawMessage(`[
 				{
 					"method": "timestamp.set",
@@ -48,16 +48,16 @@ func TestAsynchronousBatchProcessing(t *testing.T) {
 			]`),
 		},
 		{
-			ID: "3",
-			Hash: "hash3",
-			ParentHash: "parenthash3",
-			StateRoot: "stateroot3",
+			ID:             "3",
+			Hash:           "hash3",
+			ParentHash:     "parenthash3",
+			StateRoot:      "stateroot3",
 			ExtrinsicsRoot: "extrinsicsroot3",
-			AuthorID: "author3",
-			Finalized: true,
-			OnInitialize: json.RawMessage(`{"test": true}`),
-			OnFinalize: json.RawMessage(`{"test": true}`),
-			Logs: json.RawMessage(`{"test": true}`),
+			AuthorID:       "author3",
+			Finalized:      true,
+			OnInitialize:   json.RawMessage(`{"test": true}`),
+			OnFinalize:     json.RawMessage(`{"test": true}`),
+			Logs:           json.RawMessage(`{"test": true}`),
 			Extrinsics: json.RawMessage(`[
 				{
 					"method": "timestamp.set",
@@ -71,25 +71,25 @@ func TestAsynchronousBatchProcessing(t *testing.T) {
 	// Set up expectations for sql mock
 	// For the first transaction
 	mock.ExpectBegin()
-	
+
 	// Expect inserts for blocks table (we don't care about specific arguments, just that it's called)
 	mock.ExpectExec("^INSERT INTO chain\\.blocks_testchain_test_relay").WillReturnResult(sqlmock.NewResult(0, 1))
-	
+
 	// Expect inserts for address2blocks table
 	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_testchain_test_relay").WillReturnResult(sqlmock.NewResult(0, 1))
-	
+
 	// Expect another insert for blocks table
 	mock.ExpectExec("^INSERT INTO chain\\.blocks_testchain_test_relay").WillReturnResult(sqlmock.NewResult(0, 1))
-	
+
 	// Expect another insert for address2blocks table
 	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_testchain_test_relay").WillReturnResult(sqlmock.NewResult(0, 1))
-	
+
 	// Expect transaction commit
 	mock.ExpectCommit()
 
 	// Create database with mock
 	database := NewSQLDatabase(db)
-	
+
 	// Create a wait group to wait for async processing
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -175,21 +175,21 @@ func TestBatchFlushOnSize(t *testing.T) {
 	testConfig := Config{
 		Relaychain:   "test_relay",
 		Chain:        "testchain",
-		BatchSize:    2, // Set batch size to 2 to force a flush after items 0 and 1
+		BatchSize:    2,                // Set batch size to 2 to force a flush after items 0 and 1
 		FlushTimeout: 10 * time.Second, // Long timeout to ensure size triggers flush, not time
 	}
 
 	// Set up expectations for the batch
 	mock.ExpectBegin()
-	
+
 	// For item 0: first blocks table, then address2blocks table
 	mock.ExpectExec("^INSERT INTO chain\\.blocks_testchain_test_relay \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES \\(.*\\) ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_testchain_test_relay \\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "1").WillReturnResult(sqlmock.NewResult(0, 1))
-	
+
 	// For item 1: first blocks table, then address2blocks table
 	mock.ExpectExec("^INSERT INTO chain\\.blocks_testchain_test_relay \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES \\(.*\\) ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_testchain_test_relay \\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty", "2").WillReturnResult(sqlmock.NewResult(0, 1))
-	
+
 	mock.ExpectCommit()
 
 	// Create database with mock
@@ -262,11 +262,11 @@ func TestFlushOnClose(t *testing.T) {
 
 	// Set up expectations for the batch
 	mock.ExpectBegin()
-	
+
 	// For item 0: first blocks table, then address2blocks table
 	mock.ExpectExec("^INSERT INTO chain\\.blocks_testchain_test_relay \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES \\(.*\\) ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_testchain_test_relay \\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "1").WillReturnResult(sqlmock.NewResult(0, 1))
-	
+
 	mock.ExpectCommit()
 	mock.ExpectClose()
 

@@ -108,4 +108,3 @@ func extractAddressesFromExtrinsics(extrinsics json.RawMessage) ([]string, error
 
 	return addresses, nil
 }
-

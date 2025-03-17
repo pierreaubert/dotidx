@@ -76,7 +76,7 @@ func main() {
 	}
 
 	// Create database instance
-	database := NewSQLDatabase(db)
+	database := NewSQLDatabase(db, ctx)
 
 	// Create tables
 	firstBlock, err := reader.FetchBlock(ctx, 1)

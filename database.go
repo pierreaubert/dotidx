@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -51,6 +52,7 @@ const SQLDatabaseSchemaVersion = 2
 // SQLDatabase implements Database using SQL
 type SQLDatabase struct {
 	db      *sql.DB
+	context context.Context
 	metrics *Metrics
 	poolCfg DBPoolConfig
 
@@ -60,15 +62,21 @@ type SQLDatabase struct {
 	batchConfig   *Config
 	batchTimer    *time.Timer
 	batchShutdown chan struct{}
+
+	// continous queries
+	materializedTicker *time.Ticker
 }
 
 // NewSQLDatabase creates a new Database instance
-func NewSQLDatabase(db *sql.DB) *SQLDatabase {
-	return NewSQLDatabaseWithPool(db, DefaultDBPoolConfig())
+func NewSQLDatabase(db *sql.DB, context context.Context) *SQLDatabase {
+	return NewSQLDatabaseWithPool(
+		db,
+		context,
+		DefaultDBPoolConfig())
 }
 
 // NewSQLDatabaseWithPool creates a new Database instance with custom connection pool settings
-func NewSQLDatabaseWithPool(db *sql.DB, poolCfg DBPoolConfig) *SQLDatabase {
+func NewSQLDatabaseWithPool(db *sql.DB, context context.Context, poolCfg DBPoolConfig) *SQLDatabase {
 	// Configure connection pool
 	db.SetMaxOpenConns(poolCfg.MaxOpenConns)
 	db.SetMaxIdleConns(poolCfg.MaxIdleConns)
@@ -76,10 +84,12 @@ func NewSQLDatabaseWithPool(db *sql.DB, poolCfg DBPoolConfig) *SQLDatabase {
 	db.SetConnMaxIdleTime(poolCfg.ConnMaxIdleTime)
 
 	return &SQLDatabase{
-		db:             db,
-		metrics:        NewMetrics("Postgres"),
-		poolCfg:        poolCfg,
-		batchShutdown:  make(chan struct{}),
+		db:                 db,
+		context:            context,
+		materializedTicker: time.NewTicker(15 * time.Minute),
+		metrics:            NewMetrics("Postgres"),
+		poolCfg:            poolCfg,
+		batchShutdown:      make(chan struct{}),
 	}
 }
 
@@ -152,7 +162,6 @@ func sanitizeChainName(initialChainName, initialRelaychainName string) string {
 	return chainName
 }
 
-
 func getBlocksTableName(config Config) (name string) {
 	chainName := sanitizeChainName(config.Chain, config.Relaychain)
 	name = fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
@@ -171,8 +180,13 @@ func getAddressTableName(config Config) (name string) {
 	return
 }
 
-// CreateTable creates the necessary tables if they don't exist
-func (s *SQLDatabase) CreateTable(config Config, firstTimestamp, lastTimestamp string) error {
+func getStatsPerMonthTableName(config Config) (name string) {
+	chainName := sanitizeChainName(config.Chain, config.Relaychain)
+	name = fmt.Sprintf("%s.stats_per_month_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
+	return
+}
+
+func (s *SQLDatabase) CreateTableBlocks(config Config) error {
 	blocksTable := getBlocksTableName(config)
 	blocksPK := getBlocksPrimaryKeyName(config)
 
@@ -205,7 +219,12 @@ GRANT ALL ON TABLE %[1]s TO dotidx;
 		return fmt.Errorf("error creating blocks table: %s %w", template, err)
 	}
 
-	// CREATE PARTITIONS
+	return nil
+}
+
+func (s *SQLDatabase) CreateTableBlocksPartitions(config Config, firstTimestamp, lastTimestamp string) error {
+	blocksTable := getBlocksTableName(config)
+
 	firstYear, firstMonth := 2020, 4
 	if firstTimestamp != "" {
 		firstTime, err := time.Parse("2000-01-01 00:00:00", firstTimestamp)
@@ -213,8 +232,9 @@ GRANT ALL ON TABLE %[1]s TO dotidx;
 			return fmt.Errorf("Parsing time failed %w", err)
 		}
 		_, firstMonthAsMonth, _ := firstTime.Date()
-		firstMonth = int(firstMonthAsMonth)-1
+		firstMonth = int(firstMonthAsMonth) - 1
 	}
+
 	// Spread by month across the partition
 	slow := 0
 	fast := 0
@@ -255,7 +275,7 @@ GRANT ALL ON TABLE %[1]s_%04[2]d_%02[3]d TO dotidx;
 				to_date,      // 6
 				slow_or_fast, // 7
 			)
-			_, err = s.db.Exec(parts)
+			_, err := s.db.Exec(parts)
 			if err != nil {
 				log.Printf("sql %s", parts)
 				return fmt.Errorf("error creating blocks partition table: %w", err)
@@ -263,8 +283,13 @@ GRANT ALL ON TABLE %[1]s_%04[2]d_%02[3]d TO dotidx;
 		}
 	}
 
+	return nil
+}
+
+func (s *SQLDatabase) CreateTableAddress2Blocks(config Config) error {
 	address2blocksTable := getAddressTableName(config)
-	template = fmt.Sprintf(`
+
+	template := fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %s (
      address TEXT,
      block_id INTEGER,
@@ -275,13 +300,19 @@ REVOKE ALL ON TABLE %[1]s FROM PUBLIC;
 GRANT SELECT ON TABLE %[1]s TO PUBLIC;
 GRANT ALL ON TABLE %[1]s TO dotidx;
 	`, address2blocksTable)
-	_, err = s.db.Exec(template)
+
+	_, err := s.db.Exec(template)
 	if err != nil {
 		log.Printf("sql %s", template)
 		return fmt.Errorf("error creating address2blocks table: %w", err)
 	}
 
-	// CREATE PARTITIONS
+	return nil
+}
+
+func (s *SQLDatabase) CreateTableAddress2BlocksPartitions(config Config) error {
+	address2blocksTable := getAddressTableName(config)
+
 	// spread across fast disks to improve access time
 	for fast := range fastTablespaceNumber {
 		parts := fmt.Sprintf(`
@@ -297,11 +328,87 @@ GRANT ALL ON TABLE %[1]s_%1[2]d TO dotidx;
 			fast,                 // 2
 			fastTablespaceNumber, // 3
 		)
-		_, err = s.db.Exec(parts)
+		_, err := s.db.Exec(parts)
 		if err != nil {
 			log.Printf("sql %s", parts)
 			return fmt.Errorf("error creating partitions for address2blocks: %w", err)
 		}
+	}
+
+	return nil
+}
+
+func (s *SQLDatabase) CreateMaterializedTableForStats(config Config) error {
+	tableName := getBlocksTableName(config)
+	statsPerMonthViewName := getStatsPerMonthTableName(config)
+	query := fmt.Sprintf(`
+		CREATE MATERIALIZED VIEW IF NOT EXISTS %s AS
+                SELECT
+		        date_trunc('month',created_at)::date as date,
+			count(*) as total,
+			min(block_id) as min_block_id,
+			max(block_id) as max_block_id
+		FROM %s
+		GROUP BY date
+		ORDER BY date DESC
+                ;
+	`, statsPerMonthViewName, tableName)
+
+	_, err := s.db.Exec(query)
+	if err != nil {
+		log.Printf("sql %s", query)
+		return fmt.Errorf("error failed to create materialized table for statistics: %w", err)
+	}
+	return nil
+}
+
+func (s *SQLDatabase) CreateDotidxTable(config Config) error {
+	query := fmt.Sprintf(`
+		CREATE TABLE IF NOT EXISTS %s.dotidx (
+                    relay_chain TEXT NOT NULL,
+                    chain       TEXT NOT NULL,
+                    CONSTRAINT dotidx_pk PRIMARY KEY (relay_chain, chain)
+                );
+	`, schemaName)
+
+	if _, err := s.db.Exec(query); err != nil {
+		log.Printf("sql %s", query)
+		return fmt.Errorf("error failed to create dotidx table: %w", err)
+	}
+
+	inserts := fmt.Sprintf(`INSERT INTO %s.dotidx (relay_chain, chain) VALUES ($1, $2)`, schemaName)
+	if _, err := s.db.Exec(inserts, strings.ToLower(config.Relaychain), sanitizeChainName(config.Chain, config.Relaychain)) ; err != nil {
+		log.Printf("sql %s", query)
+		return fmt.Errorf("error failed to create dotidx table: %w", err)
+	}
+
+	return nil
+}
+
+func (s *SQLDatabase) CreateTable(config Config, firstTimestamp, lastTimestamp string) error {
+
+	if err := s.CreateDotidxTable(config); err != nil {
+		return fmt.Errorf("error creating dotidx table: %w", err)
+	}
+
+	if err := s.CreateTableBlocks(config); err != nil {
+		return fmt.Errorf("error creating table blocks: %w", err)
+	}
+
+	if err := s.CreateTableBlocksPartitions(config, firstTimestamp, lastTimestamp); err != nil {
+		return fmt.Errorf("error creating table blocks partitions: %w", err)
+	}
+
+	if err := s.CreateTableAddress2Blocks(config); err != nil {
+		return fmt.Errorf("error creating table address2blocks: %w", err)
+	}
+
+	if err := s.CreateTableAddress2BlocksPartitions(config); err != nil {
+		return fmt.Errorf("error creating table address2blocks partitions: %w", err)
+	}
+
+	if err := s.CreateMaterializedTableForStats(config); err != nil {
+		return fmt.Errorf("error creating materialized table for statistics: %w", err)
 	}
 
 	return nil
@@ -529,9 +636,9 @@ func (s *SQLDatabase) saveBatch(items []BlockData, config Config) error {
 			// faking it
 			id, _ := strconv.ParseInt(item.ID, 10, 32)
 			milli := id % 1000
-			sec   := (id / 1000) % 60
-			min   := (id / 60000) % 60
-			hour  := (id / 3600000) % 60
+			sec := (id / 1000) % 60
+			min := (id / 60000) % 60
+			hour := (id / 3600000) % 60
 			ts = fmt.Sprintf("2020-05-01 %02d:%02d:%02d.%04d", hour, min, sec, milli)
 		}
 
@@ -619,3 +726,27 @@ func (s *SQLDatabase) GetStats() *MetricsStats {
 	return s.metrics.GetStats()
 }
 
+func (s *SQLDatabase) UpdateMaterializedTables(config Config) error {
+
+	template := fmt.Sprintf(`REFRESH MATERIALIZED VIEW [ CONCURRENTLY ] %s`,
+		getStatsPerMonthTableName(config))
+
+	_, err := s.db.Exec(template)
+	if err != nil {
+		return fmt.Errorf("error creating blocks table: %s %w", template, err)
+	}
+
+	return nil
+}
+
+func (s *SQLDatabase) UpdateDatabaseStats(config Config) error {
+	for {
+		select {
+		case <-s.context.Done():
+			return s.context.Err()
+		case <-s.materializedTicker.C:
+			s.UpdateMaterializedTables(config)
+		}
+	}
+	return nil
+}

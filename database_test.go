@@ -56,13 +56,13 @@ func TestSaveToDatabase(t *testing.T) {
 
 	// For first item: first blocks table insert with correct column names
 	mock.ExpectExec("^INSERT INTO chain\\.blocks_polkadot_chain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES \\(.*\\) ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
-	
+
 	// Then address2blocks table
 	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_polkadot_chain \\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "1").WillReturnResult(sqlmock.NewResult(0, 1))
 
 	// For second item: first blocks table with correct column names
 	mock.ExpectExec("^INSERT INTO chain\\.blocks_polkadot_chain \\(block_id, created_at, hash, parent_hash, state_root, extrinsics_root, author_id, finalized, on_initialize, on_finalize, logs, extrinsics\\) VALUES \\(.*\\) ON CONFLICT.*$").WillReturnResult(sqlmock.NewResult(0, 1))
-	
+
 	// Then address2blocks table
 	mock.ExpectExec("^INSERT INTO chain\\.address2blocks_polkadot_chain \\(address, block_id\\) VALUES \\(\\$1, \\$2\\) ON CONFLICT \\(address, block_id\\) DO NOTHING$").WithArgs("5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty", "2").WillReturnResult(sqlmock.NewResult(0, 1))
 

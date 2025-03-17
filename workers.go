@@ -209,7 +209,7 @@ func processBlockBatch(ctx context.Context, blockIDs []int, config Config, db Da
 	}
 
 	// Create the array of block IDs from the range
-	ids := make([]int, 0, blockIDs[len(blockIDs)-1] - blockIDs[0] + 1)
+	ids := make([]int, 0, blockIDs[len(blockIDs)-1]-blockIDs[0]+1)
 	for i := blockIDs[0]; i <= blockIDs[len(blockIDs)-1]; i++ {
 		ids = append(ids, i)
 	}

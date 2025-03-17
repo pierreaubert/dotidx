@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 )
 
@@ -17,10 +16,6 @@ type Frontend struct {
 	config         Config
 	listenAddr     string
 	metricsHandler *Metrics
-	// Cache for expensive queries
-	cacheMutex           sync.RWMutex
-	monthlyStatsCache    []MonthlyStats
-	monthlyStatsCacheExp time.Time
 }
 
 // NewFrontend creates a new Frontend instance
@@ -30,8 +25,6 @@ func NewFrontend(db *sql.DB, config Config, listenAddr string) *Frontend {
 		config:         config,
 		listenAddr:     listenAddr,
 		metricsHandler: NewMetrics("Frontend"),
-		// Initialize with expired cache
-		monthlyStatsCacheExp: time.Now().Add(-1 * time.Hour),
 	}
 }
 
@@ -81,7 +74,9 @@ type BlocksResponse struct {
 
 // CompletionRateResponse is the response for the /stats/completatiorate endpoint
 type CompletionRateResponse struct {
-	PercentCompletion int `json:"percent_completion"`
+	RelayChain        string
+	Chain             string
+	PercentCompletion float64 `json:"percent_completion"`
 	HeadID            int `json:"head_id"`
 }
 
@@ -171,6 +166,8 @@ func (f *Frontend) handleCompletionRate(w http.ResponseWriter, r *http.Request) 
 
 	// Prepare response
 	response := CompletionRateResponse{
+		RelayChain: f.config.Relaychain,
+		Chain: f.config.Chain,
 		PercentCompletion: percentCompletion,
 		HeadID:            headID,
 	}
@@ -199,7 +196,7 @@ func (f *Frontend) handleStatsPerMonth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Query the database to get the monthly stats (with caching)
-	stats, err := f.getCachedMonthlyStats()
+	stats, err := f.getMonthlyStats()
 	if err != nil {
 		log.Printf("Error getting monthly stats: %v", err)
 		http.Error(w, "Error retrieving monthly statistics", http.StatusInternalServerError)
@@ -220,50 +217,13 @@ func (f *Frontend) handleStatsPerMonth(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// getCachedMonthlyStats returns monthly stats with caching (15 min expiration)
-func (f *Frontend) getCachedMonthlyStats() ([]MonthlyStats, error) {
-	// Check if we have a valid cache
-	f.cacheMutex.RLock()
-	cachedData := f.monthlyStatsCache
-	cacheExpiration := f.monthlyStatsCacheExp
-	f.cacheMutex.RUnlock()
-
-	// If cache is still valid, return it
-	if time.Now().Before(cacheExpiration) && len(cachedData) > 0 {
-		log.Printf("Using cached monthly stats (expires at %s)", cacheExpiration.Format(time.RFC3339))
-		return cachedData, nil
-	}
-
-	// Cache expired or empty, query the database
-	log.Printf("Monthly stats cache expired, querying database")
-	stats, err := f.getMonthlyStats()
-	if err != nil {
-		return nil, err
-	}
-
-	// Update cache
-	f.cacheMutex.Lock()
-	f.monthlyStatsCache = stats
-	f.monthlyStatsCacheExp = time.Now().Add(15 * time.Minute)
-	f.cacheMutex.Unlock()
-
-	log.Printf("Updated monthly stats cache (expires at %s)", f.monthlyStatsCacheExp.Format(time.RFC3339))
-	return stats, nil
-}
-
 // getMonthlyStats queries the database to get statistics per month
 func (f *Frontend) getMonthlyStats() ([]MonthlyStats, error) {
 	// SQL query to get block statistics per month
-	query := `
-		SELECT
-			date_trunc('month',created_at)::date as date,
-			count(*),
-			min(block_id),
-			max(block_id)
-		FROM chain.blocks_polkadot_polkadot
-		GROUP BY date
-		ORDER BY date DESC;
-	`
+	query := fmt.Sprintf(`
+		SELECT *
+		FROM %s;
+	`, getStatsPerMonthTableName(f.config))
 
 	// log.Printf("%s", query)
 
@@ -300,23 +260,19 @@ func (f *Frontend) getMonthlyStats() ([]MonthlyStats, error) {
 }
 
 // getCompletionRate queries the database to get the completion rate
-func (f *Frontend) getCompletionRate() (int, int, error) {
-	// SQL query to calculate the completion rate
-	query := `
-		SELECT
-			count(distinct block_id) * 100 / max(block_id) as percentcompletion,
-			max(block_id) as head_id
-		FROM chain.blocks_polkadot_polkadot;
-	`
+func (f *Frontend) getCompletionRate() (float64, int, error) {
 
-	// log.Printf("%s", query)
+	query := fmt.Sprintf(`SELECT sum(total*100)/max(max_block_id), max(max_block_id) FROM %s;`,
+		getStatsPerMonthTableName(f.config))
+
+	log.Printf("%s", query)
 
 	// Execute the query
-	var percentCompletion int
+	var percentCompletion float64
 	var headID int
 	err := f.db.QueryRow(query).Scan(&percentCompletion, &headID)
 	if err != nil {
-		return 0, 0, fmt.Errorf("database query failed: %w", err)
+		return float64(0.0), 0, fmt.Errorf("database query failed: %w", err)
 	}
 
 	return percentCompletion, headID, nil
@@ -390,5 +346,3 @@ func (f *Frontend) getBlocksByAddress(address string) ([]BlockData, error) {
 
 	return blocks, nil
 }
-
-
