@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 )
@@ -139,33 +138,9 @@ func (f *Frontend) handleAddressToBlocks(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Convert Block to BlockData for API response
-	blockData := make([]BlockData, len(blocks))
-	for i, block := range blocks {
-		blockData[i] = BlockData{
-			ID:             block.ID,
-			Timestamp:      block.Timestamp,
-			Hash:           block.Hash,
-			ParentHash:     block.ParentHash,
-			StateRoot:      block.StateRoot,
-			ExtrinsicsRoot: block.ExtrinsicsRoot,
-			AuthorID:       block.AuthorID,
-			Finalized:      block.Finalized,
-			OnInitialize:   json.RawMessage(block.OnInitialize),
-			OnFinalize:     json.RawMessage(block.OnFinalize),
-			Logs:           json.RawMessage(block.Logs),
-			Extrinsics:     json.RawMessage(block.Extrinsics),
-		}
-	}
-
-	// Prepare the response
-	response := BlocksResponse{
-		Blocks: blockData,
-	}
-
 	// Set content type and encode response as JSON
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
+	if err := json.NewEncoder(w).Encode(blocks); err != nil {
 		log.Printf("Error encoding response: %v", err)
 		http.Error(w, "Error encoding response", http.StatusInternalServerError)
 		return
@@ -406,18 +381,6 @@ func (f *Frontend) getBlocksByAddress(address string) ([]BlockData, error) {
 			return nil, fmt.Errorf("error scanning block: %w", err)
 		}
 
-		// Filter logs - only keep logs containing the address
-		block.Logs = filterArrayByAddress(block.Logs, address)
-
-		// Filter on_initialize - only keep events containing the address
-		block.OnInitialize = filterObjectWithEvents(block.OnInitialize, address)
-
-		// Filter on_finalize - only keep events containing the address
-		block.OnFinalize = filterObjectWithEvents(block.OnFinalize, address)
-
-		// Use recursive filtering for extrinsics due to their complex structure
-		block.Extrinsics = filterExtrinsicsRecursive(block.Extrinsics, address)
-
 		blocks = append(blocks, block)
 	}
 
@@ -428,208 +391,4 @@ func (f *Frontend) getBlocksByAddress(address string) ([]BlockData, error) {
 	return blocks, nil
 }
 
-// filterArrayByAddress filters a JSON array to only include elements containing the specified address
-func filterArrayByAddress(data []byte, address string) []byte {
-	if len(data) == 0 || !strings.Contains(string(data), address) {
-		return []byte("[]")
-	}
 
-	// Try to unmarshal as array
-	var array []json.RawMessage
-	if err := json.Unmarshal(data, &array); err != nil {
-		return data // Return original if not a valid array
-	}
-
-	// Filter array to only include items containing the address
-	filtered := []json.RawMessage{}
-	for _, item := range array {
-		if strings.Contains(string(item), address) {
-			filtered = append(filtered, item)
-		}
-	}
-
-	result, err := json.Marshal(filtered)
-	if err != nil {
-		return data // Return original if cannot marshal
-	}
-
-	return result
-}
-
-// filterObjectWithEvents filters a JSON object, keeping only events containing the specified address
-func filterObjectWithEvents(data []byte, address string) []byte {
-	if len(data) == 0 || !strings.Contains(string(data), address) {
-		return []byte("{}")
-	}
-
-	// Parse the JSON object
-	var obj map[string]json.RawMessage
-	if err := json.Unmarshal(data, &obj); err != nil {
-		return data // Return original if not a valid object
-	}
-
-	// Check for events array
-	eventsData, ok := obj["events"]
-	if !ok {
-		return data // Return original if no events field
-	}
-
-	// Filter the events array
-	obj["events"] = filterArrayByAddress(eventsData, address)
-
-	// Marshal back to JSON
-	result, err := json.Marshal(obj)
-	if err != nil {
-		return data // Return original if cannot marshal
-	}
-
-	return result
-}
-
-// filterExtrinsicsRecursive recursively filters out extrinsics that don't contain the given address
-func filterExtrinsicsRecursive(extrinsicsJson []byte, address string) []byte {
-	empty := []byte("[]")
-	// Skip empty arrays or if address is not found at all
-	if len(extrinsicsJson) == 0 || !strings.Contains(string(extrinsicsJson), address) {
-		return empty
-	}
-
-	// Parse the JSON into a generic interface
-	var extrinsics interface{}
-	err := json.Unmarshal(extrinsicsJson, &extrinsics)
-	if err != nil {
-		log.Printf("Error unmarshaling extrinsics: %v", err)
-		return empty
-	}
-
-	// Define a recursive function to filter values
-	var filterValue func(val interface{}) interface{}
-	filterValue = func(val interface{}) interface{} {
-		switch val := val.(type) {
-		case []interface{}: // Handle array
-			result := make([]interface{}, 0)
-
-			// Process each item in the array
-			for _, item := range val {
-				// Convert item to JSON string to check for direct address match
-				jsonData, err := json.Marshal(item)
-				if err == nil && strings.Contains(string(jsonData), address) {
-					// If item directly contains the address, add it
-					result = append(result, item)
-					continue
-				}
-
-				// Recursively filter the item
-				filtered := filterValue(item)
-				if filtered != nil {
-					// Check if the filtered item contains the address
-					jsonData, err := json.Marshal(filtered)
-					if err == nil && strings.Contains(string(jsonData), address) {
-						result = append(result, filtered)
-					}
-				}
-			}
-
-			// If nothing matched, return nil
-			if len(result) == 0 {
-				return nil
-			}
-			return result
-
-		case map[string]interface{}: // Handle object/map
-			result := make(map[string]interface{})
-			hasAddress := false
-
-			// First, check if any value directly contains the address as a string
-			for _, itemValue := range val {
-				if str, ok := itemValue.(string); ok {
-					if strings.Contains(str, address) {
-						hasAddress = true
-						// Copy all fields from the original map
-						for k, v := range val {
-							result[k] = v
-						}
-						return result
-					}
-				}
-			}
-
-			// Otherwise, recursively filter nested structures (arrays/maps)
-			for _, itemValue := range val {
-				switch itemValue.(type) {
-				case map[string]interface{}, []interface{}:
-					// Recursively filter this complex value
-					filtered := filterValue(itemValue)
-
-					// If filtered result is not nil, include it and mark this map as containing the address
-					if filtered != nil {
-						jsonData, err := json.Marshal(filtered)
-						if err == nil && strings.Contains(string(jsonData), address) {
-							result[""] = filtered
-							hasAddress = true
-						}
-					}
-				}
-			}
-
-			// If we found the address somewhere in the nested structures, copy all fields from the original map
-			if hasAddress {
-				// Copy all fields that haven't been added yet
-				for k, v := range val {
-					if _, exists := result[k]; !exists {
-						result[k] = v
-					}
-				}
-				return result
-			}
-
-			// If no values contain the address, return nil
-			return nil
-
-		default: // Handle primitive values (string, number, boolean, null)
-			if str, ok := val.(string); ok {
-				// For strings, check direct containment
-				if strings.Contains(str, address) {
-					return str
-				}
-			}
-			return nil
-		}
-	}
-
-	// Apply the filter function to the root object
-	filtered := filterValue(extrinsics)
-	if filtered == nil {
-		// If nothing matched, return empty array
-		log.Println("Filtered JSON array: null")
-		return empty
-	}
-
-	// Convert back to JSON
-	result, err := json.Marshal(filtered)
-	if err != nil {
-		log.Printf("Error marshaling filtered extrinsics: %v", err)
-		return extrinsicsJson // Return original if cannot marshal
-	}
-
-	log.Printf("Filtered extrinsics: %s", result)
-	return result
-}
-
-// isValidAddress validates a Polkadot address format
-func isValidAddress(address string) bool {
-	// Polkadot addresses are 47 or 48 characters long and start with a number or letter
-	if len(address) < 45 || len(address) > 50 {
-		return false
-	}
-
-	// Check for common prefixes of Polkadot addresses
-	validPrefixes := []string{"1", "5F", "5G", "5D", "5E", "5H"}
-	for _, prefix := range validPrefixes {
-		if strings.HasPrefix(address, prefix) {
-			return true
-		}
-	}
-
-	return false
-}

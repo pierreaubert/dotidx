@@ -71,5 +71,9 @@ func validateConfig(config Config) error {
 		return fmt.Errorf("max workers must be greater than 0")
 	}
 
+	if config.Chain == "" {
+		return fmt.Errorf("chain name is required")
+	}
+
 	return nil
 }

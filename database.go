@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -11,7 +12,7 @@ import (
 
 // Database defines the interface for database operations
 type Database interface {
-	CreateTable(config Config) error
+	CreateTable(config Config, firstTimestamp, lastTimestamp string) error
 	CreateIndex(config Config) error
 	Save(items []BlockData, config Config) error
 	GetExistingBlocks(startRange, endRange int, config Config) (map[int]bool, error)
@@ -30,9 +31,9 @@ type DBPoolConfig struct {
 }
 
 const schemaName = "chain"
-const fastTablespaceRoot = "/dotidx/fast"
+const fastTablespaceRoot = "fast"
 const fastTablespaceNumber = 4
-const slowTablespaceRoot = "/dotidx/slow"
+const slowTablespaceRoot = "slow"
 const slowTablespaceNumber = 6
 
 func DefaultDBPoolConfig() DBPoolConfig {
@@ -150,9 +151,17 @@ func sanitizeChainName(initialChainName, initialRelaychainName string) string {
 	}
 	return chainName
 }
+
+
 func getBlocksTableName(config Config) (name string) {
 	chainName := sanitizeChainName(config.Chain, config.Relaychain)
 	name = fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
+	return
+}
+
+func getBlocksPrimaryKeyName(config Config) (name string) {
+	chainName := sanitizeChainName(config.Chain, config.Relaychain)
+	name = fmt.Sprintf("blocks_%s_%s", strings.ToLower(config.Relaychain), chainName)
 	return
 }
 
@@ -163,8 +172,9 @@ func getAddressTableName(config Config) (name string) {
 }
 
 // CreateTable creates the necessary tables if they don't exist
-func (s *SQLDatabase) CreateTable(config Config) error {
+func (s *SQLDatabase) CreateTable(config Config, firstTimestamp, lastTimestamp string) error {
 	blocksTable := getBlocksTableName(config)
+	blocksPK := getBlocksPrimaryKeyName(config)
 
 	// Create the blocks table
 	template := fmt.Sprintf(`
@@ -182,19 +192,29 @@ CREATE TABLE IF NOT EXISTS %[1]s
   on_finalize     jsonb,
   logs            jsonb,
   extrinsics      jsonb,
-  CONSTRAINT      block_pk PRIMARY KEY (block_id, created_at)
+  CONSTRAINT      %[2]s_pk PRIMARY KEY (block_id, created_at)
 ) PARTITION BY RANGE (created_at);
 ALTER TABLE IF EXISTS %[1]s OWNER to dotidx;
 REVOKE ALL ON TABLE %[1]s FROM PUBLIC;
 GRANT SELECT ON TABLE %[1]s TO PUBLIC;
 GRANT ALL ON TABLE %[1]s TO dotidx;
-	`, blocksTable)
+	`, blocksTable, blocksPK)
+
 	_, err := s.db.Exec(template)
 	if err != nil {
 		return fmt.Errorf("error creating blocks table: %s %w", template, err)
 	}
 
 	// CREATE PARTITIONS
+	firstYear, firstMonth := 2020, 4
+	if firstTimestamp != "" {
+		firstTime, err := time.Parse("2000-01-01 00:00:00", firstTimestamp)
+		if err == nil {
+			return fmt.Errorf("Parsing time failed %w", err)
+		}
+		_, firstMonthAsMonth, _ := firstTime.Date()
+		firstMonth = int(firstMonthAsMonth)-1
+	}
 	// Spread by month across the partition
 	slow := 0
 	fast := 0
@@ -202,13 +222,17 @@ GRANT ALL ON TABLE %[1]s TO dotidx;
 	for year_idx := range 6 {
 		year := 2020 + year_idx
 		if year >= time.Now().Year() {
-			slow_or_fast = fmt.Sprintf("fast%d", fast)
+			slow_or_fast = fmt.Sprintf("%s%d", fastTablespaceRoot, fast)
 			fast = min(fast+1, fastTablespaceNumber-1)
 		} else {
-			slow_or_fast = fmt.Sprintf("slow%d", slow)
+			slow_or_fast = fmt.Sprintf("%s%d", slowTablespaceRoot, slow)
 			slow = min(slow+1, slowTablespaceNumber-1)
 		}
 		for month := range 12 {
+			// skip tables if no data
+			if year < firstYear || (year == firstYear && month < firstMonth) {
+				continue
+			}
 			from_date := fmt.Sprintf("%04d-%02d-01 00:00:00.0000", year, month+1)
 			to_date := fmt.Sprintf("%04d-%02d-01 00:00:00.0000", year, month+2)
 			if month == 11 {
@@ -233,7 +257,8 @@ GRANT ALL ON TABLE %[1]s_%04[2]d_%02[3]d TO dotidx;
 			)
 			_, err = s.db.Exec(parts)
 			if err != nil {
-				return fmt.Errorf("error : %w", err)
+				log.Printf("sql %s", parts)
+				return fmt.Errorf("error creating blocks partition table: %w", err)
 			}
 		}
 	}
@@ -252,6 +277,7 @@ GRANT ALL ON TABLE %[1]s TO dotidx;
 	`, address2blocksTable)
 	_, err = s.db.Exec(template)
 	if err != nil {
+		log.Printf("sql %s", template)
 		return fmt.Errorf("error creating address2blocks table: %w", err)
 	}
 
@@ -273,7 +299,8 @@ GRANT ALL ON TABLE %[1]s_%1[2]d TO dotidx;
 		)
 		_, err = s.db.Exec(parts)
 		if err != nil {
-			return fmt.Errorf("error : %w", err)
+			log.Printf("sql %s", parts)
+			return fmt.Errorf("error creating partitions for address2blocks: %w", err)
 		}
 	}
 
@@ -334,7 +361,9 @@ func (s *SQLDatabase) Save(items []BlockData, config Config) error {
 	// Handle timer reset logic
 	if !flushRequired && s.batchTimer == nil {
 		s.batchTimer = time.AfterFunc(config.FlushTimeout, func() {
-			s.flushBatch()
+			if err := s.flushBatch(); err != nil {
+				return
+			}
 		})
 	}
 
@@ -496,7 +525,14 @@ func (s *SQLDatabase) saveBatch(items []BlockData, config Config) error {
 	for _, item := range items {
 		ts, err := extractTimestamp(item.Extrinsics)
 		if err != nil {
-			log.Printf("warning: blockID %s could not find timestamp %v", item.ID, err)
+			// log.Printf("warning: blockID %s could not find timestamp %v", item.ID, err)
+			// faking it
+			id, _ := strconv.ParseInt(item.ID, 10, 32)
+			milli := id % 1000
+			sec   := (id / 1000) % 60
+			min   := (id / 60000) % 60
+			hour  := (id / 3600000) % 60
+			ts = fmt.Sprintf("2020-05-01 %02d:%02d:%02d.%04d", hour, min, sec, milli)
 		}
 
 		// Insert into blocks table using direct execution

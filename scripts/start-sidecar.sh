@@ -17,13 +17,14 @@ fi
 echo "Using: ip=$IP"
 
 SAS_EXPRESS_PORT_START=10800
+
 SAS_SUBSTRATE_TYPES_BUNDLE=undefined
 SAS_SUBSTRATE_TYPES_CHAIN=undefined
 SAS_SUBSTRATE_TYPES_SPEC=undefined
 SAS_SUBSTRATE_TYPES=undefined
 SAS_SUBSTRATE_CACHE_CAPACITY=undefined
 
-for p in `seq 1 15`; do
+for p in `seq 1 32`; do
     touch "$ROOT/logs/sidecar-$p.log"
     SAS_LOG_LEVEL="debug" \
     SAS_LOG_JSON=false \

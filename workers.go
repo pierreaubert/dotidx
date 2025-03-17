@@ -45,7 +45,7 @@ func startWorkers(
 					}
 
 					// Process a single block
-					processSingleBlock(ctx, blockID, config, db, reader, workerID)
+					processSingleBlock(ctx, blockID, config, db, reader)
 				}
 			}
 		}(i)
@@ -67,7 +67,7 @@ func startWorkers(
 					}
 
 					// Process a batch of blocks
-					processBlockBatch(ctx, blockIDs, config, db, reader, workerID)
+					processBlockBatch(ctx, blockIDs, config, db, reader)
 				}
 			}
 		}(i)
@@ -187,7 +187,7 @@ func startWorkers(
 }
 
 // ProcessSingleBlock fetches and processes a single block using fetchBlock
-func processSingleBlock(ctx context.Context, blockID int, config Config, db Database, reader ChainReader, workerID int) {
+func processSingleBlock(ctx context.Context, blockID int, config Config, db Database, reader ChainReader) {
 	block, err := reader.FetchBlock(ctx, blockID)
 	if err != nil {
 		log.Printf("Error fetching block %d: %v", blockID, err)
@@ -203,7 +203,7 @@ func processSingleBlock(ctx context.Context, blockID int, config Config, db Data
 }
 
 // ProcessBlockBatch fetches and processes a batch of blocks using fetchBlockRange
-func processBlockBatch(ctx context.Context, blockIDs []int, config Config, db Database, reader ChainReader, workerID int) {
+func processBlockBatch(ctx context.Context, blockIDs []int, config Config, db Database, reader ChainReader) {
 	if len(blockIDs) == 0 {
 		return
 	}

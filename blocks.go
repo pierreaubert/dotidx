@@ -24,6 +24,23 @@ type BlockData struct {
 	Extrinsics     json.RawMessage `json:"extrinsics"`
 }
 
+func isValidAddress(address string) bool {
+	// Polkadot addresses are 47 or 48 characters long and start with a number or letter
+	if len(address) < 45 || len(address) > 50 {
+		return false
+	}
+
+	// Check for common prefixes of Polkadot addresses
+	validPrefixes := []string{"1", "5F", "5G", "5D", "5E", "5H"}
+	for _, prefix := range validPrefixes {
+		if strings.HasPrefix(address, prefix) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func extractTimestamp(extrinsics []byte) (ts string, err error) {
 	const defaultTimestamp = "0001-01-01 00:00:00.0000"
 	re := regexp.MustCompile("\"now\"[ ]*[:][ ]*\"[0-9]+\"")
@@ -49,7 +66,6 @@ func extractAddressesFromExtrinsics(extrinsics json.RawMessage) ([]string, error
 		return nil, nil
 	}
 
-	// Parse the extrinsics JSON
 	var data interface{}
 	if err := json.Unmarshal(extrinsics, &data); err != nil {
 		return nil, fmt.Errorf("error parsing extrinsics JSON: %w", err)
@@ -57,60 +73,34 @@ func extractAddressesFromExtrinsics(extrinsics json.RawMessage) ([]string, error
 
 	// Set to store unique addresses
 	addressMap := make(map[string]struct{})
-
-	// Function to validate if a string is a Polkadot address
-	validateAddress := func(addr string) bool {
-		// Polkadot addresses are 47 or 48 characters long and start with a number or letter
-		if len(addr) < 45 || len(addr) > 50 {
-			return false
-		}
-
-		// Check for common prefixes of Polkadot addresses
-		validPrefixes := []string{"1", "5F", "5G", "5D", "5E", "5H"}
-		for _, prefix := range validPrefixes {
-			if strings.HasPrefix(addr, prefix) {
-				return true
-			}
-		}
-
-		return false
-	}
-
-	// Recursive function to find address fields in the JSON
 	var findAddresses func(data interface{})
+
 	findAddresses = func(data interface{}) {
 		switch v := data.(type) {
 		case map[string]interface{}:
 			// Check for fields that might contain an address
 			for key, value := range v {
-				// Check if the field contains "id" in its name and is a string
 				if strings.Contains(strings.ToLower(key), "id") {
-					if id, ok := value.(string); ok && validateAddress(id) {
+					if id, ok := value.(string); ok && isValidAddress(id) {
 						addressMap[id] = struct{}{}
 					}
 				}
-				// Also recursively check all fields
 				findAddresses(value)
 			}
 
 		case []interface{}:
-			// Check each item in the array
 			for _, item := range v {
-				// If the item is a string, check if it's an address
-				if str, ok := item.(string); ok && validateAddress(str) {
+				if str, ok := item.(string); ok && isValidAddress(str) {
 					addressMap[str] = struct{}{}
 				} else {
-					// Otherwise, recursively check the item
 					findAddresses(item)
 				}
 			}
 		}
 	}
 
-	// Start the recursive search
 	findAddresses(data)
 
-	// Convert the map to a slice
 	addresses := make([]string, 0, len(addressMap))
 	for addr := range addressMap {
 		addresses = append(addresses, addr)
@@ -118,3 +108,4 @@ func extractAddressesFromExtrinsics(extrinsics json.RawMessage) ([]string, error
 
 	return addresses, nil
 }
+

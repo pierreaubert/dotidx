@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -23,6 +24,31 @@ func main() {
 	if err := validateConfig(config); err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
+
+	// ----------------------------------------------------------------------
+	// ChainReader
+	// ----------------------------------------------------------------------
+	reader := NewSidecar(config.ChainReaderURL)
+	// Test the sidecar service
+	if err := reader.Ping(); err != nil {
+		log.Fatalf("Sidecar service test failed: %v", err)
+	}
+	log.Println("Sidecar service is working properly")
+
+	headBlockID, err := reader.GetChainHeadID()
+	if err != nil {
+		log.Fatalf("Failed to fetch head block: %v", err)
+	}
+	log.Printf("Current head block is %d", headBlockID)
+
+	// ----------------------------------------------------------------------
+	// Set up context with cancellation for graceful shutdown
+	// ----------------------------------------------------------------------
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Handle OS signals for graceful shutdown
+	setupSignalHandler(cancel)
 
 	// ----------------------------------------------------------------------
 	// Database
@@ -53,7 +79,25 @@ func main() {
 	database := NewSQLDatabase(db)
 
 	// Create tables
-	if err := database.CreateTable(config); err != nil {
+	firstBlock, err := reader.FetchBlock(ctx, 1)
+	if err != nil {
+		log.Fatalf("Cannot get block 1: %v", err)
+	}
+	firstTimestamp, err := extractTimestamp(firstBlock.Extrinsics)
+	if err != nil {
+		// some parachain do not have the pallet timestamp
+		firstTimestamp = ""
+	}
+	lastBlock, err := reader.FetchBlock(ctx, headBlockID)
+	if err != nil {
+		log.Fatalf("Cannot get head block %d: %v", headBlockID, err)
+	}
+	lastTimestamp, err := extractTimestamp(lastBlock.Extrinsics)
+	if err != nil {
+		lastTimestamp = time.Now().Format("2006-01-02 15:04:05")
+	}
+
+	if err := database.CreateTable(config, firstTimestamp, lastTimestamp); err != nil {
 		log.Fatalf("Error creating tables: %v", err)
 	}
 
@@ -63,25 +107,6 @@ func main() {
 	}
 
 	log.Printf("Successfully connected to database %s", config.DatabaseURL)
-
-	// ----------------------------------------------------------------------
-	// ChainReader
-	// ----------------------------------------------------------------------
-	reader := NewSidecar(config.ChainReaderURL)
-	// Test the sidecar service
-	if err := reader.Ping(); err != nil {
-		log.Fatalf("Sidecar service test failed: %v", err)
-	}
-	log.Println("Sidecar service is working properly")
-
-	// ----------------------------------------------------------------------
-	// Set up context with cancellation for graceful shutdown
-	// ----------------------------------------------------------------------
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Handle OS signals for graceful shutdown
-	setupSignalHandler(cancel)
 
 	// ----------------------------------------------------------------------
 	// REST Frontend
@@ -101,12 +126,6 @@ func main() {
 			log.Printf("Error starting frontend server: %v", err)
 		}
 	}()
-
-	headBlockID, err := reader.GetChainHeadID()
-	if err != nil {
-		log.Fatalf("Failed to fetch head block: %v", err)
-	}
-	log.Printf("Current head block is %d", headBlockID)
 
 	// print some stats
 	go func() {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHandleAddressToBlocks(t *testing.T) {
@@ -324,21 +325,21 @@ func TestHandleStatsPerMonth(t *testing.T) {
 				frontend.monthlyStatsCache = nil
 				frontend.monthlyStatsCacheExp = time.Now().Add(-1 * time.Hour)
 				frontend.cacheMutex.Unlock()
-				
+
 				// Create expected rows
 				columns := []string{"date", "count", "min", "max"}
 
 				// Create mock rows
 				mockRows := sqlmock.NewRows(columns).AddRow(
 					time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC), // date
-					100,                                       // count
-					1000,                                      // min_block_id
-					1100,                                      // max_block_id
+					100,  // count
+					1000, // min_block_id
+					1100, // max_block_id
 				).AddRow(
 					time.Date(2023, 2, 1, 0, 0, 0, 0, time.UTC), // date
-					200,                                       // count
-					1101,                                      // min_block_id
-					1300,                                      // max_block_id
+					200,  // count
+					1101, // min_block_id
+					1300, // max_block_id
 				)
 
 				// Expect query execution
@@ -398,7 +399,7 @@ func TestHandleStatsPerMonth(t *testing.T) {
 				frontend.monthlyStatsCache = nil
 				frontend.monthlyStatsCacheExp = time.Now().Add(-1 * time.Hour)
 				frontend.cacheMutex.Unlock()
-				
+
 				mock.ExpectQuery(`SELECT.*date_trunc\('month',created_at\)::date as date`).WillReturnError(fmt.Errorf("database error"))
 			},
 			validateResult: func(t *testing.T, resp *httptest.ResponseRecorder) {
@@ -458,14 +459,14 @@ func TestMonthlyStatsCaching(t *testing.T) {
 	// Create mock rows that will be returned on first query
 	mockRows := sqlmock.NewRows(columns).AddRow(
 		time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC), // date
-		100,                                       // count
-		1000,                                      // min_block_id
-		1100,                                      // max_block_id
+		100,  // count
+		1000, // min_block_id
+		1100, // max_block_id
 	).AddRow(
 		time.Date(2023, 2, 1, 0, 0, 0, 0, time.UTC), // date
-		200,                                       // count
-		1101,                                      // min_block_id
-		1300,                                      // max_block_id
+		200,  // count
+		1101, // min_block_id
+		1300, // max_block_id
 	)
 
 	// First query should execute the database query
@@ -525,14 +526,14 @@ func TestMonthlyStatsCaching(t *testing.T) {
 	// Create new mock rows for the new query after cache expiration
 	newMockRows := sqlmock.NewRows(columns).AddRow(
 		time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC), // same first month
-		100,                                       // count
-		1000,                                      // min_block_id
-		1100,                                      // max_block_id
+		100,  // count
+		1000, // min_block_id
+		1100, // max_block_id
 	).AddRow(
 		time.Date(2023, 3, 1, 0, 0, 0, 0, time.UTC), // different second month
-		300,                                       // count
-		1301,                                      // min_block_id
-		1500,                                      // max_block_id
+		300,  // count
+		1301, // min_block_id
+		1500, // max_block_id
 	)
 
 	// Expect another query after cache expiration
@@ -560,53 +561,6 @@ func TestMonthlyStatsCaching(t *testing.T) {
 	// Verify all expectations were met
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("Unfulfilled expectations: %s", err)
-	}
-}
-
-func TestIsValidAddress(t *testing.T) {
-	tests := []struct {
-		name    string
-		address string
-		want    bool
-	}{
-		{
-			name:    "Valid Polkadot address",
-			address: "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
-			want:    true,
-		},
-		{
-			name:    "Valid address with 1 prefix",
-			address: "16fAYQeYwBhWrJGSS8UXMNUWvUQf38VcvCaXxUPwMBUCCsQ1",
-			want:    true,
-		},
-		{
-			name:    "Too short address",
-			address: "5FHne",
-			want:    false,
-		},
-		{
-			name:    "Too long address",
-			address: "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694tyaaaaaaaaaaaa",
-			want:    false,
-		},
-		{
-			name:    "Invalid prefix",
-			address: "XYZ123W46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
-			want:    false,
-		},
-		{
-			name:    "Empty address",
-			address: "",
-			want:    false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := isValidAddress(tt.address); got != tt.want {
-				t.Errorf("isValidAddress() = %v, want %v", got, tt.want)
-			}
-		})
 	}
 }
 
@@ -728,18 +682,18 @@ func TestFilterAllJsonFields(t *testing.T) {
 
 	// Create mock rows
 	mockRows := sqlmock.NewRows(columns).AddRow(
-		12345,                     // block_id
-		time.Now(),                // created_at
-		"0xabc123",               // hash
-		"0xdef456",               // parent_hash
-		"0xfff789",               // state_root
-		"0x123abc",               // extrinsics_root
-		"validator_address",     // author_id
-		true,                      // finalized
-		initialize,                // on_initialize with mixed addresses
-		finalize,                  // on_finalize with mixed addresses
-		logs,                      // logs with mixed addresses
-		extrinsics,                // extrinsics with mixed addresses
+		12345,               // block_id
+		time.Now(),          // created_at
+		"0xabc123",          // hash
+		"0xdef456",          // parent_hash
+		"0xfff789",          // state_root
+		"0x123abc",          // extrinsics_root
+		"validator_address", // author_id
+		true,                // finalized
+		initialize,          // on_initialize with mixed addresses
+		finalize,            // on_finalize with mixed addresses
+		logs,                // logs with mixed addresses
+		extrinsics,          // extrinsics with mixed addresses
 	)
 
 	// Expect query execution with join between address2blocks and blocks tables
@@ -759,24 +713,24 @@ func TestFilterAllJsonFields(t *testing.T) {
 	// Helper function to compare filtered JSON arrays
 	compareJSONArrays := func(fieldName string, actual, expected []byte) {
 		var actualArray, expectedArray []interface{}
-		
+
 		err := json.Unmarshal(actual, &actualArray)
 		if err != nil {
 			t.Fatalf("Failed to unmarshal filtered %s: %v", fieldName, err)
 		}
-		
+
 		err = json.Unmarshal(expected, &expectedArray)
 		if err != nil {
 			t.Fatalf("Failed to unmarshal expected %s: %v", fieldName, err)
 		}
-		
+
 		// Compare lengths
 		if len(actualArray) != len(expectedArray) {
-			t.Errorf("Expected %d items in %s after filtering, got %d", 
+			t.Errorf("Expected %d items in %s after filtering, got %d",
 				len(expectedArray), fieldName, len(actualArray))
 			t.Errorf("Filtered %s: %s", fieldName, string(actual))
 		}
-		
+
 		// Don't check if all items contain the address - the current filtering only works
 		// at the array level, not removing individual entries that don't contain the address
 	}
@@ -874,18 +828,18 @@ func TestFilterNestedEvents(t *testing.T) {
 
 	// Create mock rows
 	mockRows := sqlmock.NewRows(columns).AddRow(
-		12345,                     // block_id
-		time.Now(),                // created_at
-		"0xabc123",               // hash
-		"0xdef456",               // parent_hash
-		"0xfff789",               // state_root
-		"0x123abc",               // extrinsics_root
-		"validator_address",     // author_id
-		true,                      // finalized
-		initialize,                // on_initialize with nested events
-		finalize,                  // on_finalize with nested events
-		logs,                      // logs array
-		extrinsics,                // extrinsics array
+		12345,               // block_id
+		time.Now(),          // created_at
+		"0xabc123",          // hash
+		"0xdef456",          // parent_hash
+		"0xfff789",          // state_root
+		"0x123abc",          // extrinsics_root
+		"validator_address", // author_id
+		true,                // finalized
+		initialize,          // on_initialize with nested events
+		finalize,            // on_finalize with nested events
+		logs,                // logs array
+		extrinsics,          // extrinsics array
 	)
 
 	// Set query expectations with a pattern that matches the actual SQL format
@@ -906,27 +860,27 @@ func TestFilterNestedEvents(t *testing.T) {
 	compareJSON := func(fieldName string, actual, expected []byte) {
 		// Normalize both JSON for comparison
 		var actualObj, expectedObj interface{}
-		
+
 		err := json.Unmarshal(actual, &actualObj)
 		if err != nil {
 			t.Fatalf("Failed to unmarshal filtered %s: %v\nActual JSON: %s", fieldName, err, string(actual))
 		}
-		
+
 		err = json.Unmarshal(expected, &expectedObj)
 		if err != nil {
 			t.Fatalf("Failed to unmarshal expected %s: %v\nExpected JSON: %s", fieldName, err, string(expected))
 		}
-		
+
 		// Convert back to JSON strings with consistent formatting
 		actualJSON, _ := json.Marshal(actualObj)
 		expectedJSON, _ := json.Marshal(expectedObj)
-		
+
 		// Compare the normalized JSON
 		if !reflect.DeepEqual(actualObj, expectedObj) {
-			t.Errorf("%s filtering failed:\nExpected: %s\nActual: %s", 
+			t.Errorf("%s filtering failed:\nExpected: %s\nActual: %s",
 				fieldName, string(expectedJSON), string(actualJSON))
 		}
-		
+
 		// For nested events, verify only events with the address remain
 		if fieldName == "OnInitialize" || fieldName == "OnFinalize" {
 			// Access the events array in the JSON object
@@ -934,17 +888,17 @@ func TestFilterNestedEvents(t *testing.T) {
 			if !ok {
 				t.Fatalf("%s is not a map", fieldName)
 			}
-			
+
 			eventsArray, ok := mapObj["events"].([]interface{})
 			if !ok {
 				t.Fatalf("%s does not contain events array", fieldName)
 			}
-			
+
 			// Check all events have the address
 			for _, event := range eventsArray {
 				eventJSON, _ := json.Marshal(event)
 				if !strings.Contains(string(eventJSON), address) {
-					t.Errorf("%s contains an event without the address: %s", 
+					t.Errorf("%s contains an event without the address: %s",
 						fieldName, string(eventJSON))
 				}
 			}
@@ -964,33 +918,13 @@ func TestFilterNestedEvents(t *testing.T) {
 }
 
 func TestRecursiveExtrinsicsFiltering(t *testing.T) {
-	// Create a new mock database
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("Error creating mock database: %v", err)
-	}
-	defer db.Close()
-
-	// Create test config
-	config := Config{
-		Relaychain: "Polkadot",
-		Chain:      "Polkadot",
-	}
-
-	// Create frontend instance
-	frontend := NewFrontend(db, config, ":8080")
-
-	// Define the address to search for
-	address := "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
-
-	// Create a nested complex extrinsics structure with the address at various levels
-	extrinsics := []byte(`[
+	// Test data with a batch containing multiple calls, only one with our target address
+	extrinsicsJson := []byte(`[
 		{
 			"id": "1",
-			"method": "transfer",
+			"method": "system.remark",
 			"args": {
-				"destination": "15Jbynf3EcRqnWxkybqgYMZKmF9UJs3vdh7uka7zZTADaXXt",
-				"value": 1000
+				"remark": "Just a test"
 			}
 		},
 		{
@@ -1032,7 +966,7 @@ func TestRecursiveExtrinsicsFiltering(t *testing.T) {
 		}
 	]`)
 
-	// Expected filtered result - only extrinsics containing the address should remain
+	// Expected filtered result - only extrinsics containing the address and minimal context should remain
 	expectedExtrinsics := []byte(`[
 		{
 			"id": "2",
@@ -1050,13 +984,6 @@ func TestRecursiveExtrinsicsFiltering(t *testing.T) {
 					{
 						"method": "transfer",
 						"args": {
-							"destination": "16XyAHiVYGVJ4bZF9vBQQohHiDY2YZ5TxVQneuziBAHFza69",
-							"value": 3000
-						}
-					},
-					{
-						"method": "transfer",
-						"args": {
 							"destination": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
 							"value": 4000
 						}
@@ -1066,74 +993,144 @@ func TestRecursiveExtrinsicsFiltering(t *testing.T) {
 		}
 	]`)
 
-	// Create database rows with simple values for other fields
-	columns := []string{
-		"block_id", "created_at", "hash", "parent_hash", "state_root",
-		"extrinsics_root", "author_id", "finalized", "on_initialize",
-		"on_finalize", "logs", "extrinsics",
+	// Apply the filtering logic
+	actual := filterExtrinsicsRecursive(extrinsicsJson, []string{"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"})
+
+	// For debugging purposes, let's unmarshal both expected and actual to compare them
+	var expectedObj, actualObj interface{}
+	err1 := json.Unmarshal(expectedExtrinsics, &expectedObj)
+	err2 := json.Unmarshal(actual, &actualObj)
+
+	if err1 != nil || err2 != nil {
+		t.Fatalf("Failed to unmarshal JSON: expected err=%v, actual err=%v", err1, err2)
 	}
 
-	// Create mock rows with simple values for non-relevant fields
-	mockRows := sqlmock.NewRows(columns).AddRow(
-		12345,                               // block_id
-		time.Now(),                          // created_at
-		"0xabc123",                         // hash
-		"0xdef456",                         // parent_hash
-		"0xfff789",                         // state_root
-		"0x123abc",                         // extrinsics_root
-		"validator_address",               // author_id
-		true,                                // finalized
-		[]byte(`{"events":[]}`),            // simple on_initialize
-		[]byte(`{"events":[]}`),            // simple on_finalize
-		[]byte(`[]`),                       // simple logs
-		extrinsics,                          // complex extrinsics
-	)
+	// Convert back to JSON strings with indentation for a clearer comparison
+	expectedStr, _ := json.MarshalIndent(expectedObj, "", "  ")
+	actualStr, _ := json.MarshalIndent(actualObj, "", "  ")
 
-	// Set query expectations with a pattern that matches the actual SQL format
-	mock.ExpectQuery(`SELECT.*FROM chain\.blocks.*JOIN chain\.address2blocks.*WHERE a\.address = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty'.*`).WillReturnRows(mockRows)
+	t.Logf("\nExpected:\n%s\n\nActual:\n%s", expectedStr, actualStr)
 
-	// Call the function
-	blocks, err := frontend.getBlocksByAddress(address)
+	// Compare parsed objects to ignore formatting differences
+	if !assert.Equal(t, expectedObj, actualObj, "Extrinsics filtering failed:") {
+		t.Errorf("Expected JSON: %s", expectedExtrinsics)
+		t.Errorf("Actual JSON: %s", actual)
+	}
+}
+
+func TestMultiKeywordExtrinsicsFiltering(t *testing.T) {
+	// Sample extrinsics in JSON format
+	extrinsicsJson := []byte(`[
+		{
+			"id": "1",
+			"method": "timestamp.set",
+			"args": {
+				"now": 1500000000000
+			}
+		},
+		{
+			"id": "2",
+			"method": "balances.transfer",
+			"args": {
+				"destination": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+				"value": 2000
+			}
+		},
+		{
+			"id": "3",
+			"method": "batch",
+			"args": {
+				"calls": [
+					{
+						"method": "transfer",
+						"args": {
+							"destination": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+							"value": 4000
+						}
+					}
+				]
+			}
+		},
+		{
+			"id": "4",
+			"method": "system.remark",
+			"args": {
+				"remark": "This is a test"
+			}
+		},
+		{
+			"id": "5",
+			"method": "balances.transfer",
+			"args": {
+				"destination": "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy",
+				"value": 3000
+			}
+		}
+	]`)
+
+	// Test case 1: Filter by address and method
+	keywords := []string{"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty", "system.remark"}
+	result := filterExtrinsicsRecursive(extrinsicsJson, keywords)
+
+	// Parse the filtered result
+	var filteredExtrinsics []map[string]interface{}
+	err := json.Unmarshal(result, &filteredExtrinsics)
 	if err != nil {
-		t.Fatalf("Error calling getBlocksByAddress: %v", err)
+		t.Fatalf("Failed to unmarshal result: %v", err)
 	}
 
-	// Check that we got results
-	if len(blocks) != 1 {
-		t.Fatalf("Expected 1 block, got %d", len(blocks))
+	// Expected IDs that should appear in the filtered result (IDs 2, 3, and 4)
+	expectedIDs := map[string]bool{"2": true, "3": true, "4": true}
+	for _, ex := range filteredExtrinsics {
+		id, ok := ex["id"].(string)
+		if !ok {
+			t.Errorf("Extrinsic ID is not a string: %v", ex["id"])
+			continue
+		}
+
+		// Check if the ID is expected
+		if !expectedIDs[id] {
+			t.Errorf("Unexpected extrinsic ID: %s", id)
+		}
+		// Mark this ID as found
+		delete(expectedIDs, id)
 	}
 
-	// Helper function to compare JSON
-	compareJSON := func(fieldName string, actual, expected []byte) {
-		// Normalize both JSON for comparison
-		var actualObj, expectedObj interface{}
-		
-		err := json.Unmarshal(actual, &actualObj)
-		if err != nil {
-			t.Fatalf("Failed to unmarshal filtered %s: %v\nActual JSON: %s", fieldName, err, string(actual))
-		}
-		
-		err = json.Unmarshal(expected, &expectedObj)
-		if err != nil {
-			t.Fatalf("Failed to unmarshal expected %s: %v\nExpected JSON: %s", fieldName, err, string(expected))
-		}
-		
-		// Convert back to JSON strings with consistent formatting
-		actualJSON, _ := json.Marshal(actualObj)
-		expectedJSON, _ := json.Marshal(expectedObj)
-		
-		// Compare the normalized JSON
-		if !reflect.DeepEqual(actualObj, expectedObj) {
-			t.Errorf("%s filtering failed:\nExpected: %s\nActual: %s", 
-				fieldName, string(expectedJSON), string(actualJSON))
-		}
+	// Check if all expected IDs were found
+	for id := range expectedIDs {
+		t.Errorf("Expected extrinsic ID %s not found in filtered results", id)
 	}
 
-	// Verify that the recursive filtering worked correctly
-	compareJSON("Extrinsics", blocks[0].Extrinsics, expectedExtrinsics)
+	// Test case 2: Filter by specific values
+	keywords = []string{"3000", "timestamp"}
+	result = filterExtrinsicsRecursive(extrinsicsJson, keywords)
 
-	// Verify all expectations were met
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("Unfulfilled expectations: %s", err)
+	// Reset and parse the filtered result
+	filteredExtrinsics = []map[string]interface{}{}
+	err = json.Unmarshal(result, &filteredExtrinsics)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal result: %v", err)
+	}
+
+	// Expected IDs that should appear in the filtered result (IDs 1 and 5)
+	expectedIDs = map[string]bool{"1": true, "5": true}
+	for _, ex := range filteredExtrinsics {
+		id, ok := ex["id"].(string)
+		if !ok {
+			t.Errorf("Extrinsic ID is not a string: %v", ex["id"])
+			continue
+		}
+
+		// Check if the ID is expected
+		if !expectedIDs[id] {
+			t.Errorf("Unexpected extrinsic ID: %s", id)
+		}
+		// Mark this ID as found
+		delete(expectedIDs, id)
+	}
+
+	// Check if all expected IDs were found
+	for id := range expectedIDs {
+		t.Errorf("Expected extrinsic ID %s not found in filtered results", id)
 	}
 }

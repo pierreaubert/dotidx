@@ -171,3 +171,74 @@ func TestExtractAddressesFromRealData(t *testing.T) {
 		t.Logf("Successfully found address %s in file %s", specificAddress, fileThatContainsAddress)
 	}
 }
+func TestIsValidAddress(t *testing.T) {
+	tests := []struct {
+		name    string
+		address string
+		want    bool
+	}{
+		{
+			name:    "Valid Polkadot address",
+			address: "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+			want:    true,
+		},
+		{
+			name:    "Valid address with 1 prefix",
+			address: "16fAYQeYwBhWrJGSS8UXMNUWvUQf38VcvCaXxUPwMBUCCsQ1",
+			want:    true,
+		},
+		{
+			name:    "Too short address",
+			address: "5FHne",
+			want:    false,
+		},
+		{
+			name:    "Too long address",
+			address: "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694tyaaaaaaaaaaaa",
+			want:    false,
+		},
+		{
+			name:    "Invalid prefix",
+			address: "XYZ123W46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+			want:    false,
+		},
+		{
+			name:    "Empty address",
+			address: "",
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isValidAddress(tt.address); got != tt.want {
+				t.Errorf("isValidAddress() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFilterJson(t *testing.T) {
+	tests := []struct {
+		input    string
+		names    []string
+		want     bool
+	}{
+		{
+			input:    "",
+			address: "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+			want:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			func pred(names []string) bool {
+			}
+			if got := filterJson(tt.input); got != tt.want {
+				t.Errorf("isValidAddress() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
