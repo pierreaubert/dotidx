@@ -94,8 +94,6 @@ func (bs BucketStats) RateSinceStart() (rate float64) {
 	return
 }
 
-
-
 // PrintStats prints the current metrics statistics
 func (m *Bucket) PrintStats(printHeader bool) {
 	bs := m.GetStats()

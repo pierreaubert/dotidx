@@ -117,4 +117,3 @@ func (f *Frontend) getBlocksByAddress(address string) ([]dotidx.BlockData, error
 
 	return blocks, nil
 }
-

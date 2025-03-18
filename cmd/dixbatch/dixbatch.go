@@ -118,6 +118,8 @@ func main() {
 		}
 	}()
 
+	startWorkers(ctx, config, database, reader, headBlockID)
+
 	log.Println("All tasks completed")
 }
 

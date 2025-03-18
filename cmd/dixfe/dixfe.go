@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-
 	_ "github.com/lib/pq"
 	"github.com/pierreaubert/dotidx"
 )
@@ -138,4 +137,3 @@ func (f *Frontend) Start(cancelCtx <-chan struct{}) error {
 
 	return nil
 }
-

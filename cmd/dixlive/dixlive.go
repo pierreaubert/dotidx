@@ -129,7 +129,7 @@ func monitorNewBlocks(
 	nextBlockID := lastProcessedBlock + 1
 	currentHeadID := lastProcessedBlock
 
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -146,7 +146,7 @@ func monitorNewBlocks(
 
 			// Log progress if head has moved
 			if headID > currentHeadID {
-				// log.Printf("Current head is at block %d, next to process is block %d", headID, nextBlockID)
+				log.Printf("Current head is at block %d, next to process is block %d", headID, nextBlockID)
 				currentHeadID = headID
 			}
 
@@ -165,11 +165,9 @@ func monitorNewBlocks(
 					break
 				}
 
-				// log.Printf("Processed block %d", nextBlockID)
+				log.Printf("Processed block %d", nextBlockID)
 				nextBlockID++
 			}
 		}
 	}
 }
-
-

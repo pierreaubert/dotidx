@@ -16,5 +16,3 @@ func SetupSignalHandler(cancel context.CancelFunc) {
 		cancel()
 	}()
 }
-
-

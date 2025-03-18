@@ -46,4 +46,3 @@ func TestMetrics_PrintStats(t *testing.T) {
 	// This is a basic test to ensure PrintStats doesn't panic
 	metrics.PrintStats(true)
 }
-

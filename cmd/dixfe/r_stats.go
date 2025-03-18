@@ -164,4 +164,3 @@ func (f *Frontend) getMonthlyStats() ([]MonthlyStats, error) {
 
 	return stats, nil
 }
-
