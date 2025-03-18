@@ -1,6 +1,8 @@
 # Polkadot Block Indexer
 
-A command-line tool for fetching block data from a Polkadot archive node via Sidecar and storing it in a PostgreSQL database.
+A utility for fetching block data from a Polkadot archive node via Sidecar and storing the data in a PostgreSQL database. It is relatively fast only limited by the speed of your disks. It also supports concurrent processing of multiple blocks.
+
+Quality is currently *beta*.
 
 ## Features
 
@@ -26,6 +28,8 @@ make
 ```
 
 ## Prework
+
+Until the `dixmgr` is operational:
 
 - Find 4 free TB of disk ideally on SSD disks. It also works on SATA but is sloooow. A mix is also working well. The more disks you have the faster this will be.
   - With 2 SATA disks, indexer run around 25 blocks per second.
@@ -95,8 +99,11 @@ dotidx -live -sidecar=http://localhost:8080 -postgres="postgres://user:pass@loca
 
 ## Interface
 
-- `dotidx` do output some statistic lines.
-- It also has a web API: go to 'http://localhost:8080'
+```bash
+dotfe -postgres="postgres://user:pass@localhost:5432/db"
+```
+
+The web API is available at 'http://localhost:8080'
 
 ### Command Line Options
 
@@ -163,9 +170,11 @@ TEST_POSTGRES_URI="postgres://user:password@localhost:5432/testdb" go test -v ./
 
 - integrate [go-substrate-rpc-client](https://github.com/centrifuge/go-substrate-rpc-client/blob/master/main_test.go) and see if it can replace Sidecar
 - add another database support, easy with the interface. Options are ScyllaDB, Cassandra or FoundationDB.
-- more testing for other parachains (currently only Relay Chain and StateMint are tested.
-- add a frontend to the DB with some UI
-- replace the pile of shell scripts with a proper installer
+- more testing for other parachains (currently only Relay Chain and StateMint are tested).
+- replace the pile of shell scripts with a proper installer, see `cmd/dixmgr`.
+- automate the monitoring, nicely working but also a pile of config files and shell scripts.
+- harden the solution (Vault or encrypted credential in systemd), firewall.
+- compare performance of doing json parsing in the DB or in the frontend.
 
 
 ## License

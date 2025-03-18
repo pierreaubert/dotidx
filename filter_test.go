@@ -20,7 +20,7 @@ func TestEventsBalanceProcess(t *testing.T) {
 			name:    "Multiple matching events",
 			address: "12e1d9wD5hpQuE7EMP8h78giqB8z7pU8pUrw8RGxuVtozNRZ",
 			Input: func() json.RawMessage {
-				data, err := os.ReadFile("tests/data/blocks/ex-24731329.json")
+				data, err := os.ReadFile("./tests/data/blocks/ex-24731329.json")
 				if err != nil {
 					t.Fatalf("Failed to read test data: %v", err)
 				}
