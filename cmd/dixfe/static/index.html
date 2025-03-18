@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
         .tab-content {
             display: none;
@@ -20,6 +21,10 @@
             border-radius: 4px;
             white-space: pre-wrap;
             overflow-x: auto;
+        }
+        .balance-graph {
+            height: 350px;
+            margin-bottom: 1.5rem;
         }
     </style>
 </head>
@@ -128,6 +133,8 @@
                     <div id="balance-result" class="is-hidden">
                         <div class="notification is-info">
                             <h3 class="title is-4">Balance Information</h3>
+                            <!-- Graph container -->
+                            <div id="balance-graph" class="balance-graph"></div>
                             <div id="balance-data"></div>
                         </div>
                     </div>

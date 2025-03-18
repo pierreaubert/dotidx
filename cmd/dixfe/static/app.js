@@ -52,37 +52,28 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Get values from filter inputs
-        const countInput = document.getElementById('balance-count');
-        const fromInput = document.getElementById('balance-from');
-        const toInput = document.getElementById('balance-to');
-        
-        const countParam = countInput ? countInput.value : '20'; // Default to 20 records
-        
-        // Convert datetime-local inputs to ISO format for API
-        let fromParam = '';
-        if (fromInput && fromInput.value) {
-            fromParam = new Date(fromInput.value).toISOString();
-        }
-        
-        let toParam = '';
-        if (toInput && toInput.value) {
-            toParam = new Date(toInput.value).toISOString();
-        }
-
         try {
-            // Build URL with all parameters
-            let balancesUrl = `/balances?address=${encodeURIComponent(address)}&count=${countParam}`;
+            // Get filter values
+            const count = document.getElementById('balance-count').value;
+            const fromDate = document.getElementById('balance-from').value;
+            const toDate = document.getElementById('balance-to').value;
             
-            // Add optional parameters if present
-            if (fromParam) {
-                balancesUrl += `&from=${encodeURIComponent(fromParam)}`;
-            }
-            if (toParam) {
-                balancesUrl += `&to=${encodeURIComponent(toParam)}`;
+            // Build URL with parameters
+            let balancesUrl = `/balances?address=${encodeURIComponent(address)}`;
+            
+            if (count) {
+                balancesUrl += `&count=${encodeURIComponent(count)}`;
             }
             
-            console.log('Fetching balances:', balancesUrl); // Debug log
+            if (fromDate) {
+                balancesUrl += `&from=${encodeURIComponent(fromDate)}`;
+            }
+            
+            if (toDate) {
+                balancesUrl += `&to=${encodeURIComponent(toDate)}`;
+            }
+            
+            console.log('Fetching balances from URL:', balancesUrl);
             const response = await fetch(balancesUrl);
             if (!response.ok) {
                 throw new Error(`HTTP error ${response.status}`);
@@ -93,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const resultDiv = document.getElementById('balance-result');
             const dataDiv = document.getElementById('balance-data');
+            const graphDiv = document.getElementById('balance-graph');
             
             resultDiv.classList.remove('is-hidden');
             
@@ -138,7 +130,123 @@ document.addEventListener('DOMContentLoaded', () => {
                 // No extrinsics found across any blocks
                 if (allExtrinsics.length === 0) {
                     dataDiv.innerHTML = '<p>No extrinsics found for this address.</p>';
+                    graphDiv.innerHTML = '';
                     return;
+                }
+                
+                // Extract data for the graph
+                const graphData = [];
+                
+                // Process extrinsics to collect time series data
+                allExtrinsics.forEach(extrinsic => {
+                    if (extrinsic.timestamp === 'N/A') {
+                        return; // Skip entries without valid timestamps
+                    }
+                    
+                    // Process transfers/deposits/withdrawals with amounts
+                    if (extrinsic.method.method === 'Withdraw' || 
+                        extrinsic.method.method === 'Deposit' || 
+                        extrinsic.method.method === 'Rewarded') {
+                        // Verify data is an array with at least 2 elements
+                        if (Array.isArray(extrinsic.data) && extrinsic.data.length >= 2) {
+                            const date = new Date(extrinsic.timestamp);
+                            const amountValue = extrinsic.data[1]/10000000000;
+                            const sign = extrinsic.method.method === 'Withdraw' ? -1 : 1;
+                            
+                            graphData.push({
+                                date,
+                                amount: sign * amountValue,
+                                type: extrinsic.method.method
+                            });
+                        }
+                    }
+                });
+                
+                // Sort by date (oldest first for cumulative graph)
+                graphData.sort((a, b) => a.date - b.date);
+                
+                // Create data series for the graph
+                if (graphData.length > 0) {
+                    // Calculate running balance
+                    let balance = 0;
+                    const balanceSeries = graphData.map(item => {
+                        balance += item.amount;
+                        return {
+                            date: item.date,
+                            balance
+                        };
+                    });
+                    
+                    // Create plotly data for transactions and balance
+                    const deposits = graphData.filter(item => item.amount > 0);
+                    const withdrawals = graphData.filter(item => item.amount < 0);
+                    
+                    const plotData = [
+                        // Balance line (primary y-axis)
+                        {
+                            x: balanceSeries.map(item => item.date),
+                            y: balanceSeries.map(item => item.balance),
+                            type: 'scatter',
+                            mode: 'lines',
+                            name: 'Balance',
+                            line: { color: 'rgb(31, 119, 180)', width: 3 }
+                        },
+                        // Deposits (secondary y-axis)
+                        {
+                            x: deposits.map(item => item.date),
+                            y: deposits.map(item => item.amount),
+                            type: 'scatter',
+                            mode: 'markers',
+                            name: 'Deposits',
+                            marker: { 
+                                color: 'rgba(0, 200, 0, 0.7)',
+                                size: 10,
+                                symbol: 'circle'
+                            },
+                            yaxis: 'y2'
+                        },
+                        // Withdrawals (secondary y-axis)
+                        {
+                            x: withdrawals.map(item => item.date),
+                            y: withdrawals.map(item => Math.abs(item.amount)), // Use absolute value for better visualization
+                            type: 'scatter',
+                            mode: 'markers',
+                            name: 'Withdrawals',
+                            marker: { 
+                                color: 'rgba(200, 0, 0, 0.7)',
+                                size: 10,
+                                symbol: 'circle'
+                            },
+                            yaxis: 'y2'
+                        }
+                    ];
+                    
+                    // Layout configuration
+                    const layout = {
+                        title: 'Balance Over Time',
+                        xaxis: { title: 'Date' },
+                        yaxis: { 
+                            title: 'Balance (DOT)',
+                            titlefont: { color: 'rgb(31, 119, 180)' },
+                            tickfont: { color: 'rgb(31, 119, 180)' }
+                        },
+                        yaxis2: {
+                            title: 'Transaction Amount (DOT)',
+                            titlefont: { color: 'rgb(148, 103, 189)' },
+                            tickfont: { color: 'rgb(148, 103, 189)' },
+                            overlaying: 'y',
+                            side: 'right'
+                        },
+                        legend: { x: 0, y: 1 },
+                        hovermode: 'closest',
+                        margin: { l: 60, r: 60, t: 50, b: 50 }
+                    };
+                    
+                    // Create the plot
+                    Plotly.newPlot(graphDiv, plotData, layout);
+                } else {
+                    // No valid data for the graph
+                    graphDiv.innerHTML = '<p class="has-text-centered">No transaction data available for plotting.</p>';
                 }
                 
                 // Group extrinsics by month
