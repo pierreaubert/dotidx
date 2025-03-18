@@ -15,7 +15,8 @@ func (f *Frontend) handleBalances(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the address from the query parameters
-	address := r.URL.Query().Get("address")
+	query := r.URL.Query()
+	address := query.Get("address")
 	if address == "" {
 		http.Error(w, "Missing address parameter", http.StatusBadRequest)
 		return
@@ -27,12 +28,14 @@ func (f *Frontend) handleBalances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count := r.URL.Query().Get("count")
+	count := query.Get("count")
+	log.Printf("Count: %s", count)
 	if count == "" {
 		count = "10"
 	}
+	log.Printf("Count: %s", count)
 
-	from := r.URL.Query().Get("from")
+	from := query.Get("from")
 	var fromTimestamp string
 	if from == "" {
 		fromTimestamp = ""
@@ -47,7 +50,7 @@ func (f *Frontend) handleBalances(w http.ResponseWriter, r *http.Request) {
 		fromTimestamp = fromTime.Format("2006-01-02 15:04:05")
 	}
 
-	to := r.URL.Query().Get("to")
+	to := query.Get("to")
 	var toTimestamp string
 	if to == "" {
 		toTimestamp = ""

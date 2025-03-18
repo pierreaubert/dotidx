@@ -4,80 +4,43 @@ document.addEventListener('DOMContentLoaded', () => {
     // Tab switching functionality
     const tabs = document.querySelectorAll('.tabs li');
     const tabContents = document.querySelectorAll('.tab-content');
-    let activeTab = 'blocks-tab'; // Default active tab
+    let activeTab = 'balances-tab'; // Default active tab
     
     // Common search input and action button
     const searchInput = document.getElementById('search-address');
     const actionButton = document.getElementById('action-button');
     
-    // 1. Check for address parameter in URL and populate the form
+    // Check for address parameter in URL and populate the form
     const urlParams = new URLSearchParams(window.location.search);
     const addressParam = urlParams.get('address');
-    if (addressParam) {
-        searchInput.value = addressParam;
-        // Will trigger API call after tabs are set up
-    }
-    
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            // Remove active class from all tabs and contents
-            tabs.forEach(t => t.classList.remove('is-active'));
-            tabContents.forEach(c => c.classList.remove('is-active'));
-            
-            // Add active class to selected tab and content
-            tab.classList.add('is-active');
-            activeTab = tab.getAttribute('data-tab');
-            document.getElementById(activeTab).classList.add('is-active');
-            
-            // 3. Call the method associated with this tab
-            if (searchInput.value.trim()) {
-                performActiveTabAction();
-            } else {
-                // If it's stats tab, we can show stats without an address
-                if (activeTab === 'stats-tab') {
-                    fetchCompletionRate();
-                    fetchMonthlyStats();
-                } else {
-                    // Hide previous results when switching tabs
-                    document.getElementById('blocks-result').classList.add('is-hidden');
-                    document.getElementById('balance-result').classList.add('is-hidden');
-                }
-            }
-        });
-    });
-    
-    // Handle action button click based on active tab
-    actionButton.addEventListener('click', performActiveTabAction);
-    
-    // Also trigger action on Enter key in the search input
-    searchInput.addEventListener('keyup', (event) => {
-        if (event.key === 'Enter') {
-            performActiveTabAction();
-        }
-    });
-    
-    // Function to perform the action based on active tab
-    function performActiveTabAction() {
-        switch(activeTab) {
-            case 'blocks-tab':
-                fetchBlocks();
-                break;
-            case 'balances-tab':
-                fetchBalances();
-                break;
-            case 'stats-tab':
-                // Call both stats functions
-                fetchCompletionRate();
-                fetchMonthlyStats();
-                break;
+
+    // Function to set the active tab
+    function setActiveTab(tabId) {
+        // Remove active class from all tabs and contents
+        tabs.forEach(t => t.classList.remove('is-active'));
+        tabContents.forEach(c => c.classList.remove('is-active'));
+        
+        // Add active class to selected tab and content
+        const selectedTab = document.querySelector(`[data-tab="${tabId}"]`);
+        if (selectedTab) {
+            selectedTab.classList.add('is-active');
         }
         
-        // Update URL with the address for bookmarking/sharing
-        const address = searchInput.value.trim();
-        if (address) {
-            const url = new URL(window.location.href);
-            url.searchParams.set('address', address);
-            window.history.replaceState({}, '', url);
+        activeTab = tabId;
+        const tabContent = document.getElementById(tabId);
+        if (tabContent) {
+            tabContent.classList.add('is-active');
+        }
+
+        // Perform action based on active tab if address is present
+        if (searchInput.value.trim()) {
+            if (activeTab === 'blocks-tab') {
+                fetchBlocks();
+            } else if (activeTab === 'balances-tab') {
+                fetchBalances();
+            } else if (activeTab === 'stats-tab') {
+                fetchMonthlyStats();
+            }
         }
     }
     
@@ -89,8 +52,38 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Get values from filter inputs
+        const countInput = document.getElementById('balance-count');
+        const fromInput = document.getElementById('balance-from');
+        const toInput = document.getElementById('balance-to');
+        
+        const countParam = countInput ? countInput.value : '20'; // Default to 20 records
+        
+        // Convert datetime-local inputs to ISO format for API
+        let fromParam = '';
+        if (fromInput && fromInput.value) {
+            fromParam = new Date(fromInput.value).toISOString();
+        }
+        
+        let toParam = '';
+        if (toInput && toInput.value) {
+            toParam = new Date(toInput.value).toISOString();
+        }
+
         try {
-            const response = await fetch(`/balances?address=${encodeURIComponent(address)}`);
+            // Build URL with all parameters
+            let balancesUrl = `/balances?address=${encodeURIComponent(address)}&count=${countParam}`;
+            
+            // Add optional parameters if present
+            if (fromParam) {
+                balancesUrl += `&from=${encodeURIComponent(fromParam)}`;
+            }
+            if (toParam) {
+                balancesUrl += `&to=${encodeURIComponent(toParam)}`;
+            }
+            
+            console.log('Fetching balances:', balancesUrl); // Debug log
+            const response = await fetch(balancesUrl);
             if (!response.ok) {
                 throw new Error(`HTTP error ${response.status}`);
             }
@@ -125,6 +118,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         // Add each extrinsic to the consolidated array
                         extrinsicArray.forEach(extrinsic => {
+                            if (palletName == 'utility' && 
+                                extrinsic.method.method == 'Rewarded' && 
+                                extrinsic.method.pallet == 'staking') {
+                                return; // Skip staking extrinsics
+                            }
                             allExtrinsics.push({
                                 timestamp,
                                 blockId,
@@ -143,71 +141,134 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 
-                // Start building the table
-                let html = '<table class="table is-fullwidth is-striped is-hoverable result-table">';
-                html += '<thead><tr><th>Timestamp</th><th>Block ID</th><th>Pallet</th><th>Method</th><th>Amount (DOT)</th><th>Actions</th></tr></thead>';
-                html += '<tbody>';
+                // Group extrinsics by month
+                const extrinsicsByMonth = {};
                 
-                // Add each extrinsic as a row
-                allExtrinsics.forEach((extrinsic, index) => {
-                    // Main row
-                    html += '<tr>';
-                    html += `<td>${extrinsic.timestamp}</td>`;
-                    html += `<td>${extrinsic.blockId}</td>`;
-                    html += `<td>${extrinsic.pallet}</td>`;
-                    html += `<td>${extrinsic.method.pallet}/${extrinsic.method.method}</td>`;
-                    
-                    // Amount handling
-                    let amount = '';
-                    let detailsContent = {};
-                    
-                    // Handle special methods: withdraw and deposit
-                    if (extrinsic.method.method === 'Withdraw' || 
-                        extrinsic.method.method === 'Deposit' || 
-                        extrinsic.method.method === 'Rewarded'
-                    ) {
-                        // Verify data is an array with at least 2 elements
-                        if (Array.isArray(extrinsic.data) && extrinsic.data.length >= 2) {
-                            // The second element (index 1) is typically the amount
-                            const amountValue = extrinsic.data[1]/10000000000;
-                            const sign = extrinsic.method.method === 'Withdraw' ? '-' : '+';
-                            amount = `${sign}${amountValue}`;
-                            
-                            // Add relevant data to details
-                            if (extrinsic.data.length > 0) {
-                                detailsContent = {
-                                    address: extrinsic.data[0],
-                                    amount: amountValue
-                                };
-                            }
-                        } else {
-                            amount = 'N/A';
-                            detailsContent = { data: extrinsic.data };
+                allExtrinsics.forEach(extrinsic => {
+                    // Skip if timestamp is not valid
+                    if (extrinsic.timestamp === 'N/A') {
+                        if (!extrinsicsByMonth['Unknown']) {
+                            extrinsicsByMonth['Unknown'] = [];
                         }
-                    } else {
-                        // For other methods, show the raw data
-                        amount = 'N/A';
-                        detailsContent = { data: extrinsic.data };
-                        
-                        // Keep all other fields from the extrinsic for reference
-                        Object.entries(extrinsic.rawExtrinsic).forEach(([key, value]) => {
-                            if (!['method', 'data'].includes(key)) {
-                                detailsContent[key] = value;
-                            }
-                        });
+                        extrinsicsByMonth['Unknown'].push(extrinsic);
+                        return;
                     }
                     
-                    html += `<td>${amount}</td>`;
+                    // Parse the timestamp
+                    try {
+                        const date = new Date(extrinsic.timestamp);
+                        // Create month key (YYYY-MM)
+                        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                        
+                        // Format timestamp as 'DD HH:MM'
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const hours = String(date.getHours()).padStart(2, '0');
+                        const minutes = String(date.getMinutes()).padStart(2, '0');
+                        const formattedTime = `${day} ${hours}:${minutes}`;
+                        
+                        // Add formatted time to the extrinsic
+                        extrinsic.formattedTime = formattedTime;
+                        
+                        // Create array for this month if it doesn't exist
+                        if (!extrinsicsByMonth[monthKey]) {
+                            extrinsicsByMonth[monthKey] = [];
+                        }
+                        
+                        // Add extrinsic to the month group
+                        extrinsicsByMonth[monthKey].push(extrinsic);
+                    } catch (e) {
+                        // Handle invalid timestamps
+                        if (!extrinsicsByMonth['Unknown']) {
+                            extrinsicsByMonth['Unknown'] = [];
+                        }
+                        extrinsicsByMonth['Unknown'].push(extrinsic);
+                    }
+                });
+                
+                // Start building the table
+                let html = '<table class="table is-fullwidth is-striped is-hoverable result-table">';
+                html += '<thead><tr><th>Timestamp</th><th>Pallet</th><th>Method</th><th>Amount (DOT)</th><th>Details</th></tr></thead>';
+                html += '<tbody>';
+                
+                // Sort month keys in descending order (newest first)
+                const sortedMonths = Object.keys(extrinsicsByMonth).sort((a, b) => {
+                    // Handle 'Unknown' specially
+                    if (a === 'Unknown') return 1;
+                    if (b === 'Unknown') return -1;
+                    return b.localeCompare(a); // Descending order
+                });
+                
+                // Process each month group
+                sortedMonths.forEach(monthKey => {
+                    // Add month header row
+                    const monthName = monthKey === 'Unknown' ? 'Unknown Date' : 
+                        new Date(`${monthKey}-01`).toLocaleString('default', { year: 'numeric', month: 'long' });
                     
-                    // Toggle button for details
-                    const detailsId = `extrinsic-details-${index}`;
-                    html += `<td><button class="button is-small toggle-details" data-target="${detailsId}"><i class="fas fa-chevron-right"></i></button></td>`;
-                    html += '</tr>';
+                    html += `<tr class="month-header"><td colspan="5"><strong>${monthName}</strong></td></tr>`;
                     
-                    // Details row (hidden by default)
-                    html += `<tr id="${detailsId}" class="details-row" style="display: none;">`;
-                    html += `<td colspan="6"><pre class="extrinsic-details">${JSON.stringify(detailsContent, null, 2)}</pre></td>`;
-                    html += '</tr>';
+                    // Add extrinsics for this month
+                    extrinsicsByMonth[monthKey].forEach((extrinsic, index) => {
+                        // Main row
+                        html += '<tr>';
+                        html += `<td>${extrinsic.formattedTime || extrinsic.timestamp}</td>`;
+                        html += `<td>${extrinsic.pallet}</td>`;
+                        html += `<td>${extrinsic.method.pallet}/${extrinsic.method.method}</td>`;
+                        
+                        // Amount handling
+                        let amount = '';
+                        let detailsContent = {
+                            blockId: extrinsic.blockId // Add blockId to details
+                        };
+                        
+                        // Handle special methods: withdraw and deposit
+                        if (extrinsic.method.method === 'Withdraw' || 
+                            extrinsic.method.method === 'Deposit' || 
+                            extrinsic.method.method === 'Rewarded'
+                        ) {
+                            // Verify data is an array with at least 2 elements
+                            if (Array.isArray(extrinsic.data) && extrinsic.data.length >= 2) {
+                                // The second element (index 1) is typically the amount
+                                const amountValue = extrinsic.data[1]/10000000000;
+                                const sign = extrinsic.method.method === 'Withdraw' ? '-' : '+';
+                                amount = `${sign}${amountValue}`;
+                                
+                                // Add relevant data to details
+                                if (extrinsic.data.length > 0) {
+                                    detailsContent = {
+                                        address: extrinsic.data[0],
+                                        amount: amountValue,
+                                        blockId: extrinsic.blockId
+                                    };
+                                }
+                            } else {
+                                amount = 'N/A';
+                                detailsContent = { data: extrinsic.data, blockId: extrinsic.blockId };
+                            }
+                        } else {
+                            // For other methods, show the raw data
+                            amount = 'N/A';
+                            detailsContent = { data: extrinsic.data, blockId: extrinsic.blockId };
+                            
+                            // Keep all other fields from the extrinsic for reference
+                            Object.entries(extrinsic.rawExtrinsic).forEach(([key, value]) => {
+                                if (!['method', 'data'].includes(key)) {
+                                    detailsContent[key] = value;
+                                }
+                            });
+                        }
+                        
+                        html += `<td>${amount}</td>`;
+                        
+                        // Toggle button for details
+                        const detailsId = `extrinsic-details-${monthKey}-${index}`;
+                        html += `<td><button class="button is-small toggle-details" data-target="${detailsId}"><i class="fas fa-chevron-right"></i></button></td>`;
+                        html += '</tr>';
+                        
+                        // Details row (hidden by default)
+                        html += `<tr id="${detailsId}" class="details-row" style="display: none;">`;
+                        html += `<td colspan="5"><pre class="extrinsic-details">${JSON.stringify(detailsContent, null, 2)}</pre></td>`;
+                        html += '</tr>';
+                    });
                 });
                 
                 html += '</tbody></table>';
@@ -236,6 +297,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     .toggle-details.is-active i {
                         transform: rotate(90deg);
+                    }
+                    .month-header {
+                        background-color: #f0f8ff; /* Light blue background */
+                    }
+                    .month-header td {
+                        padding: 10px !important;
+                        font-size: 1.1em;
                     }
                 `;
                 document.head.appendChild(style);
@@ -417,27 +485,63 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // Add a selector for stats type when on the stats tab
-    const completionRateTitle = document.querySelector('#stats-tab h3:first-of-type');
-    completionRateTitle.addEventListener('click', () => {
-        fetchCompletionRate();
-    });
-    
-    const monthlyStatsTitle = document.querySelector('#stats-tab h3:last-of-type');
-    monthlyStatsTitle.addEventListener('click', () => {
-        fetchMonthlyStats();
-    });
-
-    // Add mobile menu toggler
-    const navbarBurgers = Array.prototype.slice.call(document.querySelectorAll('.navbar-burger'), 0);
-    if (navbarBurgers.length > 0) {
-        navbarBurgers.forEach(el => {
-            el.addEventListener('click', () => {
-                const target = document.getElementById(el.dataset.target);
-                el.classList.toggle('is-active');
-                target.classList.toggle('is-active');
+    // Initialize the app
+    function init() {
+        // Set the default active tab
+        setActiveTab(activeTab);
+        
+        // Setup tab switching
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabId = tab.dataset.tab;
+                setActiveTab(tabId);
             });
         });
+
+        // Setup search button action
+        actionButton.addEventListener('click', () => {
+            if (activeTab === 'blocks-tab') {
+                fetchBlocks();
+            } else if (activeTab === 'balances-tab') {
+                fetchBalances();
+            } else if (activeTab === 'stats-tab') {
+                fetchMonthlyStats();
+            }
+        });
+
+        // Setup filters apply button
+        const applyFiltersButton = document.getElementById('apply-filters');
+        if (applyFiltersButton) {
+            applyFiltersButton.addEventListener('click', () => {
+                fetchBalances();
+            });
+        }
+
+        // Setup enter key on search input
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                if (activeTab === 'blocks-tab') {
+                    fetchBlocks();
+                } else if (activeTab === 'balances-tab') {
+                    fetchBalances();
+                } else if (activeTab === 'stats-tab') {
+                    fetchMonthlyStats();
+                }
+            }
+        });
+        
+        // If address parameter was present, populate and trigger search
+        if (addressParam) {
+            searchInput.value = addressParam;
+            // Trigger the appropriate action based on active tab
+            if (activeTab === 'blocks-tab') {
+                fetchBlocks();
+            } else if (activeTab === 'balances-tab') {
+                fetchBalances();
+            } else if (activeTab === 'stats-tab') {
+                fetchMonthlyStats();
+            }
+        }
     }
     
     // Helper function to show error messages
@@ -506,10 +610,7 @@ document.addEventListener('DOMContentLoaded', () => {
         html += '</tbody></table>';
         return html;
     }
-    
-    // If address parameter was present, trigger appropriate action
-    if (addressParam) {
-        // Wait for everything to be set up
-        setTimeout(performActiveTabAction, 100);
-    }
+
+    // Call the initialization function
+    init();
 });

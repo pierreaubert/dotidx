@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DIX a Polkadot explorer</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="styles.css">
     <style>
         .tab-content {
@@ -90,6 +90,41 @@
             
             <div class="tab-content" id="balances-tab">
                 <div class="box">
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Count</label>
+                                <div class="control">
+                                    <input id="balance-count" class="input" type="number" value="20" min="1" max="100">
+                                </div>
+                                <p class="help">Number of records to display</p>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">From Date</label>
+                                <div class="control">
+                                    <input id="balance-from" class="input" type="datetime-local">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">To Date</label>
+                                <div class="control">
+                                    <input id="balance-to" class="input" type="datetime-local">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="column is-narrow">
+                            <div class="field">
+                                <label class="label">&nbsp;</label>
+                                <div class="control">
+                                    <button id="apply-filters" class="button is-info">Apply Filters</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div id="balance-result" class="is-hidden">
                         <div class="notification is-info">
                             <h3 class="title is-4">Balance Information</h3>

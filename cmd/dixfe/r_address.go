@@ -129,7 +129,7 @@ func (f *Frontend) getBlocksByAddress(address string, count, from, to string) ([
 		cond,
 		count,
 	)
-
+	log.Printf("Query: %s", query)
 	rows, err := f.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("database query failed: %w", err)
