@@ -6,4 +6,7 @@
   - all code is formatted, linted and vetted
   - refactor functions which are over 50 lines long
   - do not duplicate code
-
+- for html code
+  - all code is formatted and valid
+- for javascript code
+  - all code is formatted and linted

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIX a Polkadot explorer</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .tab-content {
+            display: none;
+        }
+        .tab-content.is-active {
+            display: block;
+        }
+        .json-display {
+            background-color: #f5f5f5;
+            padding: 1rem;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar is-primary" role="navigation" aria-label="main navigation">
+        <div class="navbar-brand">
+            <a class="navbar-item" href="/">
+                <h1 class="title has-text-white">DIX a polka<strong>D</strong>ot <strong>I</strong>nde<strong>X</strong>er<h1>
+            </a>
+            <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbarMenu">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </a>
+        </div>
+
+        <div id="navbarMenu" class="navbar-menu">
+            <div class="navbar-end">
+                <a class="navbar-item" href="https://github.com/pierreaubert/dotidx" target="_blank" rel="noopener noreferrer">GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <section class="hero is-info">
+        <div class="hero-body">
+            <p class="title">A Polkadot Blockchain Data Explorer</p>
+            <p class="subtitle">Explore balances, staking or blocks per address, and some statistics!</p>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <!-- Common Search Box -->
+            <div class="box mb-5">
+                <div class="field has-addons">
+                    <div class="control is-expanded has-icons-left">
+                        <input id="search-address" class="input" type="text" placeholder="Enter address">
+                        <span class="icon is-small is-left">
+                            <i class="fas fa-search"></i>
+                        </span>
+                    </div>
+                    <div class="control">
+                        <button id="action-button" class="button is-primary">Go</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tabs Navigation -->
+            <div class="tabs is-boxed is-medium">
+                <ul>
+                    <li class="is-active" data-tab="blocks-tab"><a>Blocks</a></li>
+                    <li data-tab="balances-tab"><a>Balances</a></li>
+                    <li data-tab="stats-tab"><a>Stats</a></li>
+                </ul>
+            </div>
+            
+            <!-- Tab Contents -->
+            <div class="tab-content is-active" id="blocks-tab">
+                <div class="box">
+                    <div id="blocks-result" class="is-hidden">
+                        <div class="notification is-info">
+                            <h3 class="title is-4">Block Information</h3>
+                            <div id="blocks-data"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tab-content" id="balances-tab">
+                <div class="box">
+                    <div id="balance-result" class="is-hidden">
+                        <div class="notification is-info">
+                            <h3 class="title is-4">Balance Information</h3>
+                            <div id="balance-data"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tab-content" id="stats-tab">
+                <div class="box">
+                    <h3 class="title is-4">Completion Rate</h3>
+                    <div id="completion-rate-result" class="mb-5 is-hidden">
+                        <div class="notification is-info">
+                            <div id="completion-rate-data"></div>
+                        </div>
+                    </div>
+                    
+                    <h3 class="title is-4">Monthly Statistics</h3>
+                    <div id="monthly-stats-result" class="is-hidden">
+                        <div class="notification is-info">
+                            <div id="monthly-stats-data"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="content has-text-centered">
+            <p><strong>DIX</strong> - A Polkadot Blockchain Data Explorer</p>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>

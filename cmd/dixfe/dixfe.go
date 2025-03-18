@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -103,6 +104,17 @@ func NewFrontend(db *sql.DB, config dotidx.Config, listenAddr string) *Frontend 
 func (f *Frontend) Start(cancelCtx <-chan struct{}) error {
 	// Set up the HTTP server
 	mux := http.NewServeMux()
+
+	// Serve static files
+	// Use absolute path instead of relative path to avoid working directory issues
+	execPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+	staticDir := filepath.Join(filepath.Dir(execPath), "static")
+	log.Printf("Serving static files from: %s", staticDir)
+	fs := http.FileServer(http.Dir(staticDir))
+	mux.Handle("/", http.StripPrefix("/", fs))
 
 	// Register API routes
 	mux.HandleFunc("/address2blocks", f.handleAddressToBlocks)
