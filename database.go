@@ -1,4 +1,4 @@
-package main
+package dotidx
 
 import (
 	"context"
@@ -156,39 +156,39 @@ func sanitizeChainName(initialChainName, initialRelaychainName string) string {
 	chainName = result.String()
 
 	// Remove relaychain name if it's included in the chain name
-	if initialChainName != initialRelaychainName {
+	if initialChainName != initialRelaychainName && chainName != relaychainName {
 		chainName = strings.ReplaceAll(chainName, relaychainName, "")
 	}
 	return chainName
 }
 
-func getBlocksTableName(config Config) (name string) {
+func GetBlocksTableName(config Config) (name string) {
 	chainName := sanitizeChainName(config.Chain, config.Relaychain)
 	name = fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 	return
 }
 
-func getBlocksPrimaryKeyName(config Config) (name string) {
+func GetBlocksPrimaryKeyName(config Config) (name string) {
 	chainName := sanitizeChainName(config.Chain, config.Relaychain)
 	name = fmt.Sprintf("blocks_%s_%s", strings.ToLower(config.Relaychain), chainName)
 	return
 }
 
-func getAddressTableName(config Config) (name string) {
+func GetAddressTableName(config Config) (name string) {
 	chainName := sanitizeChainName(config.Chain, config.Relaychain)
 	name = fmt.Sprintf("%s.address2blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 	return
 }
 
-func getStatsPerMonthTableName(config Config) (name string) {
+func GetStatsPerMonthTableName(config Config) (name string) {
 	chainName := sanitizeChainName(config.Chain, config.Relaychain)
 	name = fmt.Sprintf("%s.stats_per_month_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
 	return
 }
 
 func (s *SQLDatabase) CreateTableBlocks(config Config) error {
-	blocksTable := getBlocksTableName(config)
-	blocksPK := getBlocksPrimaryKeyName(config)
+	blocksTable := GetBlocksTableName(config)
+	blocksPK := GetBlocksPrimaryKeyName(config)
 
 	// Create the blocks table
 	template := fmt.Sprintf(`
@@ -223,7 +223,7 @@ GRANT ALL ON TABLE %[1]s TO dotidx;
 }
 
 func (s *SQLDatabase) CreateTableBlocksPartitions(config Config, firstTimestamp, lastTimestamp string) error {
-	blocksTable := getBlocksTableName(config)
+	blocksTable := GetBlocksTableName(config)
 
 	firstYear, firstMonth := 2020, 4
 	if firstTimestamp != "" {
@@ -287,7 +287,7 @@ GRANT ALL ON TABLE %[1]s_%04[2]d_%02[3]d TO dotidx;
 }
 
 func (s *SQLDatabase) CreateTableAddress2Blocks(config Config) error {
-	address2blocksTable := getAddressTableName(config)
+	address2blocksTable := GetAddressTableName(config)
 
 	template := fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %s (
@@ -311,7 +311,7 @@ GRANT ALL ON TABLE %[1]s TO dotidx;
 }
 
 func (s *SQLDatabase) CreateTableAddress2BlocksPartitions(config Config) error {
-	address2blocksTable := getAddressTableName(config)
+	address2blocksTable := GetAddressTableName(config)
 
 	// spread across fast disks to improve access time
 	for fast := range fastTablespaceNumber {
@@ -339,8 +339,8 @@ GRANT ALL ON TABLE %[1]s_%1[2]d TO dotidx;
 }
 
 func (s *SQLDatabase) CreateMaterializedTableForStats(config Config) error {
-	tableName := getBlocksTableName(config)
-	statsPerMonthViewName := getStatsPerMonthTableName(config)
+	tableName := GetBlocksTableName(config)
+	statsPerMonthViewName := GetStatsPerMonthTableName(config)
 	query := fmt.Sprintf(`
 		CREATE MATERIALIZED VIEW IF NOT EXISTS %s AS
                 SELECT
@@ -376,10 +376,21 @@ func (s *SQLDatabase) CreateDotidxTable(config Config) error {
 		return fmt.Errorf("error failed to create dotidx table: %w", err)
 	}
 
-	inserts := fmt.Sprintf(`INSERT INTO %s.dotidx (relay_chain, chain) VALUES ($1, $2)`, schemaName)
-	if _, err := s.db.Exec(inserts, strings.ToLower(config.Relaychain), sanitizeChainName(config.Chain, config.Relaychain)); err != nil {
-		log.Printf("sql %s", query)
-		return fmt.Errorf("error failed to create dotidx table: %w", err)
+	inserts := fmt.Sprintf(`
+INSERT INTO %s.dotidx (relay_chain, chain)
+VALUES ('%s', '%s')
+ON CONFLICT (relay_chain, chain) DO NOTHING;
+`,
+		schemaName,
+		strings.ToLower(config.Relaychain),
+		sanitizeChainName(config.Chain, config.Relaychain),
+	)
+
+	// log.Printf("%s", inserts)
+
+	if _, err := s.db.Exec(inserts); err != nil {
+		log.Printf("sql %s", inserts)
+		return fmt.Errorf("error failed to create insert in dotidx: %w", err)
 	}
 
 	return nil
@@ -417,8 +428,8 @@ func (s *SQLDatabase) CreateTable(config Config, firstTimestamp, lastTimestamp s
 // TODO: adapt to the new partionning
 // when tables are full (a month) they are immutable so we can write the index once and forall
 func (s *SQLDatabase) CreateIndex(config Config) error {
-	blocksTable := getBlocksTableName(config)
-	address2blocksTable := getAddressTableName(config)
+	blocksTable := GetBlocksTableName(config)
+	address2blocksTable := GetAddressTableName(config)
 
 	template := fmt.Sprintf(`
                 CREATE INDEX IF NOT EXISTS extrinsincs_idx
@@ -582,8 +593,8 @@ func (s *SQLDatabase) saveBatch(items []BlockData, config Config) error {
 	}(start)
 
 	// Get table names
-	blocksTable := getBlocksTableName(config)
-	address2blocksTable := getAddressTableName(config)
+	blocksTable := GetBlocksTableName(config)
+	address2blocksTable := GetAddressTableName(config)
 
 	// log.Printf("Saving batch of %d items to database", len(items))
 	// log.Printf("Blocks table: %s", blocksTable)
@@ -630,7 +641,7 @@ func (s *SQLDatabase) saveBatch(items []BlockData, config Config) error {
 
 	// Insert items directly without using prepared statements
 	for _, item := range items {
-		ts, err := extractTimestamp(item.Extrinsics)
+		ts, err := ExtractTimestamp(item.Extrinsics)
 		if err != nil {
 			// log.Printf("warning: blockID %s could not find timestamp %v", item.ID, err)
 			// faking it
@@ -689,7 +700,7 @@ func (s *SQLDatabase) saveBatch(items []BlockData, config Config) error {
 // GetExistingBlocks retrieves a list of block IDs that already exist in the database
 func (s *SQLDatabase) GetExistingBlocks(startRange, endRange int, config Config) (map[int]bool, error) {
 	// Create blocks table name
-	blocksTable := getBlocksTableName(config)
+	blocksTable := GetBlocksTableName(config)
 
 	// Query for existing blocks - explicitly create a simple query without multiple statements
 	query := fmt.Sprintf("SELECT block_id FROM %s WHERE block_id BETWEEN $1 AND $2", blocksTable)
@@ -729,7 +740,7 @@ func (s *SQLDatabase) GetStats() *MetricsStats {
 func (s *SQLDatabase) UpdateMaterializedTables(config Config) error {
 
 	template := fmt.Sprintf(`REFRESH MATERIALIZED VIEW [ CONCURRENTLY ] %s`,
-		getStatsPerMonthTableName(config))
+		GetStatsPerMonthTableName(config))
 
 	_, err := s.db.Exec(template)
 	if err != nil {
@@ -748,5 +759,4 @@ func (s *SQLDatabase) UpdateDatabaseStats(config Config) error {
 			s.UpdateMaterializedTables(config)
 		}
 	}
-	return nil
 }

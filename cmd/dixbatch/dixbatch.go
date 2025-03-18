@@ -2,16 +2,130 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
+	"os"
+	"strings"
 	"sync"
 	"time"
+
+	_ "github.com/lib/pq"
+
+	"github.com/pierreaubert/dotidx"
 )
+
+func main() {
+	// Parse command line arguments
+	config := dotidx.ParseFlags()
+
+	// Set up logging
+	log.SetOutput(os.Stdout)
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+
+	// Validate configuration
+	if err := dotidx.ValidateConfig(config); err != nil {
+		log.Fatalf("Invalid configuration: %v", err)
+	}
+	log.Printf("Relay chain: %s chain: %s", config.Relaychain, config.Chain)
+
+	// ----------------------------------------------------------------------
+	// ChainReader
+	// ----------------------------------------------------------------------
+	reader := dotidx.NewSidecar(config.ChainReaderURL)
+	// Test the sidecar service
+	if err := reader.Ping(); err != nil {
+		log.Fatalf("Sidecar service test failed: %v", err)
+	}
+	log.Println("Successfully connected to Sidecar service")
+
+	headBlockID, err := reader.GetChainHeadID()
+	if err != nil {
+		log.Fatalf("Failed to fetch head block: %v", err)
+	}
+	log.Printf("Current head block is %d", headBlockID)
+
+	// ----------------------------------------------------------------------
+	// Set up context with cancellation for graceful shutdown
+	// ----------------------------------------------------------------------
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Handle OS signals for graceful shutdown
+	dotidx.SetupSignalHandler(cancel)
+
+	// ----------------------------------------------------------------------
+	// Database
+	// ----------------------------------------------------------------------
+	var db *sql.DB
+	if strings.Contains(config.DatabaseURL, "postgres") {
+		// Ensure sslmode=disable is in the PostgreSQL URI if not already present
+		if !strings.Contains(config.DatabaseURL, "sslmode=") {
+			if strings.Contains(config.DatabaseURL, "?") {
+				config.DatabaseURL += "&sslmode=disable"
+			} else {
+				config.DatabaseURL += "?sslmode=disable"
+			}
+		}
+
+		// Create database connection
+		var err error
+		db, err = sql.Open("postgres", config.DatabaseURL)
+		if err != nil {
+			log.Fatalf("Error opening database: %v", err)
+		}
+		defer db.Close()
+	} else {
+		log.Fatalf("unsupported database: %s", config.DatabaseURL)
+	}
+
+	// Create database instance
+	database := dotidx.NewSQLDatabase(db, ctx)
+
+	// Create tables
+	firstBlock, err := reader.FetchBlock(ctx, 1)
+	if err != nil {
+		log.Fatalf("Cannot get block 1: %v", err)
+	}
+	firstTimestamp, err := dotidx.ExtractTimestamp(firstBlock.Extrinsics)
+	if err != nil {
+		// some parachain do not have the pallet timestamp
+		firstTimestamp = ""
+	}
+	lastBlock, err := reader.FetchBlock(ctx, headBlockID)
+	if err != nil {
+		log.Fatalf("Cannot get head block %d: %v", headBlockID, err)
+	}
+	lastTimestamp, err := dotidx.ExtractTimestamp(lastBlock.Extrinsics)
+	if err != nil {
+		lastTimestamp = time.Now().Format("2006-01-02 15:04:05")
+	}
+
+	if err := database.CreateTable(config, firstTimestamp, lastTimestamp); err != nil {
+		log.Fatalf("Error creating tables: %v", err)
+	}
+
+	// Test the connection
+	if err := database.Ping(); err != nil {
+		log.Fatalf("Failed to ping PostgreSQL: %v", err)
+	}
+
+	log.Printf("Successfully connected to database %s", config.DatabaseURL)
+
+	// print some stats
+	go func() {
+		if err := NewStats(ctx, database, reader).Print(); err != nil {
+			log.Fatalf("Error monitoring stats: %v", err)
+		}
+	}()
+
+	log.Println("All tasks completed")
+}
 
 func startWorkers(
 	ctx context.Context,
-	config Config,
-	db Database,
-	reader ChainReader,
+	config dotidx.Config,
+	db dotidx.Database,
+	reader dotidx.ChainReader,
 	headID int) {
 
 	config.EndRange = min(config.EndRange, headID)
@@ -45,7 +159,7 @@ func startWorkers(
 					}
 
 					// Process a single block
-					processSingleBlock(ctx, blockID, config, db, reader)
+					dotidx.ProcessSingleBlock(ctx, blockID, config, db, reader)
 				}
 			}
 		}(i)
@@ -67,7 +181,7 @@ func startWorkers(
 					}
 
 					// Process a batch of blocks
-					processBlockBatch(ctx, blockIDs, config, db, reader)
+					dotidx.ProcessBlockBatch(ctx, blockIDs, config, db, reader)
 				}
 			}
 		}(i)
@@ -186,114 +300,17 @@ func startWorkers(
 	wg.Wait()
 }
 
-// ProcessSingleBlock fetches and processes a single block using fetchBlock
-func processSingleBlock(ctx context.Context, blockID int, config Config, db Database, reader ChainReader) {
-	block, err := reader.FetchBlock(ctx, blockID)
-	if err != nil {
-		log.Printf("Error fetching block %d: %v", blockID, err)
-		return
-	}
-
-	// Save block to database
-	err = db.Save([]BlockData{block}, config)
-	if err != nil {
-		log.Printf("Error saving block %d: %v", blockID, err)
-		return
-	}
-}
-
-// ProcessBlockBatch fetches and processes a batch of blocks using fetchBlockRange
-func processBlockBatch(ctx context.Context, blockIDs []int, config Config, db Database, reader ChainReader) {
-	if len(blockIDs) == 0 {
-		return
-	}
-
-	// Create the array of block IDs from the range
-	ids := make([]int, 0, blockIDs[len(blockIDs)-1]-blockIDs[0]+1)
-	for i := blockIDs[0]; i <= blockIDs[len(blockIDs)-1]; i++ {
-		ids = append(ids, i)
-	}
-
-	blockRange, err := reader.FetchBlockRange(ctx, ids)
-	if err != nil {
-		log.Printf("Error fetching blocks %d-%d: %v", blockIDs[0], blockIDs[len(blockIDs)-1], err)
-		return
-	}
-
-	if len(blockRange) == 0 {
-		log.Printf("No blocks returned for range %d-%d", blockIDs[0], blockIDs[len(blockIDs)-1])
-		return
-	}
-
-	// Save blocks to database
-	err = db.Save(blockRange, config)
-	if err != nil {
-		log.Printf("Error saving blocks %d-%d: %v", blockIDs[0], blockIDs[len(blockIDs)-1], err)
-		return
-	}
-}
-
-// MonitorNewBlocks continuously monitors for new blocks and adds them to the database
-func monitorNewBlocks(ctx context.Context, config Config, db Database, reader ChainReader, lastProcessedBlock int) error {
-	log.Printf("Starting to monitor new blocks from block %d", lastProcessedBlock)
-
-	nextBlockID := lastProcessedBlock + 1
-	currentHeadID := lastProcessedBlock
-
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			// Fetch the current head block
-			headID, err := reader.GetChainHeadID()
-			if err != nil {
-				log.Printf("Error fetching head block: %v", err)
-				continue
-			}
-
-			// Log progress if head has moved
-			if headID > currentHeadID {
-				// log.Printf("Current head is at block %d, next to process is block %d", headID, nextBlockID)
-				currentHeadID = headID
-			}
-
-			// Process blocks from nextBlockID up to the head
-			for nextBlockID <= headID {
-				block, err := reader.FetchBlock(ctx, nextBlockID)
-				if err != nil {
-					log.Printf("Error fetching block %d: %v", nextBlockID, err)
-					break
-				}
-
-				// Save block to database
-				err = db.Save([]BlockData{block}, config)
-				if err != nil {
-					log.Printf("Error saving block %d: %v", nextBlockID, err)
-					break
-				}
-
-				// log.Printf("Processed block %d", nextBlockID)
-				nextBlockID++
-			}
-		}
-	}
-}
-
 // Stats struct to track and print statistics
 type Stats struct {
-	db           Database
-	reader       ChainReader
+	db           dotidx.Database
+	reader       dotidx.ChainReader
 	tickerHeader *time.Ticker
 	tickerInfo   *time.Ticker
 	context      context.Context
 }
 
 // NewStats creates a new Stats instance
-func NewStats(ctx context.Context, db Database, reader ChainReader) *Stats {
+func NewStats(ctx context.Context, db dotidx.Database, reader dotidx.ChainReader) *Stats {
 	return &Stats{
 		db:           db,
 		reader:       reader,
@@ -326,35 +343,27 @@ func (s *Stats) printHeader() {
 	log.Printf("+---------------------------|------------------------|--------------------------------|")
 }
 
-func (s *Stats) printStats(stats *MetricsStats) {
+func (s *Stats) printStats(stats *dotidx.MetricsStats) {
 	if stats == nil {
 		return
 	}
 
-	rs := stats.bucketsStats
-	ds := stats.bucketsStats
+	rs := stats.BucketsStats
+	ds := stats.BucketsStats
 
 	if len(rs) > 0 && len(ds) > 0 {
-		rs_rate := float64(0)
-		ds_rate := float64(0)
-
-		if rs[0].count+rs[0].failures > 0 {
-			rs_rate = float64(rs[0].failures) / float64(rs[0].count+rs[0].failures) * 100
-		}
-		if ds[0].count+ds[0].failures > 0 {
-			ds_rate = float64(ds[0].failures) / float64(ds[0].count+ds[0].failures) * 100
-		}
-
+		rs_rate := rs[0].RateSinceStart()
+		ds_rate := ds[0].RateSinceStart()
 		log.Printf("| %7d %5.1f %5.1f %5.1f | %4d %4d %5d %5.0f%% | %6.1f  %4d %4d %5d %5.0f%% |",
-			rs[0].count, rs[0].rate, rs[1].rate, rs[2].rate,
-			rs[0].min.Milliseconds(),
-			rs[0].avg.Milliseconds(),
-			rs[0].max.Milliseconds(),
+			rs[0].Count, rs[0].Rate, rs[1].Rate, rs[2].Rate,
+			rs[0].Min.Milliseconds(),
+			rs[0].Avg.Milliseconds(),
+			rs[0].Max.Milliseconds(),
 			rs_rate,
-			ds[0].rate,
-			ds[0].min.Milliseconds(),
-			ds[0].avg.Milliseconds(),
-			ds[0].max.Milliseconds(),
+			ds[0].Rate,
+			ds[0].Min.Milliseconds(),
+			ds[0].Avg.Milliseconds(),
+			ds[0].Max.Milliseconds(),
 			ds_rate)
 	}
 }

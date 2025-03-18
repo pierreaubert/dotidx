@@ -22,6 +22,7 @@ A command-line tool for fetching block data from a Polkadot archive node via Sid
 
 ```bash
 go get github.com/pierreaubert/dotidx
+make
 ```
 
 ## Prework
@@ -74,6 +75,13 @@ total 8
 
 
 ## Usage
+
+The system built 4 binaries:
+
+- `dixbatch` : pull large amount of blocks into the database
+- `dixlive`: can pull the head of 1 or many chains into the database (and run continously)
+- `dixfe`: a web frontend to demonstrate how to use the data in the database
+- `dixmgr`: a service that launches and monitor all the various services (unrelease yet)
 
 ```bash
 dotidx -start=1000 -end=2000 -sidecar=http://localhost:8080 -postgres="postgres://user:pass@localhost:5432/db" -workers 5 -batch 10

@@ -1,4 +1,4 @@
-package main
+package dotidx
 
 import (
 	"log"
@@ -20,9 +20,9 @@ type Bucket struct {
 }
 
 type BucketStats struct {
-	count, failures int
-	avg, min, max   time.Duration
-	rate            float64
+	Count, Failures int
+	Avg, Min, Max   time.Duration
+	Rate            float64
 }
 
 // NewBucket creates a new Bucket instance
@@ -39,7 +39,6 @@ func NewBucketStats() BucketStats {
 	return BucketStats{}
 }
 
-// RecordLatency records the latency of a sidecar API call
 func (m *Bucket) RecordLatency(start time.Time, count int, err error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -68,52 +67,60 @@ func (m *Bucket) RecordLatency(start time.Time, count int, err error) {
 	}
 }
 
-// GetStats returns the current metrics statistics
 func (m *Bucket) GetStats() (bs BucketStats) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	bs.count = m.callCount
-	bs.failures = m.failures
+	bs.Count = m.callCount
+	bs.Failures = m.failures
 
-	if bs.count > 0 {
-		bs.avg = (m.totalTime / time.Duration(bs.count)).Round(time.Millisecond)
-		bs.min = m.minTime.Round(time.Millisecond)
-		bs.max = m.maxTime.Round(time.Millisecond)
+	if bs.Count > 0 {
+		bs.Avg = (m.totalTime / time.Duration(bs.Count)).Round(time.Millisecond)
+		bs.Min = m.minTime.Round(time.Millisecond)
+		bs.Max = m.maxTime.Round(time.Millisecond)
 		delta := time.Since(m.startedAt)
 		if tt := delta.Milliseconds(); tt > 0 {
-			bs.rate = float64(bs.count) * float64(1000.0) / float64(tt)
+			bs.Rate = float64(bs.Count) * float64(1000.0) / float64(tt)
 		}
 	}
 
 	return
 }
 
+func (bs BucketStats) RateSinceStart() (rate float64) {
+	if bs.Count+bs.Failures > 0 {
+		rate = float64(bs.Failures) / float64(bs.Count+bs.Failures) * 100
+	}
+	return
+}
+
+
+
 // PrintStats prints the current metrics statistics
 func (m *Bucket) PrintStats(printHeader bool) {
 	bs := m.GetStats()
 	if printHeader {
-		log.Printf("Statistics: Total calls: %d failure: %d rate: %.1fs", bs.count, bs.failures, bs.rate)
+		log.Printf("Statistics: Total calls: %d failure: %d rate: %.1fs", bs.Count, bs.Failures, bs.Rate)
 	}
-	if bs.count > 0 {
+	if bs.Count > 0 {
 		log.Printf("  Latency avg: %v min: %v max: %v Success rate: %.2f%%",
-			bs.avg, bs.min, bs.max, float64(bs.count)/(float64(bs.count+bs.failures))*100)
+			bs.Avg, bs.Min, bs.Max, float64(bs.Count)/(float64(bs.Count+bs.Failures))*100)
 	}
 }
 
 // Metrics tracks performance metrics for API calls
 type Metrics struct {
-	buckets []*Bucket
+	Buckets []*Bucket
 }
 
 type MetricsStats struct {
-	bucketsStats [4]BucketStats
+	BucketsStats [4]BucketStats
 }
 
 // NewMetrics creates a new Metrics instance
 func NewMetrics(name string) *Metrics {
 	return &Metrics{
-		buckets: []*Bucket{
+		Buckets: []*Bucket{
 			NewBucket(name, time.Duration(time.Hour*24)),
 			NewBucket(name, time.Duration(time.Hour)),
 			NewBucket(name, time.Duration(time.Minute*5)),
@@ -124,14 +131,14 @@ func NewMetrics(name string) *Metrics {
 
 // RecordLatency records the latency of a sidecar API call
 func (m *Metrics) RecordLatency(start time.Time, count int, err error) {
-	for i := range m.buckets {
-		m.buckets[i].RecordLatency(start, count, err)
+	for i := range m.Buckets {
+		m.Buckets[i].RecordLatency(start, count, err)
 	}
 }
 
 func NewMetricsStats() *MetricsStats {
 	return &MetricsStats{
-		bucketsStats: [4]BucketStats{
+		BucketsStats: [4]BucketStats{
 			NewBucketStats(),
 			NewBucketStats(),
 			NewBucketStats(),
@@ -143,15 +150,15 @@ func NewMetricsStats() *MetricsStats {
 // GetStats returns the current metrics statistics
 func (m *Metrics) GetStats() (s *MetricsStats) {
 	s = NewMetricsStats()
-	for i := range m.buckets {
-		s.bucketsStats[i] = m.buckets[i].GetStats()
+	for i := range m.Buckets {
+		s.BucketsStats[i] = m.Buckets[i].GetStats()
 	}
 	return
 }
 
 // PrintStats prints the current metrics statistics
 func (m *Metrics) PrintStats(printHeader bool) {
-	for i := range m.buckets {
-		m.buckets[i].PrintStats(printHeader)
+	for i := range m.Buckets {
+		m.Buckets[i].PrintStats(printHeader)
 	}
 }

@@ -1,4 +1,4 @@
-package main
+package dotidx
 
 import (
 	"encoding/json"
@@ -24,7 +24,7 @@ type BlockData struct {
 	Extrinsics     json.RawMessage `json:"extrinsics"`
 }
 
-func isValidAddress(address string) bool {
+func IsValidAddress(address string) bool {
 	// Polkadot addresses are 47 or 48 characters long and start with a number or letter
 	if len(address) < 45 || len(address) > 50 {
 		return false
@@ -41,7 +41,7 @@ func isValidAddress(address string) bool {
 	return false
 }
 
-func extractTimestamp(extrinsics []byte) (ts string, err error) {
+func ExtractTimestamp(extrinsics []byte) (ts string, err error) {
 	const defaultTimestamp = "0001-01-01 00:00:00.0000"
 	re := regexp.MustCompile("\"now\"[ ]*[:][ ]*\"[0-9]+\"")
 	texts := re.FindAllString(string(extrinsics), 1)
@@ -81,7 +81,7 @@ func extractAddressesFromExtrinsics(extrinsics json.RawMessage) ([]string, error
 			// Check for fields that might contain an address
 			for key, value := range v {
 				if strings.Contains(strings.ToLower(key), "id") {
-					if id, ok := value.(string); ok && isValidAddress(id) {
+					if id, ok := value.(string); ok && IsValidAddress(id) {
 						addressMap[id] = struct{}{}
 					}
 				}
@@ -90,7 +90,7 @@ func extractAddressesFromExtrinsics(extrinsics json.RawMessage) ([]string, error
 
 		case []interface{}:
 			for _, item := range v {
-				if str, ok := item.(string); ok && isValidAddress(str) {
+				if str, ok := item.(string); ok && IsValidAddress(str) {
 					addressMap[str] = struct{}{}
 				} else {
 					findAddresses(item)

@@ -5,23 +5,24 @@ import (
 	"database/sql"
 	"log"
 	"os"
-	"os/signal"
 	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
+
+	"github.com/pierreaubert/dotidx"
 )
 
 func main() {
 	// Parse command line arguments
-	config := parseFlags()
+	config := dotidx.ParseFlags()
 
 	// Set up logging
 	log.SetOutput(os.Stdout)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
 	// Validate configuration
-	if err := validateConfig(config); err != nil {
+	if err := dotidx.ValidateConfig(config); err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
 	log.Printf("Relay chain: %s chain: %s", config.Relaychain, config.Chain)
@@ -29,7 +30,7 @@ func main() {
 	// ----------------------------------------------------------------------
 	// ChainReader
 	// ----------------------------------------------------------------------
-	reader := NewSidecar(config.ChainReaderURL)
+	reader := dotidx.NewSidecar(config.ChainReaderURL)
 	// Test the sidecar service
 	if err := reader.Ping(); err != nil {
 		log.Fatalf("Sidecar service test failed: %v", err)
@@ -49,7 +50,7 @@ func main() {
 	defer cancel()
 
 	// Handle OS signals for graceful shutdown
-	setupSignalHandler(cancel)
+	dotidx.SetupSignalHandler(cancel)
 
 	// ----------------------------------------------------------------------
 	// Database
@@ -77,14 +78,14 @@ func main() {
 	}
 
 	// Create database instance
-	database := NewSQLDatabase(db, ctx)
+	database := dotidx.NewSQLDatabase(db, ctx)
 
 	// Create tables
 	firstBlock, err := reader.FetchBlock(ctx, 1)
 	if err != nil {
 		log.Fatalf("Cannot get block 1: %v", err)
 	}
-	firstTimestamp, err := extractTimestamp(firstBlock.Extrinsics)
+	firstTimestamp, err := dotidx.ExtractTimestamp(firstBlock.Extrinsics)
 	if err != nil {
 		// some parachain do not have the pallet timestamp
 		firstTimestamp = ""
@@ -93,7 +94,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Cannot get head block %d: %v", headBlockID, err)
 	}
-	lastTimestamp, err := extractTimestamp(lastBlock.Extrinsics)
+	lastTimestamp, err := dotidx.ExtractTimestamp(lastBlock.Extrinsics)
 	if err != nil {
 		lastTimestamp = time.Now().Format("2006-01-02 15:04:05")
 	}
@@ -109,68 +110,66 @@ func main() {
 
 	log.Printf("Successfully connected to database %s", config.DatabaseURL)
 
-	// ----------------------------------------------------------------------
-	// REST Frontend
-	// ----------------------------------------------------------------------
-	frontendAddr := ":8080"
-	if len(os.Getenv("FRONTEND_ADDR")) > 0 {
-		frontendAddr = os.Getenv("FRONTEND_ADDR")
+	log.Println("Starting monitoring for new blocks...")
+	if err := monitorNewBlocks(ctx, config, database, reader, headBlockID); err != nil {
+		log.Fatalf("Error monitoring blocks: %v", err)
 	}
 
-	// Initialize the frontend server
-	frontend := NewFrontend(db, config, frontendAddr)
+}
 
-	// Start the frontend server in a goroutine
-	log.Printf("Starting REST API frontend on %s", frontendAddr)
-	go func() {
-		if err := frontend.Start(ctx.Done()); err != nil {
-			log.Printf("Error starting frontend server: %v", err)
+// MonitorNewBlocks continuously monitors for new blocks and adds them to the database
+func monitorNewBlocks(
+	ctx context.Context,
+	config dotidx.Config,
+	db dotidx.Database,
+	reader dotidx.ChainReader,
+	lastProcessedBlock int) error {
+	log.Printf("Starting to monitor new blocks from block %d", lastProcessedBlock)
+
+	nextBlockID := lastProcessedBlock + 1
+	currentHeadID := lastProcessedBlock
+
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			// Fetch the current head block
+			headID, err := reader.GetChainHeadID()
+			if err != nil {
+				log.Printf("Error fetching head block: %v", err)
+				continue
+			}
+
+			// Log progress if head has moved
+			if headID > currentHeadID {
+				// log.Printf("Current head is at block %d, next to process is block %d", headID, nextBlockID)
+				currentHeadID = headID
+			}
+
+			// Process blocks from nextBlockID up to the head
+			for nextBlockID <= headID {
+				block, err := reader.FetchBlock(ctx, nextBlockID)
+				if err != nil {
+					log.Printf("Error fetching block %d: %v", nextBlockID, err)
+					break
+				}
+
+				// Save block to database
+				err = db.Save([]dotidx.BlockData{block}, config)
+				if err != nil {
+					log.Printf("Error saving block %d: %v", nextBlockID, err)
+					break
+				}
+
+				// log.Printf("Processed block %d", nextBlockID)
+				nextBlockID++
+			}
 		}
-	}()
-
-	// print some stats
-	go func() {
-		if err := NewStats(ctx, database, reader).Print(); err != nil {
-			log.Fatalf("Error monitoring stats: %v", err)
-		}
-	}()
-
-	// If in live mode, fetch the head block and update the range
-	if config.Live {
-		log.Println("Running in live mode")
-		config.StartRange = max(1, headBlockID-100000)
-		config.EndRange = headBlockID
-
-		// Create a separate context for workers that can complete independently
-		workerCtx, workerCancel := context.WithCancel(ctx)
-		defer workerCancel() // Ensure proper cleanup
-
-		// Start workers to process existing blocks
-		startWorkers(workerCtx, config, database, reader, headBlockID)
-
-		// Start monitoring for new blocks with the main context
-		// This will keep running even after startWorkers completes
-		log.Println("Starting monitoring for new blocks...")
-		if err := monitorNewBlocks(ctx, config, database, reader, headBlockID); err != nil {
-			log.Fatalf("Error monitoring blocks: %v", err)
-		}
-	} else {
-		// Start workers and wait for completion in normal mode
-		startWorkers(ctx, config, database, reader, headBlockID)
-	}
-
-	if !config.Live {
-		// monthTracker := NewMonthTracker(db, config)
-		log.Println("All tasks completed")
 	}
 }
 
-func setupSignalHandler(cancel context.CancelFunc) {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		<-c
-		log.Println("Received interrupt signal, shutting down...")
-		cancel()
-	}()
-}
+

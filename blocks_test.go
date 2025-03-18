@@ -1,4 +1,4 @@
-package main
+package dotidx
 
 //goland:noinspection Annotator,Annotator,Annotator,Annotator,Annotator,Annotator,Annotator,Annotator
 import (
@@ -212,11 +212,9 @@ func TestIsValidAddress(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isValidAddress(tt.address); got != tt.want {
-				t.Errorf("isValidAddress() = %v, want %v", got, tt.want)
+			if got := IsValidAddress(tt.address); got != tt.want {
+				t.Errorf("IsValidAddress() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
-
-

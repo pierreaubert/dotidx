@@ -1,4 +1,4 @@
-package main
+package dotidx
 
 import (
 	"flag"
@@ -19,16 +19,19 @@ type Config struct {
 	Live           bool
 }
 
-func parseFlags() Config {
-	startRange := flag.Int("start", 1, "Start of the integer range")
-	endRange := flag.Int("end", 10, "End of the integer range")
+func ParseFlags() Config {
 	chainReaderURL := flag.String("chainreader", "", "Chain reader URL: sidecar or go")
 	databaseURL := flag.String("database", "", "Database URL")
+
+	startRange := flag.Int("start", 1, "Start of the integer range")
+	endRange := flag.Int("end", 10, "End of the integer range")
 	batchSize := flag.Int("batch", 10, "Number of items to collect before writing to database")
 	maxWorkers := flag.Int("workers", 5, "Maximum number of concurrent workers")
 	flushTimeout := flag.Duration("flush", 30*time.Second, "Maximum time to wait before flushing data to database")
+
 	relaychain := flag.String("relaychain", "Polkadot", "Relaychain name")
 	chain := flag.String("chain", "", "Chain name")
+
 	live := flag.Bool("live", false, "Live mode: continuously fetch new blocks as they are produced")
 
 	flag.Parse()
@@ -47,7 +50,7 @@ func parseFlags() Config {
 	}
 }
 
-func validateConfig(config Config) error {
+func ValidateConfig(config Config) error {
 	// In live mode, we don't need to validate the range as it will be determined dynamically
 	if !config.Live {
 		if config.StartRange > config.EndRange {

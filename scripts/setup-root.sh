@@ -10,3 +10,9 @@ apt install npm
 
 # for testing
 apt install curl
+
+# for database
+apt install postgresql-16 postgresql-16-jsquery
+
+# for monitoring
+apt install prometheus grafana prometheus-postgres-exporter prometheus-sql-exporter prometheus-node-exporter sensors

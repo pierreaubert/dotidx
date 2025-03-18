@@ -13,3 +13,6 @@ TAGS
 ETAGS
 *.log
 *.gz
+cmd/dixbatch/dixbatch
+cmd/dixfe/dixfe
+cmd/dixlive/dixlive
