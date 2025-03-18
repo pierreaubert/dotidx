@@ -31,12 +31,47 @@ func (f *Frontend) handleAddressToBlocks(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	count := r.URL.Query().Get("count")
+	if count == "" {
+		count = "10"
+	}
+
+	from := r.URL.Query().Get("from")
+	var fromTimestamp string
+	if from == "" {
+		fromTimestamp = ""
+	} else {
+		// Try to parse the from parameter as a timestamp
+		fromTime, err := dotidx.ParseTimestamp(from)
+		if err != nil {
+			http.Error(w, "Invalid 'from' timestamp format", http.StatusBadRequest)
+			return
+		}
+		// Format as SQL timestamp
+		fromTimestamp = fromTime.Format("2006-01-02 15:04:05")
+	}
+
+	to := r.URL.Query().Get("to")
+	var toTimestamp string
+	if to == "" {
+		toTimestamp = ""
+	} else {
+		// Try to parse the to parameter as a timestamp
+		toTime, err := dotidx.ParseTimestamp(to)
+		if err != nil {
+			http.Error(w, "Invalid 'to' timestamp format", http.StatusBadRequest)
+			return
+		}
+		// Format as SQL timestamp
+		toTimestamp = toTime.Format("2006-01-02 15:04:05")
+	}
+
 	if !dotidx.IsValidAddress(address) {
 		http.Error(w, "Invalid address format", http.StatusBadRequest)
 		return
 	}
 
-	blocks, err := f.getBlocksByAddress(address)
+	blocks, err := f.getBlocksByAddress(address, count, fromTimestamp, toTimestamp)
 	if err != nil {
 		log.Printf("Error getting blocks for address %s: %v", address, err)
 		http.Error(w, "Error retrieving blocks", http.StatusInternalServerError)
@@ -51,9 +86,21 @@ func (f *Frontend) handleAddressToBlocks(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (f *Frontend) getBlocksByAddress(address string) ([]dotidx.BlockData, error) {
+func (f *Frontend) getBlocksByAddress(address string, count, from, to string) ([]dotidx.BlockData, error) {
 	if !dotidx.IsValidAddress(address) {
 		return nil, fmt.Errorf("invalid address format")
+	}
+
+	cond := ""
+	if from != "" {
+		cond = fmt.Sprintf("AND b.created_at >= '%s'", from)
+	}
+	if to != "" {
+		if cond != "" {
+			cond += fmt.Sprintf(" AND b.created_at <= '%s'", to)
+		} else {
+			cond = fmt.Sprintf("AND b.created_at <= '%s'", to)
+		}
 	}
 
 	query := fmt.Sprintf(
@@ -73,11 +120,14 @@ func (f *Frontend) getBlocksByAddress(address string) ([]dotidx.BlockData, error
 		FROM %s b
 		JOIN %s a ON b.block_id = a.block_id
 		WHERE a.address = '%s'
+		%s
 		ORDER BY b.block_id DESC
-		LIMIT 10;`,
+		LIMIT %s;`,
 		dotidx.GetBlocksTableName(f.config),
 		dotidx.GetAddressTableName(f.config),
 		address,
+		cond,
+		count,
 	)
 
 	rows, err := f.db.Query(query)

@@ -94,24 +94,167 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) {
                 throw new Error(`HTTP error ${response.status}`);
             }
-            const data = await response.json();
+            const textRaw = await response.text();
+            const result = JSON.parse(textRaw);
+            console.log('Balances Data:', textRaw); // Debug log
             
             const resultDiv = document.getElementById('balance-result');
             const dataDiv = document.getElementById('balance-data');
             
             resultDiv.classList.remove('is-hidden');
             
-            if (data && Array.isArray(data) && data.length > 0) {
+            // Check if we have data
+            if (result && Array.isArray(result) && result.length > 0) {
+                // Create a consolidated array of all extrinsics
+                const allExtrinsics = [];
+                
+                // Go through all blocks and collect extrinsics
+                result.forEach(block => {
+                    if (!block.extrinsics || typeof block.extrinsics !== 'object') {
+                        return; // Skip blocks without extrinsics
+                    }
+                    
+                    const timestamp = block.timestamp || 'N/A';
+                    const blockId = block.number || 'N/A';
+                    
+                    // Go through each extrinsic type in the block
+                    Object.entries(block.extrinsics).forEach(([palletName, extrinsicArray]) => {
+                        if (!Array.isArray(extrinsicArray) || extrinsicArray.length === 0) {
+                            return; // Skip empty arrays
+                        }
+                        
+                        // Add each extrinsic to the consolidated array
+                        extrinsicArray.forEach(extrinsic => {
+                            allExtrinsics.push({
+                                timestamp,
+                                blockId,
+                                pallet: palletName,
+                                method: extrinsic.method || 'N/A',
+                                data: extrinsic.data || [],
+                                rawExtrinsic: extrinsic // Keep the full extrinsic for reference
+                            });
+                        });
+                    });
+                });
+                
+                // No extrinsics found across any blocks
+                if (allExtrinsics.length === 0) {
+                    dataDiv.innerHTML = '<p>No extrinsics found for this address.</p>';
+                    return;
+                }
+                
+                // Start building the table
                 let html = '<table class="table is-fullwidth is-striped is-hoverable result-table">';
-                html += '<thead><tr><th>Asset</th><th>Balance</th><th>Date</th></tr></thead>';
+                html += '<thead><tr><th>Timestamp</th><th>Block ID</th><th>Pallet</th><th>Method</th><th>Amount (DOT)</th><th>Actions</th></tr></thead>';
                 html += '<tbody>';
                 
-                data.forEach(item => {
-                    html += `<tr><td>${item["asset"] || 'N/A'}</td><td>${item["balance"] || 0}</td><td>${item["date"] || 'N/A'}</td></tr>`;
+                // Add each extrinsic as a row
+                allExtrinsics.forEach((extrinsic, index) => {
+                    // Main row
+                    html += '<tr>';
+                    html += `<td>${extrinsic.timestamp}</td>`;
+                    html += `<td>${extrinsic.blockId}</td>`;
+                    html += `<td>${extrinsic.pallet}</td>`;
+                    html += `<td>${extrinsic.method.pallet}/${extrinsic.method.method}</td>`;
+                    
+                    // Amount handling
+                    let amount = '';
+                    let detailsContent = {};
+                    
+                    // Handle special methods: withdraw and deposit
+                    if (extrinsic.method.method === 'Withdraw' || 
+                        extrinsic.method.method === 'Deposit' || 
+                        extrinsic.method.method === 'Rewarded'
+                    ) {
+                        // Verify data is an array with at least 2 elements
+                        if (Array.isArray(extrinsic.data) && extrinsic.data.length >= 2) {
+                            // The second element (index 1) is typically the amount
+                            const amountValue = extrinsic.data[1]/10000000000;
+                            const sign = extrinsic.method.method === 'Withdraw' ? '-' : '+';
+                            amount = `${sign}${amountValue}`;
+                            
+                            // Add relevant data to details
+                            if (extrinsic.data.length > 0) {
+                                detailsContent = {
+                                    address: extrinsic.data[0],
+                                    amount: amountValue
+                                };
+                            }
+                        } else {
+                            amount = 'N/A';
+                            detailsContent = { data: extrinsic.data };
+                        }
+                    } else {
+                        // For other methods, show the raw data
+                        amount = 'N/A';
+                        detailsContent = { data: extrinsic.data };
+                        
+                        // Keep all other fields from the extrinsic for reference
+                        Object.entries(extrinsic.rawExtrinsic).forEach(([key, value]) => {
+                            if (!['method', 'data'].includes(key)) {
+                                detailsContent[key] = value;
+                            }
+                        });
+                    }
+                    
+                    html += `<td>${amount}</td>`;
+                    
+                    // Toggle button for details
+                    const detailsId = `extrinsic-details-${index}`;
+                    html += `<td><button class="button is-small toggle-details" data-target="${detailsId}"><i class="fas fa-chevron-right"></i></button></td>`;
+                    html += '</tr>';
+                    
+                    // Details row (hidden by default)
+                    html += `<tr id="${detailsId}" class="details-row" style="display: none;">`;
+                    html += `<td colspan="6"><pre class="extrinsic-details">${JSON.stringify(detailsContent, null, 2)}</pre></td>`;
+                    html += '</tr>';
                 });
                 
                 html += '</tbody></table>';
                 dataDiv.innerHTML = html;
+                
+                // Add some styling for the JSON details
+                const style = document.createElement('style');
+                style.textContent = `
+                    .extrinsic-details {
+                        max-height: 150px;
+                        overflow-y: auto;
+                        font-size: 0.8rem;
+                        background-color: #f8f8f8;
+                        padding: 0.5rem;
+                        border-radius: 4px;
+                        margin: 0;
+                    }
+                    .details-row td {
+                        padding: 0 !important;
+                    }
+                    .details-row pre {
+                        margin: 0.75rem;
+                    }
+                    .toggle-details i {
+                        transition: transform 0.2s;
+                    }
+                    .toggle-details.is-active i {
+                        transform: rotate(90deg);
+                    }
+                `;
+                document.head.appendChild(style);
+                
+                // Add event listeners for the toggle buttons
+                document.querySelectorAll('.toggle-details').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const targetId = this.getAttribute('data-target');
+                        const targetRow = document.getElementById(targetId);
+                        
+                        if (targetRow.style.display === 'none') {
+                            targetRow.style.display = 'table-row';
+                            this.classList.add('is-active');
+                        } else {
+                            targetRow.style.display = 'none';
+                            this.classList.remove('is-active');
+                        }
+                    });
+                });
             } else {
                 dataDiv.innerHTML = '<p>No balance information found for this address.</p>';
             }
