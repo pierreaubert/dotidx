@@ -1,5 +1,9 @@
 {
   "dependencies": {
     "@substrate/api-sidecar": "^20.2.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.22.0",
+    "prettier": "^3.5.3"
   }
 }
