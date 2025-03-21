@@ -429,7 +429,6 @@ func (s *SQLDatabase) CreateTable(config Config, firstTimestamp, lastTimestamp s
 // when tables are full (a month) they are immutable so we can write the index once and forall
 func (s *SQLDatabase) CreateIndex(config Config) error {
 	blocksTable := GetBlocksTableName(config)
-	address2blocksTable := GetAddressTableName(config)
 
 	template := fmt.Sprintf(`
                 CREATE INDEX IF NOT EXISTS extrinsincs_idx
@@ -438,14 +437,6 @@ func (s *SQLDatabase) CreateIndex(config Config) error {
                 TABLESPACE pg_default;
 	`, blocksTable)
 	_, err := s.db.Exec(template)
-	if err != nil {
-		return fmt.Errorf("error creating index on address column: %w", err)
-	}
-
-	template = fmt.Sprintf(`
-		CREATE INDEX IF NOT EXISTS %s_address_idx ON %s (address)
-	`, address2blocksTable, address2blocksTable)
-	_, err = s.db.Exec(template)
 	if err != nil {
 		return fmt.Errorf("error creating index on address column: %w", err)
 	}
