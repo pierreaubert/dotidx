@@ -2,13 +2,7 @@
 // This file imports and coordinates all functionality from the module files
 
 // Import functionality from module files
-import {
-  fetchBlocks,
-  renderBlockContent,
-  escapeHtml,
-  highlightAddressMatches,
-  escapeRegExp,
-} from "./blocks.js";
+import { fetchBlocks } from "./blocks.js";
 import { fetchBalances } from "./balances.js";
 import { fetchStaking } from "./staking.js";
 import { fetchCompletionRate, fetchMonthlyStats } from "./stats.js";
@@ -47,19 +41,19 @@ function initApp() {
     searchInput.value = addressParam;
   }
   if (countParam) {
-    document.getElementById("balance-count").value = countParam;
+      document.getElementById("search-count").value = countParam;
   }
   if (fromParam) {
     // Convert from ISO format to local datetime-local format
     const fromDate = new Date(fromParam);
-    document.getElementById("balance-from").value = fromDate
+    document.getElementById("search-from").value = fromDate
       .toISOString()
       .slice(0, 16);
   }
   if (toParam) {
     // Convert from ISO format to local datetime-local format
     const toDate = new Date(toParam);
-    document.getElementById("balance-to").value = toDate
+    document.getElementById("search-to").value = toDate
       .toISOString()
       .slice(0, 16);
   }
@@ -69,9 +63,9 @@ function initApp() {
     const address = searchInput.value.trim();
     if (!address) return; // Don't update URL if no address is entered
 
-    const count = document.getElementById("balance-count").value.trim();
-    const fromDate = document.getElementById("balance-from").value;
-    const toDate = document.getElementById("balance-to").value;
+    const count = document.getElementById("search-count").value.trim();
+    const fromDate = document.getElementById("search-from").value;
+    const toDate = document.getElementById("search-to").value;
 
     let newUrl = `?address=${encodeURIComponent(address)}`;
 
@@ -95,9 +89,9 @@ function initApp() {
 
   // Function to clear filters and reset to defaults
   function clearFilters() {
-    document.getElementById("balance-count").value = "";
-    document.getElementById("balance-from").value = "";
-    document.getElementById("balance-to").value = "";
+    document.getElementById("search-count").value = "";
+    document.getElementById("search-from").value = "";
+    document.getElementById("search-to").value = "";
 
     // Also clear the URL parameters
     if (searchInput.value.trim()) {
@@ -120,9 +114,9 @@ function initApp() {
 
     // Debug DOM elements for each tab to identify issues
     if (tabId === "balances-tab") {
-      const balanceResult = document.getElementById("balance-result");
-      const balanceData = document.getElementById("balance-data");
-      const balanceGraph = document.getElementById("balance-graph");
+      const balanceResult = document.getElementById("search-result");
+      const balanceData = document.getElementById("search-data");
+      const balanceGraph = document.getElementById("search-graph");
       console.log("Balance tab elements:", {
         balanceResult: !!balanceResult,
         balanceData: !!balanceData,

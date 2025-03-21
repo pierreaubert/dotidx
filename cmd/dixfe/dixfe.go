@@ -119,6 +119,7 @@ func (f *Frontend) Start(cancelCtx <-chan struct{}) error {
 	// Register API routes
 	mux.HandleFunc("/address2blocks", f.handleAddressToBlocks)
 	mux.HandleFunc("/balances", f.handleBalances)
+	mux.HandleFunc("/staking", f.handleStaking)
 	mux.HandleFunc("/stats/completion_rate", f.handleCompletionRate)
 	mux.HandleFunc("/stats/per_month", f.handleStatsPerMonth)
 

@@ -1,4 +1,5 @@
 // blocks.js - Block-related functionality for DotIDX
+import {showError} from './misc.js';
 
 // Function to render block content recursively
 function renderBlockContent(content, searchAddress) {
@@ -297,10 +298,4 @@ window.nextBlockPage = function () {
 };
 
 // Export functions
-export {
-  fetchBlocks,
-  renderBlockContent,
-  escapeHtml,
-  highlightAddressMatches,
-  escapeRegExp,
-};
+export { fetchBlocks };

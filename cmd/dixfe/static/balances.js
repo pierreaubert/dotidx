@@ -1,19 +1,5 @@
 // balances.js - Balance-related functionality for DotIDX
-
-// Function to format timestamp as 'DD HH:MM'
-function formatTimestamp(timestamp) {
-  if (timestamp === "N/A") return timestamp;
-
-  try {
-    const date = new Date(timestamp);
-    const day = String(date.getDate()).padStart(2, "0");
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    return `${day} ${hours}:${minutes}`;
-  } catch (e) {
-    return timestamp;
-  }
-}
+import { formatTimestamp } from "./misc.js";
 
 // Function to build balance graph data
 function buildBalanceGraphData(balances) {
@@ -366,9 +352,9 @@ async function fetchBalances() {
 
   try {
     // Get filter values
-    const count = document.getElementById("balance-count").value;
-    const fromDateInput = document.getElementById("balance-from").value;
-    const toDateInput = document.getElementById("balance-to").value;
+    const count = document.getElementById("search-count").value;
+    const fromDateInput = document.getElementById("search-from").value;
+    const toDateInput = document.getElementById("search-to").value;
 
     // Format dates to RFC3339 format
     let fromDate = "";
@@ -461,13 +447,4 @@ function showError(section, message) {
 }
 
 // Export functions
-export {
-  fetchBalances,
-  formatTimestamp,
-  buildBalanceGraphData,
-  createBalanceGraph,
-  groupBalancesByMonth,
-  renderBalancesTable,
-  extractBalancesFromBlocks,
-  addExtrinsicToggleListeners,
-};
+export { fetchBalances };

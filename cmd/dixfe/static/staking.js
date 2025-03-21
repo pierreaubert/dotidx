@@ -1,135 +1,38 @@
 // staking.js - Staking-related functionality for DotIDX
-
-// Function to format timestamp as 'DD HH:MM' (reused from balances.js)
-function formatTimestamp(timestamp) {
-  if (timestamp === "N/A") return timestamp;
-
-  try {
-    const date = new Date(timestamp);
-    const day = String(date.getDate()).padStart(2, "0");
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    return `${day} ${hours}:${minutes}`;
-  } catch (e) {
-    return timestamp;
-  }
-}
-
-// Function to extract extrinsics from blocks for staking
-function extractStakingExtrinsicsFromBlocks(blocks) {
-  const allExtrinsics = [];
-
-  // Go through all blocks and collect staking extrinsics
-  blocks.forEach((block) => {
-    if (!block.extrinsics || typeof block.extrinsics !== "object") {
-      return; // Skip blocks without extrinsics
-    }
-
-    const timestamp = block.timestamp || "N/A";
-    const blockId = block.number || "N/A";
-
-    // Go through each pallet in the block
-    Object.entries(block.extrinsics).forEach(([palletName, extrinsicArray]) => {
-      if (!Array.isArray(extrinsicArray) || extrinsicArray.length === 0) {
-        return; // Skip empty arrays
-      }
-
-      // Add each extrinsic related to staking
-      extrinsicArray.forEach((extrinsic) => {
-        // Check if this is a staking extrinsic or utility with staking method
-        if (
-          palletName === "staking" ||
-          (palletName === "utility" &&
-            extrinsic.method &&
-            extrinsic.method.pallet === "staking")
-        ) {
-          allExtrinsics.push({
-            timestamp,
-            blockId,
-            pallet: palletName,
-            method: extrinsic.method || "N/A",
-            data: extrinsic.data || [],
-            rawExtrinsic: extrinsic, // Keep the full extrinsic for reference
-          });
-        }
-      });
-    });
-  });
-
-  return allExtrinsics;
-}
+import { showError, formatTimestamp } from "./misc.js";
 
 // Function to build staking graph data
-function buildStakingGraphData(allExtrinsics) {
+function buildStakingGraphData(stakingData) {
   const transactionsByDay = {};
 
   // Process extrinsics to collect time series data
-  allExtrinsics.forEach((extrinsic) => {
+  stakingData.forEach((extrinsic) => {
     if (extrinsic.timestamp === "N/A") {
       return; // Skip entries without valid timestamps
     }
 
-    try {
-      const date = new Date(extrinsic.timestamp);
-      // Create a day key (YYYY-MM-DD) to group by day
-      const dayKey = date.toISOString().split("T")[0];
+    const date = new Date(extrinsic.timestamp);
+    const dayKey = date.toISOString().split("T")[0];
+    let amount = extrinsic.totalAmount;
 
-      // Initialize the day entry if it doesn't exist
-      if (!transactionsByDay[dayKey]) {
-        transactionsByDay[dayKey] = {
-          date: new Date(dayKey), // Start of the day
-          totalAmount: 0,
-          bonded: 0,
-          unbonded: 0,
-          rewards: 0,
-          count: 0,
-        };
-      }
-
-      // Process different staking methods
-      let amount = 0;
-      let type = "other";
-
-      // Bond
-      if (
-        (extrinsic.method.method === "Bond" ||
-          extrinsic.method.method === "BondExtra") &&
-        Array.isArray(extrinsic.data) &&
-        extrinsic.data.length > 0
-      ) {
-        type = "bonded";
-        amount = parseFloat(extrinsic.data[0]) / 10000000000;
-        transactionsByDay[dayKey].bonded += amount;
-        transactionsByDay[dayKey].totalAmount += amount;
-      }
-      // Unbond
-      else if (
-        extrinsic.method.method === "Unbond" &&
-        Array.isArray(extrinsic.data) &&
-        extrinsic.data.length > 0
-      ) {
-        type = "unbonded";
-        amount = -parseFloat(extrinsic.data[0]) / 10000000000;
-        transactionsByDay[dayKey].unbonded += Math.abs(amount);
-        transactionsByDay[dayKey].totalAmount += amount;
-      }
-      // Rewards
-      else if (
-        extrinsic.method.method === "Rewarded" &&
-        Array.isArray(extrinsic.data) &&
-        extrinsic.data.length > 1
-      ) {
-        type = "rewards";
-        amount = parseFloat(extrinsic.data[1]) / 10000000000;
-        transactionsByDay[dayKey].rewards += amount;
-        transactionsByDay[dayKey].totalAmount += amount;
-      }
-
-      // Update count regardless of type
-      transactionsByDay[dayKey].count += 1;
-    } catch (e) {
-      console.error("Error processing staking extrinsic:", e);
+    if (!transactionsByDay[dayKey]) {
+      transactionsByDay[dayKey] = {
+        date: new Date(dayKey), // Start of the day
+        totalAmount: 0,
+        deposits: 0,
+        withdrawals: 0,
+        count: 0,
+      };
     }
+
+    // Update day totals
+    transactionsByDay[dayKey].totalAmount += amount;
+    if (amount > 0) {
+      transactionsByDay[dayKey].deposits += amount;
+    } else {
+      transactionsByDay[dayKey].withdrawals += amount;
+    }
+    transactionsByDay[dayKey].count += 1;
   });
 
   // Convert the grouped data to an array
@@ -139,91 +42,73 @@ function buildStakingGraphData(allExtrinsics) {
   return graphData.sort((a, b) => a.date - b.date);
 }
 
-// Function to create plotly graph for staking data
-function createStakingGraph(graphData, graphDiv) {
+// Function to create plotly graph
+function createStakingGraph(graphData, graphDiv, address) {
   if (graphData.length === 0) {
     graphDiv.innerHTML =
-      '<p class="has-text-centered">No staking data available for plotting.</p>';
+      '<p class="has-text-centered">No transaction data available for plotting.</p>';
     return;
   }
 
-  // Calculate running balance
-  let runningBalance = 0;
-  const balanceSeries = graphData.map((item) => {
-    runningBalance += item.totalAmount;
+  // Calculate running staking
+  let runningStaking = 0;
+  const stakingSeries = graphData.map((item) => {
+    runningStaking += item.totalAmount;
     return {
       x: item.date,
-      y: runningBalance,
-      text: `Date: ${item.date.toLocaleDateString()}<br>Total Staked: ${runningBalance.toFixed(4)}<br>Day change: ${item.totalAmount.toFixed(4)}<br>Transactions: ${item.count}`,
+      y: runningStaking,
+      text: `Date: ${item.date.toLocaleDateString()}<br>Staking: ${runningStaking}<br>Day change: ${item.totalAmount}<br>Transactions: ${item.count}`,
     };
   });
 
-  // Create data for bonds, unbonds, and rewards
-  const bonded = graphData
+  // Create data for deposits and withdrawals
+  const deposits = graphData
     .map((item) => ({
       x: item.date,
-      y: item.bonded,
-      text: `Date: ${item.date.toLocaleDateString()}<br>Bonded: +${item.bonded.toFixed(4)}`,
+      y: item.deposits,
+      text: `Date: ${item.date.toLocaleDateString()}<br>Deposits: +${item.deposits.toFixed(4)}`,
     }))
     .filter((item) => item.y > 0);
 
-  const unbonded = graphData
+  const withdrawals = graphData
     .map((item) => ({
       x: item.date,
-      y: item.unbonded,
-      text: `Date: ${item.date.toLocaleDateString()}<br>Unbonded: -${item.unbonded.toFixed(4)}`,
+      y: item.withdrawals,
+      text: `Date: ${item.date.toLocaleDateString()}<br>Withdrawals: -${item.withdrawals.toFixed(4)}`,
     }))
-    .filter((item) => item.y > 0);
-
-  const rewards = graphData
-    .map((item) => ({
-      x: item.date,
-      y: item.rewards,
-      text: `Date: ${item.date.toLocaleDateString()}<br>Rewards: +${item.rewards.toFixed(4)}`,
-    }))
-    .filter((item) => item.y > 0);
+    .filter((item) => item.y < 0);
 
   // Create the plotly data array
   const plotData = [
     {
       type: "scatter",
       mode: "lines+markers",
-      name: "Total Staked",
-      x: balanceSeries.map((p) => p.x),
-      y: balanceSeries.map((p) => p.y),
-      text: balanceSeries.map((p) => p.text),
+      name: "Staking " + address,
+      x: stakingSeries.map((p) => p.x),
+      y: stakingSeries.map((p) => p.y),
+      text: stakingSeries.map((p) => p.text),
       line: { color: "rgb(31, 119, 180)", width: 2 },
       marker: { size: 6 },
       hoverinfo: "text+x",
     },
     {
       type: "bar",
-      name: "Bonded",
-      x: bonded.map((p) => p.x),
-      y: bonded.map((p) => p.y),
-      text: bonded.map((p) => p.text),
+      name: "Deposits",
+      x: deposits.map((p) => p.x),
+      y: deposits.map((p) => p.y),
+      // text: deposits.map(p => p.text),
       marker: { color: "rgba(0, 200, 0, 0.7)" },
-      hoverinfo: "text+x",
+      hoverinfo: deposits.map((p) => "%{x}<br>" + p.text),
       yaxis: "y2",
     },
     {
       type: "bar",
-      name: "Unbonded",
-      x: unbonded.map((p) => p.x),
-      y: unbonded.map((p) => p.y),
-      text: unbonded.map((p) => p.text),
+      name: "Withdrawals",
+      x: withdrawals.map((p) => p.x),
+      y: withdrawals.map((p) => p.y),
+      // text: withdrawals.map(p => p.text),
       marker: { color: "rgba(200, 0, 0, 0.7)" },
-      hoverinfo: "text+x",
-      yaxis: "y2",
-    },
-    {
-      type: "bar",
-      name: "Rewards",
-      x: rewards.map((p) => p.x),
-      y: rewards.map((p) => p.y),
-      text: rewards.map((p) => p.text),
-      marker: { color: "rgba(255, 165, 0, 0.7)" },
-      hoverinfo: "text+x",
+      hoverinfo: withdrawals.map((p) => p.x + " " + p.text),
       yaxis: "y2",
     },
   ];
@@ -248,8 +133,8 @@ function createStakingGraph(graphData, graphDiv) {
       title: "Date",
     },
     yaxis: {
-      title: "Total Staked",
-      tickformat: ".4f",
+      title: "Staking",
+      tickformat: ".2f",
     },
     yaxis2: {
       title: "Daily Activity",
@@ -257,14 +142,14 @@ function createStakingGraph(graphData, graphDiv) {
       tickfont: { color: "rgb(148, 103, 189)" },
       overlaying: "y",
       side: "right",
-      tickformat: ".4f",
+      tickformat: ".2f",
     },
     margin: {
-      l: 50,
-      r: 50,
-      b: 100,
+      l: 80,
+      r: 80,
+      b: 80,
       t: 100,
-      pad: 4,
+      pad: 2,
     },
   };
 
@@ -272,8 +157,8 @@ function createStakingGraph(graphData, graphDiv) {
   Plotly.newPlot(graphDiv, plotData, layout, { responsive: true });
 }
 
-// Function to group staking extrinsics by month
-function groupStakingExtrinsicsByMonth(allExtrinsics) {
+// Function to group extrinsics by month
+function groupStakingsByMonth(allExtrinsics) {
   const extrinsicsByMonth = {};
 
   allExtrinsics.forEach((extrinsic) => {
@@ -311,13 +196,13 @@ function groupStakingExtrinsicsByMonth(allExtrinsics) {
   return extrinsicsByMonth;
 }
 
-// Function to render staking extrinsics table
-function renderStakingExtrinsicsTable(extrinsicsByMonth) {
+// Function to render extrinsics table
+function renderStakingsTable(extrinsicsByMonth) {
   // Start building the table
   let html =
     '<table class="table is-fullwidth is-striped is-hoverable result-table">';
   html +=
-    "<thead><tr><th>Timestamp</th><th>Pallet</th><th>Method</th><th>Amount (DOT)</th><th>Details</th></tr></thead>";
+    "<thead><tr><th>Timestamp</th><th>Method</th><th>Amount (DOT)</th><th>Details</th></tr></thead>";
   html += "<tbody>";
 
   // Sort month keys in descending order (newest first)
@@ -339,67 +224,32 @@ function renderStakingExtrinsicsTable(extrinsicsByMonth) {
             month: "long",
           });
 
-    html += `<tr class="month-header"><td colspan="5"><strong>${monthName}</strong></td></tr>`;
+    html += `<tr class="month-header"><td colspan="4"><strong>${monthName}</strong></td></tr>`;
 
     // Add extrinsics for this month
     extrinsicsByMonth[monthKey].forEach((extrinsic, index) => {
       // Main row
       html += "<tr>";
       html += `<td>${extrinsic.formattedTime || extrinsic.timestamp}</td>`;
-      html += `<td>${extrinsic.pallet}</td>`;
-      html += `<td>${extrinsic.method.pallet}/${extrinsic.method.method}</td>`;
+      html += `<td>${extrinsic.method.method}</td>`;
 
-      // Amount handling
-      let amount = "N/A";
+      let amount = extrinsic.totalAmount.toFixed(2);
       let detailsContent = {
         blockId: extrinsic.blockId, // Add blockId to details
+        pallet: extrinsic.pallet,
+        method: extrinsic.method.method,
+        subpallet: extrinsic.method.pallet,
       };
-
-      // Handle specific staking methods
-      if (
-        extrinsic.method.method === "Bond" ||
-        extrinsic.method.method === "BondExtra"
-      ) {
-        if (Array.isArray(extrinsic.data) && extrinsic.data.length > 0) {
-          const amountValue = extrinsic.data[0] / 10000000000;
-          amount = `+${amountValue}`;
-          detailsContent.amount = amountValue;
-        }
-      } else if (extrinsic.method.method === "Unbond") {
-        if (Array.isArray(extrinsic.data) && extrinsic.data.length > 0) {
-          const amountValue = extrinsic.data[0] / 10000000000;
-          amount = `-${amountValue}`;
-          detailsContent.amount = -amountValue;
-        }
-      } else if (extrinsic.method.method === "Rewarded") {
-        if (Array.isArray(extrinsic.data) && extrinsic.data.length > 1) {
-          const amountValue = extrinsic.data[1] / 10000000000;
-          amount = `+${amountValue}`;
-          detailsContent.amount = amountValue;
-          detailsContent.account = extrinsic.data[0];
-        }
-      }
-
-      // Add raw data to details
-      detailsContent.data = extrinsic.data;
-
-      // Keep all other fields from the extrinsic for reference
-      Object.entries(extrinsic.rawExtrinsic).forEach(([key, value]) => {
-        if (!["method", "data"].includes(key)) {
-          detailsContent[key] = value;
-        }
-      });
 
       html += `<td>${amount}</td>`;
 
-      // Toggle button for details
-      const detailsId = `staking-details-${monthKey}-${index}`;
-      html += `<td><button class="button is-small toggle-details" data-target="${detailsId}"><i class="fas fa-chevron-right"></i></button></td>`;
+      const detailsId = `extrinsic-details-${monthKey}-${index}`;
+      html += `<td><button class="button is-small toggle-details" data-target="${detailsId}">&gt;</button></td>`;
       html += "</tr>";
 
       // Details row (hidden by default)
       html += `<tr id="${detailsId}" class="details-row" style="display: none;">`;
-      html += `<td colspan="5"><pre class="extrinsic-details">${JSON.stringify(detailsContent, null, 2)}</pre></td>`;
+      html += `<td colspan="4"><pre class="extrinsic-details">${JSON.stringify(detailsContent, null, 2)}</pre></td>`;
       html += "</tr>";
     });
   });
@@ -408,107 +258,78 @@ function renderStakingExtrinsicsTable(extrinsicsByMonth) {
   return html;
 }
 
-// Function to fetch staking data
-async function fetchStaking() {
-  const searchInput = document.getElementById("search-address");
-  const address = searchInput.value.trim();
-  if (!address) {
-    alert("Please enter an address");
-    return;
-  }
+function extractStakingsFromBlocks(blocks, address) {
+  const stakings = [];
 
-  try {
-    // Get filter values - reuse the same filters as balances
-    const count = document.getElementById("balance-count").value;
-    const fromDateInput = document.getElementById("balance-from").value;
-    const toDateInput = document.getElementById("balance-to").value;
-
-    // Format dates to RFC3339 format
-    let fromDate = "";
-    let toDate = "";
-
-    if (fromDateInput) {
-      const fromDateTime = new Date(fromDateInput);
-      fromDate = fromDateTime.toISOString();
+  // Go through all blocks and collect extrinsics
+  blocks.forEach((block) => {
+    if (!block.extrinsics || typeof block.extrinsics !== "object") {
+      return; // Skip blocks without extrinsics
     }
 
-    if (toDateInput) {
-      const toDateTime = new Date(toDateInput);
-      toDate = toDateTime.toISOString();
-    }
+    const timestamp = block.timestamp || "N/A";
+    const blockId = block.number || "N/A";
 
-    // For now, reuse the address2blocks endpoint to get staking data
-    // We'll filter for staking-related extrinsics on the client side
-    let url = `/address2blocks?address=${encodeURIComponent(address)}`;
+    // Go through each extrinsic type in the block
+    Object.entries(block.extrinsics).forEach(([palletName, extrinsicArray]) => {
+      if (!Array.isArray(extrinsicArray) || extrinsicArray.length === 0) {
+        return; // Skip empty arrays
+      }
 
-    if (count) {
-      url += `&count=${encodeURIComponent(count)}`;
-    }
+      // Add each extrinsic to the consolidated array
+      extrinsicArray.forEach((extrinsic) => {
+        if (extrinsic?.method.pallet) {
+          const palletName = extrinsic.method.pallet;
+          if (
+            palletName !== "staking"
+          ) {
+            return;
+          }
 
-    if (fromDate) {
-      url += `&from=${encodeURIComponent(fromDate)}`;
-    }
+          console.log('Loop: '+extrinsic.method.pallet+' '+extrinsic.method.method);
 
-    if (toDate) {
-      url += `&to=${encodeURIComponent(toDate)}`;
-    }
+          let amount = 0.0;
+          if (
+            extrinsic.method.pallet === "stakings" &&
+            extrinsic.method.method === "Transfer"
+          ) {
+            amount = parseFloat(extrinsic.data[2]);
+            if (address === extrinsic.data[0]) {
+              amount = -amount;
+            }
+          } else if (
+            extrinsic.method.pallet === "stakings" &&
+            extrinsic.method.method === "Deposit"
+          ) {
+            amount = parseFloat(extrinsic.data[1]);
+          } else if (
+            extrinsic.method.pallet === "stakings" &&
+            extrinsic.method.method === "Withdraw"
+          ) {
+            amount = -parseFloat(extrinsic.data[1]);
+          } else {
+	      console.log('TODO: '+extrinsic.method.pallet+' '+extrinsic.method.method);
+	  }
 
-    console.log("Fetching staking data from URL:", url);
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}`);
-    }
-    const data = await response.json();
+          amount = amount / 10 / 1000 / 1000 / 1000;
 
-    const resultDiv = document.getElementById("staking-result");
-    const dataDiv = document.getElementById("staking-data");
-    const graphDiv = document.getElementById("staking-graph");
-
-    resultDiv.classList.remove("is-hidden");
-
-    if (data && Array.isArray(data) && data.length > 0) {
-      // Process blocks to extract staking extrinsics
-      const stakingExtrinsics = extractStakingExtrinsicsFromBlocks(data);
-
-      // Format timestamps for display
-      stakingExtrinsics.forEach((extrinsic) => {
-        if (extrinsic.timestamp !== "N/A") {
-          extrinsic.formattedTime = formatTimestamp(extrinsic.timestamp);
+          stakings.push({
+            timestamp,
+            blockId,
+            pallet: palletName,
+            method: extrinsic.method,
+            totalAmount: amount,
+          });
         }
       });
+    });
+  });
 
-      if (stakingExtrinsics.length > 0) {
-        // Group extrinsics by month
-        const extrinsicsByMonth =
-          groupStakingExtrinsicsByMonth(stakingExtrinsics);
-
-        // Create graph data
-        const graphData = buildStakingGraphData(stakingExtrinsics);
-
-        // Create the graph
-        createStakingGraph(graphData, graphDiv);
-
-        // Render the table
-        dataDiv.innerHTML = renderStakingExtrinsicsTable(extrinsicsByMonth);
-
-        // Add toggle listeners for extrinsic details
-        addStakingToggleListeners();
-      } else {
-        dataDiv.innerHTML = "<p>No staking data found for this address.</p>";
-        graphDiv.innerHTML = "";
-      }
-    } else {
-      dataDiv.innerHTML = "<p>No blocks found for this address.</p>";
-      graphDiv.innerHTML = "";
-    }
-  } catch (error) {
-    console.error("Error fetching staking data:", error);
-    showError("staking", error.message);
-  }
+  return stakings;
 }
 
-// Function to add toggle listeners for staking extrinsic details
-function addStakingToggleListeners() {
+// Function to add toggle listeners for extrinsic details
+function addExtrinsicToggleListeners() {
   document.querySelectorAll(".toggle-details").forEach((button) => {
     button.addEventListener("click", function () {
       const targetId = this.getAttribute("data-target");
@@ -522,25 +343,99 @@ function addStakingToggleListeners() {
   });
 }
 
-// Helper function to show error messages
-function showError(section, message) {
-  const resultDiv = document.getElementById(`${section}-result`);
-  const dataDiv = document.getElementById(`${section}-data`);
+// Function to fetch stakings
+async function fetchStaking() {
+  const searchInput = document.getElementById("search-address");
+  const address = searchInput.value.trim();
+  if (!address) {
+    alert("Please enter an address");
+    return;
+  }
 
-  if (resultDiv && dataDiv) {
+  try {
+    // Get filter values
+    const count = document.getElementById("search-count").value;
+    const fromDateInput = document.getElementById("search-from").value;
+    const toDateInput = document.getElementById("search-to").value;
+
+    // Format dates to RFC3339 format
+    let fromDate = "";
+    let toDate = "";
+
+    if (fromDateInput) {
+      // Convert HTML datetime-local input format to RFC3339
+      const fromDateTime = new Date(fromDateInput);
+      fromDate = fromDateTime.toISOString(); // This gives RFC3339 format
+    }
+
+    if (toDateInput) {
+      // Convert HTML datetime-local input format to RFC3339
+      const toDateTime = new Date(toDateInput);
+      toDate = toDateTime.toISOString(); // This gives RFC3339 format
+    }
+
+    // Build URL with parameters
+    let stakingsUrl = `/staking?address=${encodeURIComponent(address)}`;
+
+    if (count) {
+      stakingsUrl += `&count=${encodeURIComponent(count)}`;
+    }
+
+    if (fromDate) {
+      stakingsUrl += `&from=${encodeURIComponent(fromDate)}`;
+    }
+
+    if (toDate) {
+      stakingsUrl += `&to=${encodeURIComponent(toDate)}`;
+    }
+
+    console.log("Fetching stakings from URL:", stakingsUrl);
+    const response = await fetch(stakingsUrl);
+    if (!response.ok) {
+      throw new Error(`HTTP error ${response.status}`);
+    }
+    const textRaw = await response.text();
+    const result = JSON.parse(textRaw);
+    console.log("Stakings Data:", textRaw); // Debug log
+
+    const resultDiv = document.getElementById("staking-result");
+    const dataDiv = document.getElementById("staking-data");
+    const graphDiv = document.getElementById("staking-graph");
+
     resultDiv.classList.remove("is-hidden");
-    dataDiv.innerHTML = `<div class="notification is-danger">${message}</div>`;
+
+    if (result && Array.isArray(result) && result.length > 0) {
+      // Process blocks to extract extrinsics
+      const stakings = extractStakingsFromBlocks(result, address);
+
+      // Format timestamps for display
+      stakings.forEach((extrinsic) => {
+        if (extrinsic.timestamp !== "N/A") {
+          extrinsic.formattedTime = formatTimestamp(extrinsic.timestamp);
+        }
+      });
+
+      // Group extrinsics by month
+      const stakingsByMonth = groupStakingsByMonth(stakings);
+
+      // Create graph data
+      const graphData = buildStakingGraphData(stakings);
+      createStakingGraph(graphData, graphDiv, address);
+
+      // Render the table
+      dataDiv.innerHTML = renderStakingsTable(stakingsByMonth);
+
+      // Add toggle listeners for extrinsic details
+      addExtrinsicToggleListeners();
+    } else {
+      dataDiv.innerHTML = "<p>No staking data found for this address.</p>";
+      graphDiv.innerHTML = "";
+    }
+  } catch (error) {
+    console.error("Error fetching stakings:", error);
+    showError("stakings", error.message);
   }
 }
 
 // Export functions
-export {
-  fetchStaking,
-  formatTimestamp,
-  buildStakingGraphData,
-  createStakingGraph,
-  groupStakingExtrinsicsByMonth,
-  renderStakingExtrinsicsTable,
-  extractStakingExtrinsicsFromBlocks,
-  addStakingToggleListeners,
-};
+export { fetchStaking };
