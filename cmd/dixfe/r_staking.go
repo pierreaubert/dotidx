@@ -9,7 +9,7 @@ import (
 	"github.com/pierreaubert/dotidx"
 )
 
-func (f *Frontend) handleBalances(w http.ResponseWriter, r *http.Request) {
+func (f *Frontend) handleStaking(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -74,11 +74,11 @@ func (f *Frontend) handleBalances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	eb := dotidx.NewEventsBalance(address)
+	es := dotidx.NewEventsStaking(address)
 	for block := range blocks {
-		filtered, err := eb.Process(blocks[block].Extrinsics)
+		filtered, err := es.Process(blocks[block].Extrinsics)
 		if err != nil {
-			http.Error(w, "Failed to extract balances from block", http.StatusInternalServerError)
+			http.Error(w, "Failed to extract stakings from block", http.StatusInternalServerError)
 			return
 		}
 		blocks[block].OnInitialize = []byte("[]")

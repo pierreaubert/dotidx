@@ -3,6 +3,7 @@ package dotidx
 import (
 	"encoding/json"
 	"fmt"
+
 	// "log"
 
 	"github.com/tidwall/gjson"
@@ -55,6 +56,39 @@ func (eb *EventsBalance) Process(extrinsics json.RawMessage) (filtered json.RawM
 	results := fmt.Sprintf(`{"balances": %s, "utility": %s, "staking": %s}`,
 		resultsBalances, resultsUtility, resultsStaking,
 	)
+
+	// log.Printf("%s", results)
+
+	return json.RawMessage(results), nil
+}
+
+type EventsStaking struct {
+	address string
+}
+
+func NewEventsStaking(address string) *EventsStaking {
+	return &EventsStaking{
+		address: address,
+	}
+}
+
+func (es *EventsStaking) Process(extrinsics json.RawMessage) (filtered json.RawMessage, err error) {
+	patternStaking := fmt.Sprintf(
+		`extrinsics.#(method.pallet=="staking").events.#(data.#(%%"%s"))#`,
+		es.address)
+
+	// expensive ...
+	sextrinsics := fmt.Sprintf(`{"extrinsics": %s}`, string(extrinsics))
+
+	// log.Printf("%s", sextrinsics)
+	// log.Printf("%d %s", len(sextrinsics), patternBalances)
+
+	resultsStaking := gjson.Get(sextrinsics, patternStaking).String()
+	if resultsStaking == "" {
+		resultsStaking = "[]"
+	}
+
+	results := fmt.Sprintf(`{"staking": %s}`, resultsStaking)
 
 	// log.Printf("%s", results)
 

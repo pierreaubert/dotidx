@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DIX a Polkadot explorer</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.3/css/bulma.min.css" integrity="sha256-RwYNyYLkMTjyYn8FRzVzQFtHXuHg9dpfkPCuf6j2XDM=" crossorigin="anonymous">
     <link rel="stylesheet" href="styles.css">
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-3.0.1.min.js" charset="utf-8"></script>
     <style>
         .tab-content {
             display: none;
@@ -51,7 +50,7 @@
     <section class="hero is-info">
         <div class="hero-body">
             <p class="title">A Polkadot Blockchain Data Explorer</p>
-            <p class="subtitle">Explore balances, staking or blocks per address, and some statistics!</p>
+            <p class="subtitle">Explore balances, staking or blocks per address, accross chains and some statistics!</p>
         </div>
     </section>
 
@@ -70,66 +69,59 @@
                         <button id="action-button" class="button is-primary">Go</button>
                     </div>
                 </div>
-            </div>
-            
-            <!-- Tabs Navigation -->
-            <div class="tabs is-boxed is-medium">
-                <ul>
-                    <li class="is-active" data-tab="blocks-tab"><a>Blocks</a></li>
-                    <li data-tab="balances-tab"><a>Balances</a></li>
-                    <li data-tab="stats-tab"><a>Stats</a></li>
-                </ul>
-            </div>
-            
-            <!-- Tab Contents -->
-            <div class="tab-content is-active" id="blocks-tab">
-                <div class="box">
-                    <div id="blocks-result" class="is-hidden">
-                        <div class="notification is-info">
-                            <h3 class="title is-4">Block Information</h3>
-                            <div id="blocks-data"></div>
+
+                <!-- Filters Row (moved from balances tab) -->
+                <div class="columns mt-3">
+                    <div class="column">
+                        <div class="field">
+                            <label class="label">Count</label>
+                            <div class="control">
+                                <input id="balance-count" class="input" type="number" value="20" min="1" max="100" title="Number of records to display">
+                            </div>
+                            <p class="help">Number of records to display</p>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="field">
+                            <label class="label">From Date</label>
+                            <div class="control">
+                                <input id="balance-from" class="input" type="datetime-local" title="Start date for filtering" placeholder="Select start date">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="field">
+                            <label class="label">To Date</label>
+                            <div class="control">
+                                <input id="balance-to" class="input" type="datetime-local" title="End date for filtering" placeholder="Select end date">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-narrow">
+                        <div class="field">
+                            <label class="label">&nbsp;</label>
+                            <div class="control buttons">
+                                <button id="apply-filters" class="button is-info">Apply Filters</button>
+                                <button id="clear-filters" class="button is-light">Clear Filters</button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-            
+
+            <!-- Tabs Navigation -->
+            <div class="tabs is-boxed is-medium">
+                <ul>
+                    <li class="is-active" data-tab="balances-tab"><a>Balances</a></li>
+                    <li data-tab="staking-tab"><a>Staking</a></li>
+                    <li data-tab="blocks-tab"><a>Blocks</a></li>
+                    <li data-tab="stats-tab"><a>Stats</a></li>
+                </ul>
+            </div>
+
+            <!-- Tab Contents -->
             <div class="tab-content" id="balances-tab">
                 <div class="box">
-                    <div class="columns">
-                        <div class="column">
-                            <div class="field">
-                                <label class="label">Count</label>
-                                <div class="control">
-                                    <input id="balance-count" class="input" type="number" value="20" min="1" max="100">
-                                </div>
-                                <p class="help">Number of records to display</p>
-                            </div>
-                        </div>
-                        <div class="column">
-                            <div class="field">
-                                <label class="label">From Date</label>
-                                <div class="control">
-                                    <input id="balance-from" class="input" type="datetime-local">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="column">
-                            <div class="field">
-                                <label class="label">To Date</label>
-                                <div class="control">
-                                    <input id="balance-to" class="input" type="datetime-local">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="column is-narrow">
-                            <div class="field">
-                                <label class="label">&nbsp;</label>
-                                <div class="control">
-                                    <button id="apply-filters" class="button is-info">Apply Filters</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                     <div id="balance-result" class="is-hidden">
                         <div class="notification is-info">
                             <h3 class="title is-4">Balance Information</h3>
@@ -140,20 +132,44 @@
                     </div>
                 </div>
             </div>
-            
+
+            <div class="tab-content" id="staking-tab">
+                <div class="box">
+                    <div id="staking-result" class="is-hidden">
+                        <div class="notification is-info">
+                            <h3 class="title is-4">Staking Information</h3>
+                            <!-- Graph container -->
+                            <div id="staking-graph" class="balance-graph"></div>
+                            <div id="staking-data"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content is-active" id="blocks-tab">
+                <div class="box">
+                    <div id="blocks-result" class="is-hidden">
+                        <div class="notification is-info">
+                            <h3 class="title is-4">Block Information</h3>
+                            <div id="blocks-data"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="tab-content" id="stats-tab">
                 <div class="box">
                     <h3 class="title is-4">Completion Rate</h3>
-                    <div id="completion-rate-result" class="mb-5 is-hidden">
+                    <div id="completion-result" class="mb-5 is-hidden">
                         <div class="notification is-info">
-                            <div id="completion-rate-data"></div>
+                            <div id="completion-data"></div>
                         </div>
                     </div>
-                    
+
                     <h3 class="title is-4">Monthly Statistics</h3>
-                    <div id="monthly-stats-result" class="is-hidden">
+                    <div id="monthly-result" class="is-hidden">
                         <div class="notification is-info">
-                            <div id="monthly-stats-data"></div>
+                            <div id="monthly-data"></div>
                         </div>
                     </div>
                 </div>
@@ -167,6 +183,7 @@
         </div>
     </footer>
 
-    <script src="app.js"></script>
+    <!-- Load JavaScript modules -->
+    <script type="module" src="app.js"></script>
 </body>
 </html>

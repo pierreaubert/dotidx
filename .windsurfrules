@@ -10,3 +10,4 @@
   - all code is formatted and valid
 - for javascript code
   - all code is formatted and linted
+  - refactor functions which are over 50 lines long
