@@ -15,6 +15,24 @@ import (
 	"github.com/pierreaubert/dotidx"
 )
 
+func validateConfig(config dotidx.Config) error {
+
+	if config.ChainReaderURL == "" {
+		return fmt.Errorf("chainReader url is required")
+	}
+
+	if config.DatabaseURL == "" {
+		return fmt.Errorf("database url is required")
+	}
+
+	if config.Chain == "" {
+		return fmt.Errorf("chain name is required")
+	}
+
+	return nil
+}
+
+
 func main() {
 
 	config := dotidx.ParseFlags()
@@ -22,7 +40,7 @@ func main() {
 	log.SetOutput(os.Stdout)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
-	if err := dotidx.ValidateConfig(config); err != nil {
+	if err := validateConfig(config); err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
 

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -13,6 +14,39 @@ import (
 	"github.com/pierreaubert/dotidx"
 )
 
+func validateConfig(config dotidx.Config) error {
+
+	// In live mode, we don't need to validate the range as it will be determined dynamically
+	if !config.Live {
+		if config.StartRange > config.EndRange {
+			return fmt.Errorf("start range must be less than or equal to end range")
+		}
+	}
+
+	if config.ChainReaderURL == "" {
+		return fmt.Errorf("chainReader url is required")
+	}
+
+	if config.DatabaseURL == "" {
+		return fmt.Errorf("database url is required")
+	}
+
+	if config.BatchSize <= 0 {
+		return fmt.Errorf("batch size must be greater than 0")
+	}
+
+	if config.MaxWorkers <= 0 {
+		return fmt.Errorf("max workers must be greater than 0")
+	}
+
+	if config.Chain == "" {
+		return fmt.Errorf("chain name is required")
+	}
+
+	return nil
+}
+
+
 func main() {
 	// Parse command line arguments
 	config := dotidx.ParseFlags()
@@ -22,7 +56,7 @@ func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
 	// Validate configuration
-	if err := dotidx.ValidateConfig(config); err != nil {
+	if err := validateConfig(config); err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
 	log.Printf("Relay chain: %s chain: %s", config.Relaychain, config.Chain)
