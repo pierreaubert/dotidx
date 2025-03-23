@@ -147,12 +147,9 @@ You should see something like:
 2025/03/11 18:00:54 workers.go:319: |  78021 49.6 49.6 50.7 |  20  10   74      0%   |  573.2    2   1  141      0%  |
 2025/03/11 18:01:09 workers.go:319: |  80191 49.6 49.6 50.8 |  20  10   74      0%   |  575.8    2   1  141      0%  |
 ```
-This machine can read ~50 blocks per second and write them to the database so roughly a week to get up to date with 25_000_000 blocks.
-With a larger machine (32 CPUs, 256GB RAM, 8x 1TB NVMe SSD) the indexer took 20h to get up to date.
-The speed at which the node can read the blocks is the limiting factor.
+A mini pc machine can read ~30 blocks per second and write them to the database so roughly one week to get up to date with 25_000_000 blocks. With a larger machine (32 CPUs, 256GB RAM, 8x 1TB NVMe SSD) the indexer took 20h to get up to date. The speed at which the node can read the blocks is the limiting factor.
 
 Notes:
-- I still dont understand yet why it is so slow.
 - If you can put the database on a diffent set of disks it does help.
 - M2 SSD will thermal throttle hard if they are not properly cooled.
 
@@ -169,12 +166,13 @@ TEST_POSTGRES_URI="postgres://user:password@localhost:5432/testdb" go test -v ./
 ## Next features
 
 - integrate [go-substrate-rpc-client](https://github.com/centrifuge/go-substrate-rpc-client/blob/master/main_test.go) and see if it can replace Sidecar
-- add another database support, easy with the interface. Options are ScyllaDB, Cassandra or FoundationDB.
+- use the p2p protocol instead of the rpc one (easy with gossamer).
+- add another database support, easy with the interface. Options are ScyllaDB, Cassandra, Vitess or FoundationDB.
 - more testing for other parachains (currently only Relay Chain and StateMint are tested).
-- replace the pile of shell scripts with a proper installer, see `cmd/dixmgr`.
 - automate the monitoring, nicely working but also a pile of config files and shell scripts.
 - harden the solution (Vault or encrypted credential in systemd), firewall.
 - compare performance of doing json parsing in the DB or in the frontend.
+- replace the pile of shell scripts with a proper installer, see `cmd/dixmgr`.
 
 
 ## License

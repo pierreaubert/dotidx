@@ -185,7 +185,7 @@ func TestFrontendStart(t *testing.T) {
 	defer db.Close()
 
 	// Create test config
-	config := Config{
+	config := dotidx.Config{
 		Relaychain: "Polkadot",
 		Chain:      "Polkadot",
 	}

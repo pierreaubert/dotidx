@@ -1,10 +1,12 @@
 # simple build
 
-all:
-	go build cmd/dixbatch/dixbatch
-	go build cmd/dixfe/dixfe
-	go build cmd/dixlive/dixlive
-	go build cmd/dixmgr/dixmgr
+all: fmt vet bin
+
+bin:
+	go build cmd/dixbatch/dixbatch.go
+	go build cmd/dixfe/dixfe.go cmd/dixfe/r_*.go
+	go build cmd/dixlive/dixlive.go
+	go build cmd/dixmgr/dixmgr.go
 
 clean:
 	./scripts/cleanup.sh

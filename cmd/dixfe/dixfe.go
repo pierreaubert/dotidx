@@ -32,7 +32,6 @@ func validateConfig(config dotidx.Config) error {
 	return nil
 }
 
-
 func main() {
 
 	config := dotidx.ParseFlags()

@@ -46,7 +46,6 @@ func validateConfig(config dotidx.Config) error {
 	return nil
 }
 
-
 func main() {
 	// Parse command line arguments
 	config := dotidx.ParseFlags()

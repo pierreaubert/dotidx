@@ -1,7 +1,7 @@
-  CREATE USER prometheus;
-  ALTER USER prometheus SET SEARCH_PATH TO prometheus,pg_catalog;
+  CREATE USER {{.Monitoring.User}};
+  ALTER USER {{.Monitoring.User}} SET SEARCH_PATH TO prometheus,pg_catalog;
 
-  CREATE SCHEMA prometheus AUTHORIZATION prometheus;
+  CREATE SCHEMA prometheus AUTHORIZATION {{.Monitoring.User}};
 
   CREATE FUNCTION prometheus.f_select_pg_stat_activity()
   RETURNS setof pg_catalog.pg_stat_activity
@@ -27,7 +27,7 @@
   AS
     SELECT * FROM prometheus.f_select_pg_stat_activity();
 
-  GRANT SELECT ON prometheus.pg_stat_replication TO prometheus;
-    GRANT SELECT ON prometheus.pg_stat_activity TO prometheus;
+  GRANT SELECT ON prometheus.pg_stat_replication TO {{.Monitoring.User}};
+    GRANT SELECT ON prometheus.pg_stat_activity TO {{.Monitoring.User}};
 
 
