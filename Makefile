@@ -1,10 +1,10 @@
 # simple build
 
 all:
-	go build
-	cd cmd/dixbatch && go build
-	cd cmd/dixlive && go build
-	cd cmd/dixfe && go build
+	go build cmd/dixbatch/dixbatch
+	go build cmd/dixfe/dixfe
+	go build cmd/dixlive/dixlive
+	go build cmd/dixmgr/dixmgr
 
 clean:
 	./scripts/cleanup.sh

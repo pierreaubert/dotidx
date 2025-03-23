@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/pierreaubert/dotidx"
 )
 
 func TestHandleAddressToBlocks(t *testing.T) {
@@ -21,7 +22,7 @@ func TestHandleAddressToBlocks(t *testing.T) {
 	defer db.Close()
 
 	// Create test config
-	config := Config{
+	config := dotidx.Config{
 		Relaychain: "Polkadot",
 		Chain:      "Polkadot",
 	}
@@ -78,7 +79,7 @@ func TestHandleAddressToBlocks(t *testing.T) {
 				}
 
 				// Decode response body - now expecting an array of blocks directly, not a BlocksResponse
-				var blocks []BlockData
+				var blocks []dotidx.BlockData
 				if err := json.Unmarshal(resp.Body.Bytes(), &blocks); err != nil {
 					t.Fatalf("Failed to decode response body: %v", err)
 				}

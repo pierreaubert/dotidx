@@ -48,4 +48,3 @@ func ParseFlags() Config {
 		Live:           *live,
 	}
 }
-
