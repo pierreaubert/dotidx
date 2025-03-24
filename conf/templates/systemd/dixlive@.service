@@ -1,9 +1,0 @@
-[Unit]
-Description=Dix service to continously index blocks
-After=network.target polkadot-node-archive.service
-
-[Service]
-EnvironmentFile=/home/pierre/bin/dotidx-dist-horn/etc/dixlive-%i.conf
-PassEnvironment=CHAINREADER DATABASE CHAIN
-ExecStart=/home/pierre/bin/dotidx-dist-horn/bin/dixlive -chainreader=${CHAINREADER} -database=${DATABASE} -chain ${CHAIN}
-

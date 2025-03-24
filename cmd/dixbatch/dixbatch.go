@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -70,6 +68,10 @@ func main() {
 	}
 	log.Printf("Current head block is %d", headBlockID)
 
+	if config.EndRange == -1 {
+		config.EndRange = headBlockID
+	}
+
 	// ----------------------------------------------------------------------
 	// Set up context with cancellation for graceful shutdown
 	// ----------------------------------------------------------------------
@@ -82,30 +84,7 @@ func main() {
 	// ----------------------------------------------------------------------
 	// Database
 	// ----------------------------------------------------------------------
-	var db *sql.DB
-	if strings.Contains(config.DatabaseURL, "postgres") {
-		// Ensure sslmode=disable is in the PostgreSQL URI if not already present
-		if !strings.Contains(config.DatabaseURL, "sslmode=") {
-			if strings.Contains(config.DatabaseURL, "?") {
-				config.DatabaseURL += "&sslmode=disable"
-			} else {
-				config.DatabaseURL += "?sslmode=disable"
-			}
-		}
-
-		// Create database connection
-		var err error
-		db, err = sql.Open("postgres", config.DatabaseURL)
-		if err != nil {
-			log.Fatalf("Error opening database: %v", err)
-		}
-		defer db.Close()
-	} else {
-		log.Fatalf("unsupported database: %s", config.DatabaseURL)
-	}
-
-	// Create database instance
-	database := dotidx.NewSQLDatabase(db, ctx)
+	database := dotidx.NewSQLDatabase(config)
 
 	// Create tables
 	firstBlock, err := reader.FetchBlock(ctx, 1)

@@ -43,14 +43,10 @@ func main() {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
 
-	// Set up context with cancellation for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	// Handle OS signals for graceful shutdown
 	dotidx.SetupSignalHandler(cancel)
 
-	// Database
 	var db *sql.DB
 	if strings.Contains(config.DatabaseURL, "postgres") {
 		// Ensure sslmode=disable is in the PostgreSQL URI if not already present
@@ -73,12 +69,10 @@ func main() {
 		log.Fatalf("unsupported database: %s", config.DatabaseURL)
 	}
 
-	database := dotidx.NewSQLDatabase(db, ctx)
-
+	database := dotidx.NewSQLDatabaseWithDB(db)
 	if err := database.Ping(); err != nil {
 		log.Fatalf("Failed to ping PostgreSQL: %v", err)
 	}
-
 	log.Printf("Successfully connected to database %s", config.DatabaseURL)
 
 	// ----------------------------------------------------------------------

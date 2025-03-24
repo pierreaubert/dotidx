@@ -20,7 +20,7 @@ type CompletionRateResponse struct {
 func (f *Frontend) getCompletionRate() (float64, int, error) {
 
 	query := fmt.Sprintf(`SELECT sum(total*100)/max(max_block_id), max(max_block_id) FROM %s;`,
-		dotidx.GetStatsPerMonthTableName(f.config))
+		dotidx.GetStatsPerMonthTableName(f.config.Relaychain, f.config.Chain))
 
 	log.Printf("%s", query)
 
@@ -129,7 +129,7 @@ func (f *Frontend) getMonthlyStats() ([]MonthlyStats, error) {
 	query := fmt.Sprintf(`
 		SELECT *
 		FROM %s;
-	`, dotidx.GetStatsPerMonthTableName(f.config))
+	`, dotidx.GetStatsPerMonthTableName(f.config.Relaychain, f.config.Chain))
 
 	// log.Printf("%s", query)
 

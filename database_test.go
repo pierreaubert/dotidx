@@ -1,7 +1,6 @@
 package dotidx
 
 import (
-	"context"
 	"encoding/json"
 	"sync"
 	"testing"
@@ -79,7 +78,7 @@ func TestSaveToDatabase(t *testing.T) {
 		FlushTimeout: 10 * time.Second, // Long timeout to ensure size triggers flush, not time
 	}
 
-	database := NewSQLDatabase(db, context.Background())
+	database := NewSQLDatabaseWithDB(db)
 
 	// Create a wait group to wait for async processing
 	var wg sync.WaitGroup
@@ -133,7 +132,7 @@ func TestNewSQLDatabaseWithPool(t *testing.T) {
 	}
 
 	// Create database with custom pool configuration
-	database := NewSQLDatabaseWithPool(db, context.Background(), customConfig)
+	database := NewSQLDatabaseWithPool(db, customConfig)
 
 	// Verify that the pool configuration was stored correctly
 	assert.Equal(t, customConfig.MaxOpenConns, database.poolCfg.MaxOpenConns, "MaxOpenConns should match")
@@ -154,7 +153,7 @@ func TestDatabaseClose(t *testing.T) {
 	}
 
 	// Create database instance
-	database := NewSQLDatabase(db, context.Background())
+	database := NewSQLDatabaseWithDB(db)
 
 	// Mock Close expectation
 	mock.ExpectClose()
@@ -193,7 +192,7 @@ func TestDatabaseClose(t *testing.T) {
 // 	// Expect the third query to create the index on address column
 // 	mock.ExpectExec("CREATE INDEX IF NOT EXISTS public.address2blocks_polkadot_chain_address_idx").WillReturnResult(sqlmock.NewResult(0, 0))
 
-// 	database := NewSQLDatabase(db, context.Background())
+// 	database := NewSQLDatabaseWithDB(db)
 
 // 	// Call the function being tested
 // 	err = database.CreateTable(testConfig)

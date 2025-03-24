@@ -23,7 +23,7 @@ func ParseFlags() Config {
 	databaseURL := flag.String("database", "", "Database URL")
 
 	startRange := flag.Int("start", 1, "Start of the integer range")
-	endRange := flag.Int("end", 10, "End of the integer range")
+	endRange := flag.Int("end", -1, "End of the integer range")
 	batchSize := flag.Int("batch", 10, "Number of items to collect before writing to database")
 	maxWorkers := flag.Int("workers", 5, "Maximum number of concurrent workers")
 	flushTimeout := flag.Duration("flush", 30*time.Second, "Maximum time to wait before flushing data to database")

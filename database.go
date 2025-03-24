@@ -1,7 +1,6 @@
 package dotidx
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -10,6 +9,11 @@ import (
 	"sync"
 	"time"
 )
+
+type DatabaseInfo struct {
+	Relaychain string
+	Chain      string
+}
 
 // Database defines the interface for database operations
 type Database interface {
@@ -21,6 +25,8 @@ type Database interface {
 	GetStats() *MetricsStats
 	DoUpgrade(config Config) error
 	Close() error
+	UpdateMaterializedTables(relayChain, chain string) error
+	GetDatabaseInfo() ([]DatabaseInfo, error)
 }
 
 // DBPoolConfig contains the configuration for the database connection pool
@@ -52,7 +58,6 @@ const SQLDatabaseSchemaVersion = 2
 // SQLDatabase implements Database using SQL
 type SQLDatabase struct {
 	db      *sql.DB
-	context context.Context
 	metrics *Metrics
 	poolCfg DBPoolConfig
 
@@ -68,15 +73,42 @@ type SQLDatabase struct {
 }
 
 // NewSQLDatabase creates a new Database instance
-func NewSQLDatabase(db *sql.DB, context context.Context) *SQLDatabase {
+func NewSQLDatabaseWithDB(db *sql.DB) *SQLDatabase {
 	return NewSQLDatabaseWithPool(
 		db,
-		context,
+		DefaultDBPoolConfig())
+}
+
+// NewSQLDatabase creates a new Database instance
+func NewSQLDatabase(config Config) *SQLDatabase {
+	var db *sql.DB
+	if strings.Contains(config.DatabaseURL, "postgres") {
+		// Ensure sslmode=disable is in the PostgreSQL URI if not already present
+		if !strings.Contains(config.DatabaseURL, "sslmode=") {
+			if strings.Contains(config.DatabaseURL, "?") {
+				config.DatabaseURL += "&sslmode=disable"
+			} else {
+				config.DatabaseURL += "?sslmode=disable"
+			}
+		}
+
+		// Create database connection
+		var err error
+		db, err = sql.Open("postgres", config.DatabaseURL)
+		if err != nil {
+			log.Fatalf("Error opening database: %v", err)
+		}
+		defer db.Close()
+	} else {
+		log.Fatalf("unsupported database: %s", config.DatabaseURL)
+	}
+	return NewSQLDatabaseWithPool(
+		db,
 		DefaultDBPoolConfig())
 }
 
 // NewSQLDatabaseWithPool creates a new Database instance with custom connection pool settings
-func NewSQLDatabaseWithPool(db *sql.DB, context context.Context, poolCfg DBPoolConfig) *SQLDatabase {
+func NewSQLDatabaseWithPool(db *sql.DB, poolCfg DBPoolConfig) *SQLDatabase {
 	// Configure connection pool
 	db.SetMaxOpenConns(poolCfg.MaxOpenConns)
 	db.SetMaxIdleConns(poolCfg.MaxIdleConns)
@@ -85,7 +117,6 @@ func NewSQLDatabaseWithPool(db *sql.DB, context context.Context, poolCfg DBPoolC
 
 	return &SQLDatabase{
 		db:                 db,
-		context:            context,
 		materializedTicker: time.NewTicker(15 * time.Minute),
 		metrics:            NewMetrics("Postgres"),
 		poolCfg:            poolCfg,
@@ -180,9 +211,9 @@ func GetAddressTableName(config Config) (name string) {
 	return
 }
 
-func GetStatsPerMonthTableName(config Config) (name string) {
-	chainName := sanitizeChainName(config.Chain, config.Relaychain)
-	name = fmt.Sprintf("%s.stats_per_month_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
+func GetStatsPerMonthTableName(relayChain, chain string) (name string) {
+	chainName := sanitizeChainName(chain, relayChain)
+	name = fmt.Sprintf("%s.stats_per_month_%s_%s", schemaName, strings.ToLower(relayChain), chainName)
 	return
 }
 
@@ -340,7 +371,7 @@ GRANT ALL ON TABLE %[1]s_%1[2]d TO dotidx;
 
 func (s *SQLDatabase) CreateMaterializedTableForStats(config Config) error {
 	tableName := GetBlocksTableName(config)
-	statsPerMonthViewName := GetStatsPerMonthTableName(config)
+	statsPerMonthViewName := GetStatsPerMonthTableName(config.Relaychain, config.Chain)
 	query := fmt.Sprintf(`
 		CREATE MATERIALIZED VIEW IF NOT EXISTS %s AS
                 SELECT
@@ -728,10 +759,10 @@ func (s *SQLDatabase) GetStats() *MetricsStats {
 	return s.metrics.GetStats()
 }
 
-func (s *SQLDatabase) UpdateMaterializedTables(config Config) error {
+func (s *SQLDatabase) UpdateMaterializedTables(relayChain, chain string) error {
 
 	template := fmt.Sprintf(`REFRESH MATERIALIZED VIEW [ CONCURRENTLY ] %s`,
-		GetStatsPerMonthTableName(config))
+		GetStatsPerMonthTableName(relayChain, chain))
 
 	_, err := s.db.Exec(template)
 	if err != nil {
@@ -741,13 +772,23 @@ func (s *SQLDatabase) UpdateMaterializedTables(config Config) error {
 	return nil
 }
 
-func (s *SQLDatabase) UpdateDatabaseStats(config Config) error {
-	for {
-		select {
-		case <-s.context.Done():
-			return s.context.Err()
-		case <-s.materializedTicker.C:
-			s.UpdateMaterializedTables(config)
-		}
+func (s *SQLDatabase) GetDatabaseInfo() ([]DatabaseInfo, error) {
+	infos := make([]DatabaseInfo, 0)
+	rows, err := s.db.Query(
+		fmt.Sprintf(
+			`SELECT relay_chain as relaychain, chain from %s.dotidx;`,
+			schemaName))
+	if err != nil {
+		return nil, fmt.Errorf("Cannot get dotidx information from database: %v", err)
 	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var info DatabaseInfo
+		if err = rows.Scan(&info.Relaychain, &info.Chain); err != nil {
+			return nil, fmt.Errorf("Cannot scan dotidx rows")
+		}
+		log.Printf("%s:%s", info.Relaychain, info.Chain)
+	}
+	return infos, nil
 }

@@ -1,9 +1,0 @@
-# Connection string for the PostgreSQL database.
-
-DATA_SOURCE_NAME='user={{.Monitoring.User}} host={{.DotidxRun}} dbname={{.DotidxDB.Name}} port={{.DotidxDB.Port}}'
-
-# Set the command-line arguments to pass to the server.
-# Due to shell escaping, to pass backslashes for regexes, you need to double
-# them (\\d for \d). If running under systemd, you need to double them again
-# (\\\\d to mean \d), and escape newlines too.
-ARGS=""

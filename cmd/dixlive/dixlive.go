@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -88,32 +86,8 @@ func main() {
 	// ----------------------------------------------------------------------
 	// Database
 	// ----------------------------------------------------------------------
-	var db *sql.DB
-	if strings.Contains(config.DatabaseURL, "postgres") {
-		// Ensure sslmode=disable is in the PostgreSQL URI if not already present
-		if !strings.Contains(config.DatabaseURL, "sslmode=") {
-			if strings.Contains(config.DatabaseURL, "?") {
-				config.DatabaseURL += "&sslmode=disable"
-			} else {
-				config.DatabaseURL += "?sslmode=disable"
-			}
-		}
+	database := dotidx.NewSQLDatabase(config)
 
-		// Create database connection
-		var err error
-		db, err = sql.Open("postgres", config.DatabaseURL)
-		if err != nil {
-			log.Fatalf("Error opening database: %v", err)
-		}
-		defer db.Close()
-	} else {
-		log.Fatalf("unsupported database: %s", config.DatabaseURL)
-	}
-
-	// Create database instance
-	database := dotidx.NewSQLDatabase(db, ctx)
-
-	// Create tables
 	firstBlock, err := reader.FetchBlock(ctx, 1)
 	if err != nil {
 		log.Fatalf("Cannot get block 1: %v", err)
@@ -131,18 +105,19 @@ func main() {
 	if err != nil {
 		lastTimestamp = time.Now().Format("2006-01-02 15:04:05")
 	}
-
 	if err := database.CreateTable(config, firstTimestamp, lastTimestamp); err != nil {
 		log.Fatalf("Error creating tables: %v", err)
 	}
 
-	// Test the connection
 	if err := database.Ping(); err != nil {
 		log.Fatalf("Failed to ping PostgreSQL: %v", err)
 	}
 
 	log.Printf("Successfully connected to database %s", config.DatabaseURL)
 
+	// ----------------------------------------------------------------------
+	// Monitoring
+	// ----------------------------------------------------------------------
 	log.Println("Starting monitoring for new blocks...")
 	if err := monitorNewBlocks(ctx, config, database, reader, headBlockID); err != nil {
 		log.Fatalf("Error monitoring blocks: %v", err)
