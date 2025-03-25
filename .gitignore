@@ -1,13 +1,7 @@
-dotidx
-data
-logs
-run
 .*~
 *~
 \#*
 .#*
-node_modules
-.idea
 TAGS
 ETAGS
 *.log
@@ -15,6 +9,8 @@ ETAGS
 cmd/dixbatch/dixbatch
 cmd/dixfe/dixfe
 cmd/dixlive/dixlive
+cmd/dixcron/dixcron
+cmd/dixmgr/dixmgr
 dist-simple
 dist-horn
 dixlive
@@ -22,3 +18,6 @@ dixfe
 dixbatch
 dixmgr
 dixcron
+.vscode
+.idea
+tests

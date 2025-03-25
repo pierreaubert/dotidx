@@ -69,51 +69,52 @@ async function fetchMonthlyStats() {
     if (!response.ok) {
       throw new Error(`HTTP error ${response.status}`);
     }
-    const data = await response.json();
+    const datas = await response.json();
 
-    monthlyResult.classList.remove("is-hidden");
-
-    // Format the monthly stats data
+    // Create content and title
     let html = '<div class="content">';
-    html += '<h4 class="subtitle">Monthly Processing Statistics</h4>';
-    html += '<table class="table is-striped is-fullwidth">';
-    html += `
-            <thead>
-                <tr>
-                    <th>Month</th>
-                    <th>Blocks Processed</th>
-                    <th>First Block</th>
-                    <th>Last Block</th>
-                </tr>
-            </thead>
-            <tbody>
-        `;
-
-    // Sort months chronologically
-    const sortedMonths = Object.keys(data.data).sort((a, b) => {
-      const [yearA, monthA] = a.split("-").map(Number);
-      const [yearB, monthB] = b.split("-").map(Number);
-      if (yearA !== yearB) return yearA - yearB;
-      return monthA - monthB;
-    });
-
-    sortedMonths.forEach((month) => {
-      const stats = data.data[month];
-      html += `
-                <tr>
-                    <td>${stats.date}</td>
-                    <td>${stats.count}</td>
-                    <td>${stats.min_block}</td>
-                    <td>${stats.max_block}</td>
-                </tr>
-            `;
-    });
-
-    html += "</tbody>";
-    html += "</table>";
-    html += "</div>";
+    html += '<div id="monthly-chart" style="width:100%; height:400px;"></div>';
+    html += '</div>';
 
     monthlyData.innerHTML = html;
+    monthlyResult.classList.remove("is-hidden");
+
+    const plotDiv = document.getElementById('monthly-chart');
+
+    const chains = new Set(datas.map((d) => d.Chain));
+    const traces = [...chains].map((chain) => ({
+        name: '#' + chain,
+        x: datas.filter((d) => d.Chain == chain).map((d)=> d.date),
+        y: datas.filter((d) => d.Chain == chain).map((d)=> d.count),
+        type: 'bar',
+      }));
+
+    const layout = {
+      title: 'Indexed blocks per month per chain',
+      xaxis: {
+        title: 'Month',
+        tickangle: -45
+      },
+      yaxis: {
+        title: 'Block Count per month',
+        rangemode: 'tozero'
+      },
+     barmode: 'stack',
+      legend: {
+        orientation: 'h',
+        y: -0.2
+      },
+      margin: {
+        l: 50,
+        r: 50,
+        b: 100,
+        t: 50,
+        pad: 4
+      }
+    };
+
+    Plotly.newPlot(plotDiv, traces, layout);
+
   } catch (error) {
     showError("monthly", error.message);
   }
