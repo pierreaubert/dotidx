@@ -16,7 +16,7 @@ async function fetchCompletionRate() {
     if (!response.ok) {
       throw new Error(`HTTP error ${response.status}`);
     }
-    const data = await response.json();
+    const datas = await response.json();
 
     completionResult.classList.remove("is-hidden");
 
@@ -33,6 +33,9 @@ async function fetchCompletionRate() {
                 </tr>
             </thead>
             <tbody>
+        `;
+      datas.forEach( (data) => {
+	  html += `
                 <tr>
                     <td>${data.RelayChain}</td>
                     <td>${data.Chain}</td>
@@ -40,12 +43,13 @@ async function fetchCompletionRate() {
                     <td>${data.head_id}</td>
                     <td>
                 </tr>
-            </tbody>
-        `;
-    html += "</table>";
-    html += "</div>";
+              `;
+      });
+      html += "</tbody>";
+      html += "</table>";
+      html += "</div>";
 
-    completionData.innerHTML = html;
+      completionData.innerHTML = html;
   } catch (error) {
     showError("completion", error.message);
   }

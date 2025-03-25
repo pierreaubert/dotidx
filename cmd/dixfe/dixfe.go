@@ -80,7 +80,7 @@ func main() {
 	// ----------------------------------------------------------------------
 	// REST Frontend
 	// ----------------------------------------------------------------------
-	frontend := NewFrontend(db, config)
+	frontend := NewFrontend(database, db, config)
 
 	if err := frontend.Start(ctx.Done()); err != nil {
 		log.Printf("Error starting frontend server: %v", err)
@@ -89,6 +89,7 @@ func main() {
 
 // Frontend handles the REST API for dotidx
 type Frontend struct {
+	database       *dotidx.SQLDatabase
 	db             *sql.DB
 	config         dotidx.Config
 	listenAddr     string
@@ -97,9 +98,10 @@ type Frontend struct {
 }
 
 // NewFrontend creates a new Frontend instance
-func NewFrontend(db *sql.DB, config dotidx.Config) *Frontend {
+func NewFrontend(database *dotidx.SQLDatabase, db *sql.DB, config dotidx.Config) *Frontend {
 	listenAddr := fmt.Sprintf("%s:%d", config.FrontendIP, config.FrontendPort)
 	return &Frontend{
+		database:       database,
 		db:             db,
 		config:         config,
 		listenAddr:     listenAddr,
@@ -112,6 +114,7 @@ func NewFrontend(db *sql.DB, config dotidx.Config) *Frontend {
 func (f *Frontend) Start(cancelCtx <-chan struct{}) error {
 	mux := http.NewServeMux()
 
+	log.Printf("Serving at http://%s/index.html", f.listenAddr)
 	log.Printf("Serving static files from: %s", f.staticPath)
 	fs := http.FileServer(http.Dir(f.staticPath))
 	mux.Handle("/", http.StripPrefix("/", fs))
