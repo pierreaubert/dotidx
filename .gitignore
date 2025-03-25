@@ -17,3 +17,8 @@ cmd/dixfe/dixfe
 cmd/dixlive/dixlive
 dist-simple
 dist-horn
+dixlive
+dixfe
+dixbatch
+dixmgr
+dixcron

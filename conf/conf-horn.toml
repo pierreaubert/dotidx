@@ -1,0 +1,62 @@
+# where do you want to generate the config files
+target_dir = "./dist"
+# name of your configuration
+name = "horn"
+dotidx_root = "/dotidx"
+dotidx_backup = "/dotidx/backup"
+dotidx_run = "/dotidx/run"
+dotidx_logs = "/dotidx/logs"
+
+[dotidx_db]
+type = "postgres"
+version = 16
+name = "dotidx"
+ip = "192.168.1.36"
+user = "dotidx"
+port = 5434
+memory = "64GB"
+data_dir = "/polkadot/postgres_data/dotidx"
+run_dir = "/polkadot/postgres_data/run"
+whitelisted_ip = ["192.168.1.102", "192.168.1.36", "192.168.1.37"]
+
+[parachains.polkadot.polkadot]
+name = "polkadot"  # name for the polkadot binary --chain parameter
+port = 9944
+basepath = "/polkadot/polkadot-node-archive"
+chainreader_ip = "192.168.1.36"
+chainreader_port = 10800
+sidecar_ip = "127.0.0.1"
+sidecar_port = 10800  # will use +1 +2 etc for each sidecar instance
+
+[parachains.polkadot.assethub]
+name = "asset-hub-polkadot"  # name for the polkadot binary --chain parameter
+port = 9946
+basepath = "/polkadot/assethub-node-archive"
+chainreader_ip = "192.168.1.36"
+chainreader_port = 10900
+sidecar_ip = "127.0.0.1"
+sidecar_port = 10900  # will use +1 +2 etc for each sidecar instance
+
+[parachains.polkadot.people]
+name = "people-polkadot"  # name for the polkadot binary --chain parameter
+port = 9948
+basepath = "/polkadot/people-node-archive"
+chainreader_ip = "192.168.1.36"
+chainreader_port = 11000
+sidecar_ip = "127.0.0.1"
+sidecar_port = 11000  # will use +1 +2 etc for each sidecar instance
+
+[parachains.polkadot.collectives]
+name = "collectives-polkadot"  # name for the polkadot binary --chain parameter
+port = 9950
+basepath = "/polkadot/collectives-node-archive"
+chainreader_ip = "192.168.1.36"
+chainreader_port = 11100
+sidecar_ip = "127.0.0.1"
+sidecar_port = 11100  # will use +1 +2 etc for each sidecar instance
+
+[filesystem]
+zfs = true
+
+[monitoring]
+user = "prometheus"

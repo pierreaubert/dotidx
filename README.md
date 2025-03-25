@@ -80,12 +80,13 @@ total 8
 
 ## Usage
 
-The system built 4 binaries:
+The system built 5 binaries:
 
-- `dixbatch` : pull large amount of blocks into the database
-- `dixlive`: can pull the head of 1 or many chains into the database (and run continously)
-- `dixfe`: a web frontend to demonstrate how to use the data in the database
-- `dixmgr`: a service that launches and monitor all the various services (unrelease yet)
+- `dixbatch` : pull large amount of blocks into the database.
+- `dixlive`: can pull the head of 1 or many chains into the database (and run continously).
+- `dixfe`: a web frontend to demonstrate how to use the data in the database.
+- `dixcron`: a cron system running long range queries on the database.
+- `dixmgr`: a service that launches and monitor all the various services (unrelease yet).
 
 ```bash
 dotidx -start=1000 -end=2000 -sidecar=http://localhost:8080 -postgres="postgres://user:pass@localhost:5432/db" -workers 5 -batch 10
@@ -110,10 +111,10 @@ The web API is available at 'http://localhost:8080'
 | Option         | Description                                           | Default |
 |----------------|-------------------------------------------------------|---------|
 | `-start`       | Start of the block range                              | 1       |
-| `-end`         | End of the block range                                | 10      |
+| `-end`         | End of the block range                                | HeadID  |
 | `-chainreader` | Sidecar API URL (required)                            | -       |
 | `-database`    | PostgreSQL connection URI (required)                  | -       |
-| `-batch`       | Number of items to collect before writing to database | 100     |
+| `-batch`       | Number of items to collect before writing to database | 10      |
 | `-workers`     | Maximum number of concurrent workers                  | 5       |
 | `-flush`       | Maximum time to wait before flushing data to database | 30s     |
 | `-live`        | Index new blocks on the fly                           |         |

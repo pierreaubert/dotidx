@@ -1,0 +1,4 @@
+  # monitoring DOTLAKE database
+  - job_name: postgres
+    static_configs:
+      - targets: ["{{.DotidxDB.IP}}:9187"]

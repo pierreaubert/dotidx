@@ -46,7 +46,10 @@ func validateConfig(config dotidx.Config) error {
 
 func main() {
 	// Parse command line arguments
-	config := dotidx.ParseFlags()
+	config, err := dotidx.ParseFlags()
+	if err != nil {
+		log.Fatalf("Invalid configuration: %v", err)
+	}
 
 	// Set up logging
 	log.SetOutput(os.Stdout)

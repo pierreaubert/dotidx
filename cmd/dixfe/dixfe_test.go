@@ -28,7 +28,7 @@ func TestHandleAddressToBlocks(t *testing.T) {
 	}
 
 	// Create frontend instance
-	frontend := NewFrontend(db, config, ":8080")
+	frontend := NewFrontend(db, config)
 
 	// Test cases
 	testCases := []struct {
@@ -191,7 +191,7 @@ func TestFrontendStart(t *testing.T) {
 	}
 
 	// Create frontend instance with a random port (to avoid conflicts)
-	frontend := NewFrontend(db, config, ":0")
+	frontend := NewFrontend(db, config)
 
 	// Create context with cancel
 	ctx, cancel := context.WithCancel(context.Background())
