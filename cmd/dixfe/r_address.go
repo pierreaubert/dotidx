@@ -104,25 +104,13 @@ func (f *Frontend) getBlocksByAddress(address string, count, from, to string) ([
 	}
 
 	query := fmt.Sprintf(
-		`SELECT
-			b.block_id,
-			b.created_at,
-			b.hash,
-			b.parent_hash,
-			b.state_root,
-			b.extrinsics_root,
-			b.author_id,
-			b.finalized,
-			b.on_initialize,
-			b.on_finalize,
-			b.logs,
-			b.extrinsics
+		`SELECT * FROM (SELECT b.*
 		FROM %s b
 		JOIN %s a ON b.block_id = a.block_id
 		WHERE a.address = '%s'
 		%s
 		ORDER BY b.block_id DESC
-		LIMIT %s;`,
+		LIMIT %s) ORDER BY block_id ASC;`,
 		dotidx.GetBlocksTableName(f.config),
 		dotidx.GetAddressTableName(f.config),
 		address,

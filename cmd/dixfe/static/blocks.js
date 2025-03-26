@@ -1,13 +1,10 @@
-// blocks.js - Block-related functionality for DotIDX
-import {showError} from './misc.js';
+import {showError, escapeHtml, highlightAddressMatches } from "./misc.js";
 
-// Function to render block content recursively
 function renderBlockContent(content, searchAddress) {
   if (content === null || content === undefined) {
     return '<span class="has-text-grey">null</span>';
   }
 
-  // Handle arrays
   if (Array.isArray(content)) {
     if (content.length === 0) {
       return '<span class="has-text-grey">(empty array)</span>';
@@ -26,7 +23,6 @@ function renderBlockContent(content, searchAddress) {
     return html;
   }
 
-  // Handle objects
   if (typeof content === "object") {
     if (Object.keys(content).length === 0) {
       return '<span class="has-text-grey">(empty object)</span>';
@@ -45,16 +41,13 @@ function renderBlockContent(content, searchAddress) {
     return html;
   }
 
-  // Handle strings, numbers, booleans, etc.
   if (typeof content === "string") {
-    // Check if this string matches the search address (case insensitive)
     const escapedContent = escapeHtml(content);
     const highlightedContent = highlightAddressMatches(
       escapedContent,
       searchAddress,
     );
 
-    // Format long strings (especially hashes) more nicely
     if (content.length > 50) {
       return `<span class="is-family-monospace break-word">${highlightedContent}</span>`;
     }
@@ -63,8 +56,6 @@ function renderBlockContent(content, searchAddress) {
 
   return String(content);
 }
-
-import { escapeHtml, highlightAddressMatches, escapeRegExp } from "./misc.js";
 
 async function fetchBlocks() {
   const searchInput = document.getElementById("search-address");

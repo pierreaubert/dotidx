@@ -44,7 +44,7 @@ export function escapeRegExp(string) {
 }
 
 // Helper function to format JSON as a table
-function formatJsonToTable(data) {
+export function formatJsonToTable(data) {
   if (!data || typeof data !== "object") {
     return "<p>No data available.</p>";
   }
@@ -118,6 +118,7 @@ export function formatTimestamp(timestamp) {
     const minutes = String(date.getMinutes()).padStart(2, "0");
     return `${day} ${hours}:${minutes}`;
   } catch (e) {
+      console.error("Error in formatTimestamp:", e);
     return timestamp;
   }
 }

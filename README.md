@@ -2,7 +2,7 @@
 
 A utility for fetching block data from a Polkadot archive node via Sidecar and storing the data in a PostgreSQL database. It is relatively fast only limited by the speed of your disks. It also supports concurrent processing of multiple blocks.
 
-Quality is currently *beta*.
+Quality is currently *beta*. Contributions are very welcome!
 
 ## Features
 
@@ -166,15 +166,7 @@ TEST_POSTGRES_URI="postgres://user:password@localhost:5432/testdb" go test -v ./
 
 ## Next features
 
-- integrate [go-substrate-rpc-client](https://github.com/centrifuge/go-substrate-rpc-client/blob/master/main_test.go) and see if it can replace Sidecar
-- use the p2p protocol instead of the rpc one (easy with gossamer).
-- add another database support, easy with the interface. Options are ScyllaDB, Cassandra, Vitess or FoundationDB.
-- more testing for other parachains (currently only Relay Chain and StateMint are tested).
-- automate the monitoring, nicely working but also a pile of config files and shell scripts.
-- harden the solution (Vault or encrypted credential in systemd), firewall.
-- compare performance of doing json parsing in the DB or in the frontend.
-- replace the pile of shell scripts with a proper installer, see `cmd/dixmgr`.
-
+- see [first project on GH](https://github.com/users/pierreaubert/projects/2)
 
 ## License
 

@@ -1,5 +1,4 @@
-// stats.js - Statistics-related functionality for DotIDX
-
+// import Plotly from "plotly.js-dist-min";
 import { showError } from "./misc.js";
 
 // Function to fetch and display completion rate

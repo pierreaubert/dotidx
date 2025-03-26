@@ -1,11 +1,12 @@
-.*~
-*~
-\#*
-.#*
+**/*~
+**/#*.*#
+**/.#*
+**/*.bak
+**/*.so
+**/*.log
+**/*.gz
 TAGS
 ETAGS
-*.log
-*.gz
 cmd/dixbatch/dixbatch
 cmd/dixfe/dixfe
 cmd/dixlive/dixlive
@@ -21,3 +22,5 @@ dixcron
 .vscode
 .idea
 tests
+package-lock.json
+node_modules

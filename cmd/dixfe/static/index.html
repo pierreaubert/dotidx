@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DIX a Polkadot explorer</title>
+    <title>DIX</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.3/css/bulma.min.css" integrity="sha256-RwYNyYLkMTjyYn8FRzVzQFtHXuHg9dpfkPCuf6j2XDM=" crossorigin="anonymous">
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.plot.ly/plotly-3.0.1.min.js" charset="utf-8"></script>
@@ -25,6 +25,9 @@
             height: 350px;
             margin-bottom: 1.5rem;
         }
+        .balance-summary {
+            margin-bottom: 1.5rem;
+        }
     </style>
 </head>
 <body>
@@ -42,6 +45,7 @@
 
         <div id="navbarMenu" class="navbar-menu">
             <div class="navbar-end">
+                <a class="navbar-item" href="/index.html?tab=stats">Statistics</a>
                 <a class="navbar-item" href="https://github.com/pierreaubert/dotidx" target="_blank" rel="noopener noreferrer">GitHub</a>
             </div>
         </div>
@@ -124,8 +128,7 @@
                 <div class="box">
                     <div id="balance-result" class="is-hidden">
                         <div class="notification is-info">
-                            <h3 class="title is-4">Balance Information</h3>
-                            <!-- Graph container -->
+                            <div id="balance-summary" class="balance-summary"></div>
                             <div id="balance-graph" class="balance-graph"></div>
                             <div id="balance-data"></div>
                         </div>

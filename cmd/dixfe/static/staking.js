@@ -1,4 +1,4 @@
-// staking.js - Staking-related functionality for DotIDX
+// import {Plotly} from "plotly.js-dist-min";
 import { showError, formatTimestamp } from "./misc.js";
 
 // Function to build staking graph data
@@ -286,8 +286,6 @@ function extractStakingsFromBlocks(blocks, address) {
             return;
           }
 
-          console.log('Loop: '+extrinsic.method.pallet+' '+extrinsic.method.method);
-
           let amount = 0.0;
           if (
             extrinsic.method.pallet === "stakings" &&
@@ -389,14 +387,12 @@ async function fetchStaking() {
       stakingsUrl += `&to=${encodeURIComponent(toDate)}`;
     }
 
-    console.log("Fetching stakings from URL:", stakingsUrl);
     const response = await fetch(stakingsUrl);
     if (!response.ok) {
       throw new Error(`HTTP error ${response.status}`);
     }
     const textRaw = await response.text();
     const result = JSON.parse(textRaw);
-    console.log("Stakings Data:", textRaw); // Debug log
 
     const resultDiv = document.getElementById("staking-result");
     const dataDiv = document.getElementById("staking-data");
