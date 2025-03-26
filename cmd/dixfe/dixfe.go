@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -95,11 +97,14 @@ type Frontend struct {
 	listenAddr     string
 	metricsHandler *dotidx.Metrics
 	staticPath     string
+	proxy          *httputil.ReverseProxy
 }
 
 // NewFrontend creates a new Frontend instance
 func NewFrontend(database *dotidx.SQLDatabase, db *sql.DB, config dotidx.Config) *Frontend {
 	listenAddr := fmt.Sprintf("%s:%d", config.FrontendIP, config.FrontendPort)
+	remote, _ := url.Parse(config.ChainReaderURL)
+	proxy := httputil.NewSingleHostReverseProxy(remote)
 	return &Frontend{
 		database:       database,
 		db:             db,
@@ -107,6 +112,7 @@ func NewFrontend(database *dotidx.SQLDatabase, db *sql.DB, config dotidx.Config)
 		listenAddr:     listenAddr,
 		metricsHandler: dotidx.NewMetrics("Frontend"),
 		staticPath:     config.FrontendStatic,
+		proxy:          proxy,
 	}
 }
 
@@ -119,11 +125,12 @@ func (f *Frontend) Start(cancelCtx <-chan struct{}) error {
 	fs := http.FileServer(http.Dir(f.staticPath))
 	mux.Handle("/", http.StripPrefix("/", fs))
 
-	mux.HandleFunc("/address2blocks", f.handleAddressToBlocks)
-	mux.HandleFunc("/balances", f.handleBalances)
-	mux.HandleFunc("/staking", f.handleStaking)
-	mux.HandleFunc("/stats/completion_rate", f.handleCompletionRate)
-	mux.HandleFunc("/stats/per_month", f.handleStatsPerMonth)
+	mux.HandleFunc("GET /address2blocks", f.handleAddressToBlocks)
+	mux.HandleFunc("GET /balances", f.handleBalances)
+	mux.HandleFunc("GET /staking", f.handleStaking)
+	mux.HandleFunc("GET /stats/completion_rate", f.handleCompletionRate)
+	mux.HandleFunc("GET /stats/per_month", f.handleStatsPerMonth)
+	mux.HandleFunc("GET /accounts/{address}/balance-info", f.handleProxy)
 
 	server := &http.Server{
 		Addr:    f.listenAddr,
