@@ -60,6 +60,19 @@ function createStakingGraph(graphData, graphDiv, address) {
         };
     });
 
+    let pos = -1;
+    const avgRewards = rewards.map((item) => {
+        const window = 5;
+        pos = pos + 1;
+        const slice = rewards.slice(Math.max(0, pos - window), Math.min(pos + window, rewards.length));
+        const total = slice.map((it) => it.y).reduce((acc, val) => acc + val);
+        const avg = (total * 1000 * 3600 * 24) / (slice[slice.length - 1].x - slice[0].x);
+        return {
+            x: item.x,
+            y: avg,
+        };
+    });
+
     const deposits = graphData.map((item) => ({
         x: item.date,
         y: item.deposits,
@@ -76,15 +89,23 @@ function createStakingGraph(graphData, graphDiv, address) {
     const plotData = [
         {
             type: 'bar',
-            name: 'Staking rewards' + address,
+            name: 'Daily',
             x: rewards.map((p) => p.x),
             y: rewards.map((p) => p.y),
             hoverinfo: rewards.map((p) => '%{x}<br>%{y}'),
         },
         {
+            type: 'lines',
+            name: 'Averaged (10d)',
+            line: { width: 8 },
+            x: avgRewards.map((it) => it.x),
+            y: avgRewards.map((it) => it.y),
+        },
+        {
             type: 'scatter',
-            name: 'Cummulative rewards',
-            mode: 'lines+markers',
+            name: 'Cummulative',
+            mode: 'lines',
+            line: { width: 8 },
             markers: { size: 10 },
             x: rewards.map((p) => p.x),
             y: rewards.map((p) => p.z),
@@ -97,7 +118,7 @@ function createStakingGraph(graphData, graphDiv, address) {
     // Configure the layout
     const layout = {
         title: {
-            text: `Rewards ${cummulativeRewards.toFixed(0)} DOTs`,
+            text: `Cummulative rewards over time: ${cummulativeRewards.toFixed(0)} DOTs`,
             font: {
                 size: 18,
             },
@@ -111,13 +132,14 @@ function createStakingGraph(graphData, graphDiv, address) {
         },
         hovermode: 'closest',
         xaxis: {
-            title: 'Date',
+            title: { text: 'Date' },
         },
         yaxis: {
-            title: 'Staking',
+            title: { text: 'Daily' },
             tickformat: '.0f',
         },
         yaxis2: {
+            title: { text: 'Cummulative' },
             side: 'right',
             tickformat: '.0f',
             overlaying: 'y',
@@ -351,7 +373,7 @@ async function fetchStaking() {
 
     const url = new URL(window.location.href);
     const params = new URLSearchParams(url.search).toString();
-    const frontendUrl = `/staking?${params}`;
+    const frontendUrl = `/fe/staking?${params}`;
 
     const response = await fetch(frontendUrl);
     if (!response.ok) {

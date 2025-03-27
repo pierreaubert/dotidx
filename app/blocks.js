@@ -73,7 +73,7 @@ async function fetchBlocks() {
         return;
     }
 
-    const response = await fetch(`/block/${blockid}`);
+    const response = await fetch(`/fe/block/${blockid}`);
     if (!response.ok) {
         throw new Error(`HTTP error ${response.status}`);
     }

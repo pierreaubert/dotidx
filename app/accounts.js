@@ -5,7 +5,7 @@ function processBalance(b) {
 }
 
 export async function getAccountAt(address, blockid) {
-    const balanceUrl = '/accounts/' + address + '/balance-info?at=' + blockid;
+    const balanceUrl = '/proxy/accounts/' + address + '/balance-info?at=' + blockid;
     const response = await fetch(balanceUrl, { mode: 'cors' });
     if (!response.ok) {
         throw new Error(`HTTP error ${response.status}`);

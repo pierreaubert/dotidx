@@ -130,13 +130,14 @@ func (f *Frontend) Start(cancelCtx <-chan struct{}) error {
 	mux.Handle("GET /", http.StripPrefix("/", fs))
 
 	// fe functions
-	mux.HandleFunc("GET /address2blocks", f.handleAddressToBlocks)
-	mux.HandleFunc("GET /balances", f.handleBalances)
-	mux.HandleFunc("GET /staking", f.handleStaking)
-	mux.HandleFunc("GET /stats/completion_rate", f.handleCompletionRate)
-	mux.HandleFunc("GET /stats/per_month", f.handleStatsPerMonth)
+	mux.HandleFunc("GET /fe/address2blocks", f.handleAddressToBlocks)
+	mux.HandleFunc("GET /fe/balances", f.handleBalances)
+	mux.HandleFunc("GET /fe/blocks/{blockid}", f.handleBlock)
+	mux.HandleFunc("GET /fe/staking", f.handleStaking)
+	mux.HandleFunc("GET /fe/stats/completion_rate", f.handleCompletionRate)
+	mux.HandleFunc("GET /fe/stats/per_month", f.handleStatsPerMonth)
 	// proxy to sidecar
-	mux.HandleFunc("GET /block/{blockid}", f.handleBlock)
+	mux.HandleFunc("GET /proxy/accounts/{address}/balance-info", f.handleProxy)
 
 	server := &http.Server{
 		Addr:    f.listenAddr,

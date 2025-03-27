@@ -338,7 +338,7 @@ async function fetchBalances(balancesUrl) {
 
     const url = new URL(window.location.href);
     const params = new URLSearchParams(url.search).toString();
-    const frontendUrl = `/balances?${params}`;
+    const frontendUrl = `/fe/balances?${params}`;
 
     const response = await fetch(frontendUrl);
     if (!response.ok) {

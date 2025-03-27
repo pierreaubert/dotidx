@@ -3,7 +3,7 @@ export async function updateNav() {
     const content = `
         <div class="navbar-brand">
             <a class="navbar-item" href="/index.html">
-                <h1 class="is-size-2">DIX</h1>
+                <h1 class="is-size-2">DIX<sup>10</sup></h1>
                 <p>A block explorer<br>
                 for Polkadot!</p>
             </a>
@@ -35,19 +35,16 @@ export async function updateNav() {
     const $navbarBurgers = Array.prototype.slice.call(document.querySelectorAll('.navbar-burger'), 0);
 
     // Add a click event on each of them
-    $navbarBurgers.forEach( el => {
-	el.addEventListener('click', () => {
+    $navbarBurgers.forEach((el) => {
+        el.addEventListener('click', () => {
+            const target = el.dataset.target;
+            const $target = document.getElementById(target);
 
-	    const target = el.dataset.target;
-	    const $target = document.getElementById(target);
-
-	    // Toggle the "is-active" class on both the "navbar-burger" and the "navbar-menu"
-	    el.classList.toggle('is-active');
-	    $target.classList.toggle('is-active');
-
-	});
+            // Toggle the "is-active" class on both the "navbar-burger" and the "navbar-menu"
+            el.classList.toggle('is-active');
+            $target.classList.toggle('is-active');
+        });
     });
-
 }
 
 export async function updateHero() {
