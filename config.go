@@ -74,7 +74,7 @@ func ParseFlags() (Config, error) {
 				expectedPort = 11000
 			case "collectives":
 				expectedPort = 11100
-			case "mythical":
+			case "mythos":
 				expectedPort = 11200
 			case "frequency":
 				expectedPort = 11300

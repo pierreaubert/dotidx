@@ -404,7 +404,7 @@ func (s *SQLDatabase) CreateDotidxTable(config Config) error {
 
 	if _, err := s.db.Exec(query); err != nil {
 		log.Printf("sql %s", query)
-		return fmt.Errorf("error failed to create dotidx table: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 
 	inserts := fmt.Sprintf(`

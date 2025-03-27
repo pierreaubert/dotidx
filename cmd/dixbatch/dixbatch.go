@@ -71,8 +71,16 @@ func main() {
 	}
 	log.Printf("Current head block is %d", headBlockID)
 
+	if config.EndRange == -1 && headBlockID == 0 {
+		log.Fatal("Cannot get head block and EndRange is not set")
+	}
+
 	if config.EndRange == -1 {
 		config.EndRange = headBlockID
+	}
+
+	if headBlockID == 0 {
+		headBlockID = config.EndRange
 	}
 
 	// ----------------------------------------------------------------------
@@ -88,6 +96,13 @@ func main() {
 	// Database
 	// ----------------------------------------------------------------------
 	database := dotidx.NewSQLDatabase(config)
+
+	// Test the connection
+	if err := database.Ping(); err != nil {
+		log.Fatalf("Failed to ping PostgreSQL: %v", err)
+	}
+
+	log.Printf("Successfully connected to database %s", config.DatabaseURL)
 
 	// Create tables
 	firstBlock, err := reader.FetchBlock(ctx, 1)
@@ -111,13 +126,6 @@ func main() {
 	if err := database.CreateTable(config, firstTimestamp, lastTimestamp); err != nil {
 		log.Fatalf("Error creating tables: %v", err)
 	}
-
-	// Test the connection
-	if err := database.Ping(); err != nil {
-		log.Fatalf("Failed to ping PostgreSQL: %v", err)
-	}
-
-	log.Printf("Successfully connected to database %s", config.DatabaseURL)
 
 	// print some stats
 	go func() {
