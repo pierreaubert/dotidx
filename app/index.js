@@ -7,7 +7,6 @@ document.addEventListener('DOMContentLoaded', () => {
 async function initApp() {
     // Initialize the app
     async function init() {
-        await updateHero();
         await updateNav();
         await updateFooter();
     }

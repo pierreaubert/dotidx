@@ -2,10 +2,12 @@ export async function updateNav() {
     const elem = document.getElementById('nav');
     const content = `
         <div class="navbar-brand">
-            <a class="navbar-item" href="/">
-                <h1 class="title has-text-white">DIX a polka<strong>D</strong>ot <strong>I</strong>nde<strong>X</strong>er<h1>
+            <a class="navbar-item" href="/index.html">
+                <h1 class="is-size-2">DIX</h1>
+                <p class="">A block explorer for Polkadot:</p>
             </a>
             <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbarMenu">
+                <span aria-hidden="true"></span>
                 <span aria-hidden="true"></span>
                 <span aria-hidden="true"></span>
                 <span aria-hidden="true"></span>
@@ -13,16 +15,38 @@ export async function updateNav() {
         </div>
 
         <div id="navbarMenu" class="navbar-menu">
+            <div class="navbar-start">
+                <a class="navbar-item is-size-4" href="/balances.html">Balances</a>
+                <a class="navbar-item is-size-4" href="/staking.html">Staking</a>
+                <a class="navbar-item is-size-4" href="/blocks.html">Blocks</a>
+                <a class="navbar-item is-size-4" href="/stats.html">Statistics</a>
+            </div>
             <div class="navbar-end">
-                <a class="navbar-item" href="/balances.html">Balances</a>
-                <a class="navbar-item" href="/staking.html">Staking</a>
-                <a class="navbar-item" href="/blocks.html">Blocks</a>
-                <a class="navbar-item" href="/stats.html">Statistics</a>
-                <a class="navbar-item" href="https://github.com/pierreaubert/dotidx" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a class="navbar-item is-size-4" href="https://github.com/pierreaubert/dotidx" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a class="navbar-item is-size-4" href="https://github.com/pierreaubert/dotidx/issues/new" target="_blank" rel="noopener noreferrer">Report a bug</a>
+                <a class="navbar-item is-size-4" href="https://github.com/pierreaubert/dotidx/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">License</a>
             </div>
         </div>
 `;
     elem.innerHTML = content;
+
+    // Get all "navbar-burger" elements
+    const $navbarBurgers = Array.prototype.slice.call(document.querySelectorAll('.navbar-burger'), 0);
+
+    // Add a click event on each of them
+    $navbarBurgers.forEach( el => {
+	el.addEventListener('click', () => {
+
+	    const target = el.dataset.target;
+	    const $target = document.getElementById(target);
+
+	    // Toggle the "is-active" class on both the "navbar-burger" and the "navbar-menu"
+	    el.classList.toggle('is-active');
+	    $target.classList.toggle('is-active');
+
+	});
+    });
+
 }
 
 export async function updateHero() {
@@ -32,7 +56,6 @@ export async function updateHero() {
             <p class="title">A Polkadot Blockchain Data Explorer</p>
             <p class="subtitle">Explore balances, staking or blocks per address, accross chains and some statistics!</p>
         </div>
-    </section>
 `;
     elem.innerHTML = content;
 }
@@ -41,7 +64,7 @@ export async function updateFooter() {
     const elem = document.getElementById('footer');
     const content = `
 <div class="content has-text-centered">
-   <p><strong>DIX</strong> - A Polkadot Blockchain Data Explorer</p>
+   <p><strong>DIX</strong> - An open source Polkadot Block Explorer</p>
 </div>
 `;
     elem.innerHTML = content;

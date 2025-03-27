@@ -1,29 +1,50 @@
-/* Custom styles to enhance Bulma */
-
-/* Add some spacing and styling to the sections */
 .section {
     padding: 2rem 1.5rem;
     margin-bottom: 1rem;
-}
-
-/* Style the boxes */
-.box {
-    margin-bottom: 1.5rem;
-    box-shadow: 0 2px 3px rgba(10, 10, 10, 0.1), 0 0 0 1px rgba(10, 10, 10, 0.1);
-    transition: box-shadow 0.3s;
 }
 
 .box:hover {
     box-shadow: 0 4px 6px rgba(10, 10, 10, 0.1), 0 0 0 1px rgba(10, 10, 10, 0.1);
 }
 
-/* Result tables */
+.box.yourdata {
+    border: 2px solid hsl(217, 71%, 53%);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.box.yourdata:hover {
+    box-shadow: 0 4px 6px hsl(217, 71%, 53%), 0 0 0 1px hsl(217, 71%, 53%);
+    transform: translateY(-5px);
+}
+
+.box.chaindata {
+    border: 2px solid hsl(48, 100%, 67%);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.box.chaindata:hover {
+    box-shadow: 0 4px 6px hsl(48, 100%, 67%), 0 0 0 1px hsl(48, 100%, 67%);
+    transform: translateY(-5px);
+}
+
+.box.statsdata {
+    border: 2px solid hsl(204, 86%, 53%);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.box.statsdata:hover {
+    box-shadow: 0 4px 6px hsl(204, 86%, 53%), 0 0 0 1px hsl(204, 86%, 53%);
+    transform: translateY(-5px);
+}
+
 .result-table {
     width: 100%;
     margin-top: 1rem;
 }
 
-/* Code blocks for displaying JSON */
 pre.json-display {
     background-color: #f5f5f5;
     padding: 1rem;
@@ -33,7 +54,6 @@ pre.json-display {
     white-space: pre-wrap;
 }
 
-/* Responsive adjustments */
 @media screen and (max-width: 768px) {
     .title {
         font-size: 1.5rem;
