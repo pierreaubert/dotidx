@@ -3,8 +3,7 @@ package dotidx
 import (
 	"encoding/json"
 	"fmt"
-
-	// "log"
+	"log"
 
 	"github.com/tidwall/gjson"
 )
@@ -30,6 +29,9 @@ func (eb *EventsBalance) Process(extrinsics json.RawMessage) (filtered json.RawM
 	patternUtility := fmt.Sprintf(
 		`extrinsics.#(method.pallet=="utility").events.#(data.#(%%"%s"))#`,
 		eb.address)
+	patternMultisig := fmt.Sprintf(
+		`extrinsics.#(method.pallet=="multisig").events.#(data.#(%%"%s"))#|#(method.pallet=="balances")#`,
+		eb.address)
 	patternStaking := fmt.Sprintf(
 		`extrinsics.#(method.pallet=="staking").events.#(data.#(%%"%s"))#|#(method.pallet=="balances")#`,
 		eb.address)
@@ -48,16 +50,20 @@ func (eb *EventsBalance) Process(extrinsics json.RawMessage) (filtered json.RawM
 	if resultsUtility == "" {
 		resultsUtility = "[]"
 	}
+	resultsMultisig := gjson.Get(sextrinsics, patternMultisig).String()
+	if resultsMultisig == "" {
+		resultsMultisig = "[]"
+	}
 	resultsStaking := gjson.Get(sextrinsics, patternStaking).String()
 	if resultsStaking == "" {
 		resultsStaking = "[]"
 	}
 
-	results := fmt.Sprintf(`{"balances": %s, "utility": %s, "staking": %s}`,
-		resultsBalances, resultsUtility, resultsStaking,
+	results := fmt.Sprintf(`{"balances": %s, "utility": %s, "multisig": %s, "staking": %s}`,
+		resultsBalances, resultsUtility, resultsMultisig, resultsStaking,
 	)
 
-	// log.Printf("%s", results)
+	log.Printf("%s", results)
 
 	return json.RawMessage(results), nil
 }

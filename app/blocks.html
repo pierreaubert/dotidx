@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIX</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.3/css/bulma.min.css" integrity="sha256-RwYNyYLkMTjyYn8FRzVzQFtHXuHg9dpfkPCuf6j2XDM=" crossorigin="anonymous">
+    <script src="https://cdn.plot.ly/plotly-3.0.1.min.js" charset="utf-8"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <nav class="navbar is-primary" role="navigation" aria-label="main navigation" id="nav"></nav>
+
+  <section class="hero is-info" id="hero"></section>
+
+  <section class="section">
+    <div class="container">
+
+      <div class="box mb-5" id="search-blocks"></div>
+
+      <div class="box">
+        <div id="blocks-result" class="is-hidden">
+          <div class="notification is-info">
+            <h3 class="title is-4">Block Information</h3>
+              <div id="blocks-data"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <footer class="footer" id="footer"></footer>
+
+  <script type="module" src="blocks.js"></script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 {
   "devDependencies": {
     "@eslint/js": "^9.22.0",
+    "bun": "^1.2.6",
     "eslint": "^9.22.0",
     "globals": "^16.0.0",
     "npm-check-updates": "^17.1.16",
@@ -11,5 +12,11 @@
   },
   "dependencies": {
     "plotly.js-dist-min": "^3.0.1"
+  },
+  "scripts": {
+    "test": "npx vitest",
+    "coverage": "npx vitest run --coverage",
+    "format": "npx prettier --write \"**/*.{js,ts}\"",
+    "oxlint": "npx oxlint@latest"
   }
 }

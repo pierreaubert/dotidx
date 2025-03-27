@@ -130,6 +130,7 @@ func (f *Frontend) Start(cancelCtx <-chan struct{}) error {
 	mux.HandleFunc("GET /staking", f.handleStaking)
 	mux.HandleFunc("GET /stats/completion_rate", f.handleCompletionRate)
 	mux.HandleFunc("GET /stats/per_month", f.handleStatsPerMonth)
+	mux.HandleFunc("GET /block/{blockid}", f.handleBlock)
 	mux.HandleFunc("GET /accounts/{address}/balance-info", f.handleProxy)
 
 	server := &http.Server{

@@ -7,7 +7,6 @@ const config = {
     singleQuote: true,
     tabWidth: 4,
     printWidth: 128,
-    parser: 'flow',
 };
 
 export default config;

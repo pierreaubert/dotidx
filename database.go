@@ -788,7 +788,6 @@ func (s *SQLDatabase) GetDatabaseInfo() ([]DatabaseInfo, error) {
 		if err = rows.Scan(&info.Relaychain, &info.Chain); err != nil {
 			return nil, fmt.Errorf("Cannot scan dotidx rows")
 		}
-		log.Printf("%s:%s", info.Relaychain, info.Chain)
 		infos = append(infos, info)
 	}
 	return infos, nil

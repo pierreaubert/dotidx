@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DIX</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.3/css/bulma.min.css" integrity="sha256-RwYNyYLkMTjyYn8FRzVzQFtHXuHg9dpfkPCuf6j2XDM=" crossorigin="anonymous">
+    <script src="https://cdn.plot.ly/plotly-3.0.1.min.js" charset="utf-8"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav class="navbar is-primary" role="navigation" aria-label="main navigation" id="nav"></nav>
+
+  <section class="hero is-info" id="hero"></section>
+
+    <div class="box">
+      <h3 class="title is-4">Completion Rate</h3>
+      <div id="completion-result" class="mb-5 is-hidden">
+        <div class="notification is-info">
+          <div id="completion-data"></div>
+        </div>
+      </div>
+
+      <h3 class="title is-4">Monthly Statistics</h3>
+      <div id="monthly-result" class="is-hidden">
+        <div class="notification is-info">
+          <div id="monthly-data"></div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer" id="footer">
+    </footer>
+
+    <!-- Load JavaScript modules -->
+    <script type="module" src="stats.js"></script>
+</body>
+</html>

@@ -63,8 +63,6 @@ func (f *Frontend) handleCompletionRate(w http.ResponseWriter, r *http.Request) 
 		percentCompletion, headID, err := f.getCompletionRate(infos[i].Relaychain, infos[i].Chain)
 		if err != nil {
 			log.Printf("Error getting completion rate: %v", err)
-			http.Error(w, "Error retrieving completion rate", http.StatusInternalServerError)
-			return
 		}
 
 		// Prepare response

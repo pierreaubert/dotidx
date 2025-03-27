@@ -42,3 +42,25 @@ pre.json-display {
         font-size: 1.25rem;
     }
 }
+
+.tab-content {
+    display: none;
+}
+.tab-content.is-active {
+    display: block;
+}
+.json-display {
+    background-color: #f5f5f5;
+    padding: 1rem;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    overflow-x: auto;
+}
+.balance-graph {
+    height: 350px;
+    margin-bottom: 1.5rem;
+}
+.balance-summary {
+    margin-bottom: 1.5rem;
+}
+

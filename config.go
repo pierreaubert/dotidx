@@ -74,6 +74,10 @@ func ParseFlags() (Config, error) {
 				expectedPort = 11000
 			case "collectives":
 				expectedPort = 11100
+			case "mythical":
+				expectedPort = 11200
+			case "frequency":
+				expectedPort = 11300
 			}
 			if !checkPortFollowConvention(*chainReaderURL, expectedPort) {
 				return Config{}, fmt.Errorf("%s:%s sidecar port should be %d got %s",
