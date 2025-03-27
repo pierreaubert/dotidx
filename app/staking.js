@@ -7,7 +7,6 @@ function buildStakingGraphData(stakingData) {
 
     // Process extrinsics to collect time series data
     stakingData.forEach((extrinsic) => {
-
         if (extrinsic.timestamp === 'N/A') {
             return; // Skip entries without valid timestamps
         }
@@ -21,14 +20,14 @@ function buildStakingGraphData(stakingData) {
                 date: new Date(dayKey), // Start of the day
                 rewards: 0,
                 deposits: 0,
-		bonded: 0,
+                bonded: 0,
                 count: 0,
             };
         }
 
-	if (extrinsic.method.method == 'Rewarded') {
+        if (extrinsic.method.method == 'Rewarded') {
             transactionsByDay[dayKey].rewards += amount;
-	} else if (extrinsic.method.method == 'Bonded' || extrinsic.method.method == 'Unbonded') {
+        } else if (extrinsic.method.method == 'Bonded' || extrinsic.method.method == 'Unbonded') {
             transactionsByDay[dayKey].bonded += amount;
         } else if (extrinsic.method.method == 'Withdrawn' || extrinsic.method.method == 'Deposit') {
             transactionsByDay[dayKey].deposits += amount;
@@ -56,25 +55,22 @@ function createStakingGraph(graphData, graphDiv, address) {
         return {
             x: item.date,
             y: item.rewards,
-	    z: cummulativeRewards,
+            z: cummulativeRewards,
             text: `Date: ${item.date.toLocaleDateString()}<br>Staking: ${item.rewards}<br>Day change: ${item.rewards}<br>Transactions: ${item.count}`,
         };
     });
 
-    const deposits = graphData
-        .map((item) => ({
-            x: item.date,
-            y: item.deposits,
-            text: `Date: ${item.date.toLocaleDateString()}<br>Deposits: ${item.deposits.toFixed(4)}`,
-        }));
+    const deposits = graphData.map((item) => ({
+        x: item.date,
+        y: item.deposits,
+        text: `Date: ${item.date.toLocaleDateString()}<br>Deposits: ${item.deposits.toFixed(4)}`,
+    }));
 
-
-    const bonded = graphData
-        .map((item) => ({
-            x: item.date,
-            y: item.bonded,
-            text: `Date: ${item.date.toLocaleDateString()}<br>Bonded: ${item.bonded.toFixed(4)}`,
-        }));
+    const bonded = graphData.map((item) => ({
+        x: item.date,
+        y: item.bonded,
+        text: `Date: ${item.date.toLocaleDateString()}<br>Bonded: ${item.bonded.toFixed(4)}`,
+    }));
 
     // Create the plotly data array
     const plotData = [
@@ -88,8 +84,8 @@ function createStakingGraph(graphData, graphDiv, address) {
         {
             type: 'scatter',
             name: 'Cummulative rewards',
-	    mode: 'lines+markers',
-	    markers: { size: 10},
+            mode: 'lines+markers',
+            markers: { size: 10 },
             x: rewards.map((p) => p.x),
             y: rewards.map((p) => p.z),
             marker: { color: 'rgba(0, 200, 0, 0.7)' },
@@ -124,7 +120,7 @@ function createStakingGraph(graphData, graphDiv, address) {
         yaxis2: {
             side: 'right',
             tickformat: '.0f',
-	    overlaying: "y",
+            overlaying: 'y',
         },
         margin: {
             l: 60,
@@ -179,7 +175,6 @@ function groupStakingsByMonth(allExtrinsics) {
 }
 
 function renderStakingsRewardsTable(extrinsicsByMonth, flip) {
-
     const sortedMonths = Object.keys(extrinsicsByMonth).sort((a, b) => {
         // Handle 'Unknown' specially
         if (a === 'Unknown') return 1;
@@ -188,11 +183,11 @@ function renderStakingsRewardsTable(extrinsicsByMonth, flip) {
     });
 
     let html = '<table class="table is-fullwidth is-striped is-hoverable result-table">';
-    html += '<thead><tr><th>Timestamp</th><th>Method</th><th class="has-text-right">Amount (DOT)</th><th>Details</th></tr></thead>';
+    html +=
+        '<thead><tr><th>Timestamp</th><th>Method</th><th class="has-text-right">Amount (DOT)</th><th>Details</th></tr></thead>';
     html += '<tbody>';
 
     sortedMonths.forEach((monthKey) => {
-
         const monthName =
             monthKey === 'Unknown'
                 ? 'Unknown Date'
@@ -201,42 +196,42 @@ function renderStakingsRewardsTable(extrinsicsByMonth, flip) {
                       month: 'long',
                   });
 
-	let first = true;
+        let first = true;
 
         extrinsicsByMonth[monthKey].forEach((extrinsic, index) => {
+            let doit = extrinsic.method.method === 'Rewarded';
+            if (flip) {
+                doit = !doit;
+            }
 
-	    let doit = extrinsic.method.method === 'Rewarded';
-	    if (flip) { doit = ! doit }
+            if (doit) {
+                if (first) {
+                    html += `<tr class="month-header"><td colspan="4"><strong>${monthName}</strong></td></tr>`;
+                    first = false;
+                }
 
-	    if (doit) {
+                html += '<tr>';
+                html += `<td>${extrinsic.formattedTime || extrinsic.timestamp}</td>`;
+                html += `<td>${extrinsic.method.method}</td>`;
 
-		if (first) {
-		    html += `<tr class="month-header"><td colspan="4"><strong>${monthName}</strong></td></tr>`;
-		    first = false;
-		}
-
-		html += '<tr>';
-		html += `<td>${extrinsic.formattedTime || extrinsic.timestamp}</td>`;
-		html += `<td>${extrinsic.method.method}</td>`;
-
-		let amount = extrinsic.totalAmount.toFixed(2);
-		let detailsContent = {
+                let amount = extrinsic.totalAmount.toFixed(2);
+                let detailsContent = {
                     blockId: extrinsic.blockId, // Add blockId to details
                     pallet: extrinsic.pallet,
                     method: extrinsic.method.method,
                     subpallet: extrinsic.method.pallet,
-		};
+                };
 
-		html += `<td class="has-text-right">${amount}</td>`;
+                html += `<td class="has-text-right">${amount}</td>`;
 
-		const detailsId = `extrinsic-details-${monthKey}-${index}`;
-		html += `<td><button class="button is-small toggle-details" data-target="${detailsId}">&gt;</button></td>`;
-		html += '</tr>';
+                const detailsId = `extrinsic-details-${monthKey}-${index}`;
+                html += `<td><button class="button is-small toggle-details" data-target="${detailsId}">&gt;</button></td>`;
+                html += '</tr>';
 
-		html += `<tr id="${detailsId}" class="details-row" style="display: none;">`;
-		html += `<td colspan="4"><pre class="extrinsic-details">${JSON.stringify(detailsContent, null, 2)}</pre></td>`;
-		html += '</tr>';
-	    }
+                html += `<tr id="${detailsId}" class="details-row" style="display: none;">`;
+                html += `<td colspan="4"><pre class="extrinsic-details">${JSON.stringify(detailsContent, null, 2)}</pre></td>`;
+                html += '</tr>';
+            }
         });
     });
 
@@ -249,46 +244,83 @@ function extractStakingsFromBlocks(blocks, address) {
 
     // Go through all blocks and collect extrinsics
     blocks.forEach((block) => {
-        if (!block.extrinsics || block.extrinsics['staking'] == undefined || block.extrinsics['staking'].length == 0) {
+        if (!block.extrinsics) {
             return;
         }
 
         const timestamp = block.timestamp || 'N/A';
         const blockId = block.number || 'N/A';
 
-        block.extrinsics['staking'].forEach((extrinsic) => {
-            if (extrinsic?.method.pallet == 'staking') {
-                let amount = 0.0;
-                if (extrinsic.method.method === 'Transfer') {
-                    amount = parseFloat(extrinsic.data[2]);
-                    if (address === extrinsic.data[0]) {
-                        amount = -amount;
+        if (block.extrinsics['staking'] != undefined) {
+            block.extrinsics['staking'].forEach((extrinsic) => {
+                if (extrinsic?.method.pallet == 'staking') {
+                    let amount = 0.0;
+                    if (extrinsic.method.method === 'Transfer') {
+                        amount = parseFloat(extrinsic.data[2]);
+                        if (address === extrinsic.data[0]) {
+                            amount = -amount;
+                        }
+                    } else if (extrinsic.method.method === 'Deposit') {
+                        amount = parseFloat(extrinsic.data[1]);
+                    } else if (extrinsic.method.method === 'Withdrawn') {
+                        amount = -parseFloat(extrinsic.data[1]);
+                    } else if (extrinsic.method.method === 'Rewarded') {
+                        amount = parseFloat(extrinsic.data[2]);
+                    } else if (extrinsic.method.method === 'Unbonded') {
+                        amount = -parseFloat(extrinsic.data[1]);
+                    } else if (extrinsic.method.method === 'Bonded') {
+                        amount = parseFloat(extrinsic.data[1]);
+                    } else {
+                        console.log('TODO: ' + extrinsic.method.pallet + ' ' + extrinsic.method.method);
                     }
-                } else if (extrinsic.method.method === 'Deposit') {
-                    amount = parseFloat(extrinsic.data[1]);
-                } else if (extrinsic.method.method === 'Withdrawn') {
-                    amount = -parseFloat(extrinsic.data[1]);
-                } else if (extrinsic.method.method === 'Rewarded') {
-                    amount = parseFloat(extrinsic.data[2]);
-                } else if (extrinsic.method.method === 'Unbonded') {
-                    amount = -parseFloat(extrinsic.data[1]);
-                } else if (extrinsic.method.method === 'Bonded') {
-                    amount = parseFloat(extrinsic.data[1]);
-                } else {
-                    console.log('TODO: ' + extrinsic.method.pallet + ' ' + extrinsic.method.method);
+
+                    amount = amount / 10 / 1000 / 1000 / 1000;
+
+                    stakings.push({
+                        timestamp,
+                        blockId,
+                        pallet: 'staking',
+                        method: extrinsic.method,
+                        totalAmount: amount,
+                    });
                 }
+            });
+        }
+        if (block.extrinsics['utility'] != undefined) {
+            block.extrinsics['utility'].forEach((extrinsic) => {
+                if (extrinsic?.method.pallet == 'staking') {
+                    let amount = 0.0;
+                    if (extrinsic.method.method === 'Transfer') {
+                        amount = parseFloat(extrinsic.data[2]);
+                        if (address === extrinsic.data[0]) {
+                            amount = -amount;
+                        }
+                    } else if (extrinsic.method.method === 'Deposit') {
+                        amount = parseFloat(extrinsic.data[1]);
+                    } else if (extrinsic.method.method === 'Withdrawn') {
+                        amount = -parseFloat(extrinsic.data[1]);
+                    } else if (extrinsic.method.method === 'Rewarded') {
+                        amount = parseFloat(extrinsic.data[2]);
+                    } else if (extrinsic.method.method === 'Unbonded') {
+                        amount = -parseFloat(extrinsic.data[1]);
+                    } else if (extrinsic.method.method === 'Bonded') {
+                        amount = parseFloat(extrinsic.data[1]);
+                    } else {
+                        console.log('TODO: ' + extrinsic.method.pallet + ' ' + extrinsic.method.method);
+                    }
 
-                amount = amount / 10 / 1000 / 1000 / 1000;
+                    amount = amount / 10 / 1000 / 1000 / 1000;
 
-                stakings.push({
-                    timestamp,
-                    blockId,
-                    pallet: 'staking',
-                    method: extrinsic.method,
-                    totalAmount: amount,
-                });
-            }
-        });
+                    stakings.push({
+                        timestamp,
+                        blockId,
+                        pallet: 'staking',
+                        method: extrinsic.method,
+                        totalAmount: amount,
+                    });
+                }
+            });
+        }
     });
 
     return stakings;

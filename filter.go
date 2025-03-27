@@ -27,7 +27,7 @@ func (eb *EventsBalance) Process(extrinsics json.RawMessage) (filtered json.RawM
 		`extrinsics.#(method.pallet=="balances").events.#(data.#(%%"%s"))#`,
 		eb.address)
 	patternUtility := fmt.Sprintf(
-		`extrinsics.#(method.pallet=="utility").events.#(data.#(%%"%s"))#`,
+		`extrinsics.#(method.pallet=="utility").events.#(data.#(%%"%s"))#|#(method.pallet=="balances")#`,
 		eb.address)
 	patternMultisig := fmt.Sprintf(
 		`extrinsics.#(method.pallet=="multisig").events.#(data.#(%%"%s"))#|#(method.pallet=="balances")#`,
@@ -79,8 +79,15 @@ func NewEventsStaking(address string) *EventsStaking {
 }
 
 func (es *EventsStaking) Process(extrinsics json.RawMessage) (filtered json.RawMessage, err error) {
+
+	// in pallet staking takes all events that match address and balances
 	patternStaking := fmt.Sprintf(
-		`extrinsics.#(method.pallet=="staking").events.#(data.#(%%"%s"))#`,
+		`extrinsics.#(method.pallet=="staking").events.#(data.#(%%"%s"))#|#(method.pallet=="balances")#`,
+		es.address)
+
+	// in pallet utility takes all events that match address and staking
+	patternUtility := fmt.Sprintf(
+		`extrinsics.#(method.pallet="utility").events.#(data.#(%%"%s"))#|#(method.pallet=="staking")#`,
 		es.address)
 
 	// expensive ...
@@ -94,7 +101,12 @@ func (es *EventsStaking) Process(extrinsics json.RawMessage) (filtered json.RawM
 		resultsStaking = "[]"
 	}
 
-	results := fmt.Sprintf(`{"staking": %s}`, resultsStaking)
+	resultsUtility := gjson.Get(sextrinsics, patternUtility).String()
+	if resultsUtility == "" {
+		resultsUtility = "[]"
+	}
+
+	results := fmt.Sprintf(`{"staking": %s, "utility": %s}`, resultsStaking, resultsUtility)
 
 	// log.Printf("%s", results)
 
