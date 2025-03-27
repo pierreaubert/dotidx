@@ -10,10 +10,10 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"github.com/pierreaubert/dotidx"
+	dix "github.com/pierreaubert/dotidx"
 )
 
-func validateConfig(config dotidx.Config) error {
+func validateConfig(config dix.Config) error {
 
 	if config.ChainReaderURL == "" {
 		return fmt.Errorf("chainReader url is required")
@@ -40,7 +40,7 @@ func validateConfig(config dotidx.Config) error {
 
 func main() {
 	// Parse command line arguments
-	config, err := dotidx.ParseFlags()
+	config, err := dix.ParseFlags()
 	if err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
@@ -58,7 +58,7 @@ func main() {
 	// ----------------------------------------------------------------------
 	// ChainReader
 	// ----------------------------------------------------------------------
-	reader := dotidx.NewSidecar(config.ChainReaderURL)
+	reader := dix.NewSidecar(config.ChainReaderURL)
 	// Test the sidecar service
 	if err := reader.Ping(); err != nil {
 		log.Fatalf("Sidecar service test failed: %v", err)
@@ -90,12 +90,12 @@ func main() {
 	defer cancel()
 
 	// Handle OS signals for graceful shutdown
-	dotidx.SetupSignalHandler(cancel)
+	dix.SetupSignalHandler(cancel)
 
 	// ----------------------------------------------------------------------
 	// Database
 	// ----------------------------------------------------------------------
-	database := dotidx.NewSQLDatabase(config)
+	database := dix.NewSQLDatabase(config)
 
 	// Test the connection
 	if err := database.Ping(); err != nil {
@@ -109,7 +109,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Cannot get block 1: %v", err)
 	}
-	firstTimestamp, err := dotidx.ExtractTimestamp(firstBlock.Extrinsics)
+	firstTimestamp, err := dix.ExtractTimestamp(firstBlock.Extrinsics)
 	if err != nil {
 		// some parachain do not have the pallet timestamp
 		firstTimestamp = ""
@@ -118,7 +118,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Cannot get head block %d: %v", headBlockID, err)
 	}
-	lastTimestamp, err := dotidx.ExtractTimestamp(lastBlock.Extrinsics)
+	lastTimestamp, err := dix.ExtractTimestamp(lastBlock.Extrinsics)
 	if err != nil {
 		lastTimestamp = time.Now().Format("2006-01-02 15:04:05")
 	}
@@ -141,9 +141,9 @@ func main() {
 
 func startWorkers(
 	ctx context.Context,
-	config dotidx.Config,
-	db dotidx.Database,
-	reader dotidx.ChainReader,
+	config dix.Config,
+	db dix.Database,
+	reader dix.ChainReader,
 	headID int) {
 
 	config.EndRange = min(config.EndRange, headID)
@@ -177,7 +177,7 @@ func startWorkers(
 					}
 
 					// Process a single block
-					dotidx.ProcessSingleBlock(ctx, blockID, config, db, reader)
+					dix.ProcessSingleBlock(ctx, blockID, config, db, reader)
 				}
 			}
 		}(i)
@@ -199,7 +199,7 @@ func startWorkers(
 					}
 
 					// Process a batch of blocks
-					dotidx.ProcessBlockBatch(ctx, blockIDs, config, db, reader)
+					dix.ProcessBlockBatch(ctx, blockIDs, config, db, reader)
 				}
 			}
 		}(i)
@@ -320,15 +320,15 @@ func startWorkers(
 
 // Stats struct to track and print statistics
 type Stats struct {
-	db           dotidx.Database
-	reader       dotidx.ChainReader
+	db           dix.Database
+	reader       dix.ChainReader
 	tickerHeader *time.Ticker
 	tickerInfo   *time.Ticker
 	context      context.Context
 }
 
 // NewStats creates a new Stats instance
-func NewStats(ctx context.Context, db dotidx.Database, reader dotidx.ChainReader) *Stats {
+func NewStats(ctx context.Context, db dix.Database, reader dix.ChainReader) *Stats {
 	return &Stats{
 		db:           db,
 		reader:       reader,
@@ -361,7 +361,7 @@ func (s *Stats) printHeader() {
 	log.Printf("+---------------------------|------------------------|--------------------------------|")
 }
 
-func (s *Stats) printStats(stats *dotidx.MetricsStats) {
+func (s *Stats) printStats(stats *dix.MetricsStats) {
 	if stats == nil {
 		return
 	}

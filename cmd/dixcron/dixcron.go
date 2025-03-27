@@ -9,10 +9,10 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"github.com/pierreaubert/dotidx"
+	dix "github.com/pierreaubert/dotidx"
 )
 
-func validateConfig(config dotidx.Config) error {
+func validateConfig(config dix.Config) error {
 
 	if config.DatabaseURL == "" {
 		return fmt.Errorf("database url is required")
@@ -23,7 +23,7 @@ func validateConfig(config dotidx.Config) error {
 
 func main() {
 	// Parse command line arguments
-	config, err := dotidx.ParseFlags()
+	config, err := dix.ParseFlags()
 	if err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
@@ -40,7 +40,7 @@ func main() {
 	// ----------------------------------------------------------------------
 	// Database
 	// ----------------------------------------------------------------------
-	database := dotidx.NewSQLDatabase(config)
+	database := dix.NewSQLDatabase(config)
 
 	// Test the connection
 	if err := database.Ping(); err != nil {
@@ -54,7 +54,7 @@ func main() {
 	log.Println("All tasks completed")
 }
 
-func startCron(ctx context.Context, ticker *time.Ticker, db dotidx.Database) {
+func startCron(ctx context.Context, ticker *time.Ticker, db dix.Database) {
 	infos, err := db.GetDatabaseInfo()
 	if err != nil {
 		log.Printf("%v", err)

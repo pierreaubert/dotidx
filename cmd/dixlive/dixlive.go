@@ -9,10 +9,10 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"github.com/pierreaubert/dotidx"
+	dix "github.com/pierreaubert/dotidx"
 )
 
-func validateConfig(config dotidx.Config) error {
+func validateConfig(config dix.Config) error {
 
 	// In live mode, we don't need to validate the range as it will be determined dynamically
 	if !config.Live {
@@ -46,7 +46,7 @@ func validateConfig(config dotidx.Config) error {
 
 func main() {
 	// Parse command line arguments
-	config, err := dotidx.ParseFlags()
+	config, err := dix.ParseFlags()
 	if err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
@@ -64,7 +64,7 @@ func main() {
 	// ----------------------------------------------------------------------
 	// ChainReader
 	// ----------------------------------------------------------------------
-	reader := dotidx.NewSidecar(config.ChainReaderURL)
+	reader := dix.NewSidecar(config.ChainReaderURL)
 	// Test the sidecar service
 	if err := reader.Ping(); err != nil {
 		log.Fatalf("Sidecar service test failed: %v", err)
@@ -84,18 +84,18 @@ func main() {
 	defer cancel()
 
 	// Handle OS signals for graceful shutdown
-	dotidx.SetupSignalHandler(cancel)
+	dix.SetupSignalHandler(cancel)
 
 	// ----------------------------------------------------------------------
 	// Database
 	// ----------------------------------------------------------------------
-	database := dotidx.NewSQLDatabase(config)
+	database := dix.NewSQLDatabase(config)
 
 	firstBlock, err := reader.FetchBlock(ctx, 1)
 	if err != nil {
 		log.Fatalf("Cannot get block 1: %v", err)
 	}
-	firstTimestamp, err := dotidx.ExtractTimestamp(firstBlock.Extrinsics)
+	firstTimestamp, err := dix.ExtractTimestamp(firstBlock.Extrinsics)
 	if err != nil {
 		// some parachain do not have the pallet timestamp
 		firstTimestamp = ""
@@ -104,7 +104,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Cannot get head block %d: %v", headBlockID, err)
 	}
-	lastTimestamp, err := dotidx.ExtractTimestamp(lastBlock.Extrinsics)
+	lastTimestamp, err := dix.ExtractTimestamp(lastBlock.Extrinsics)
 	if err != nil {
 		lastTimestamp = time.Now().Format("2006-01-02 15:04:05")
 	}
@@ -131,9 +131,9 @@ func main() {
 // MonitorNewBlocks continuously monitors for new blocks and adds them to the database
 func monitorNewBlocks(
 	ctx context.Context,
-	config dotidx.Config,
-	db dotidx.Database,
-	reader dotidx.ChainReader,
+	config dix.Config,
+	db dix.Database,
+	reader dix.ChainReader,
 	lastProcessedBlock int) error {
 	log.Printf("Starting to monitor new blocks from block %d", lastProcessedBlock)
 
@@ -170,7 +170,7 @@ func monitorNewBlocks(
 				}
 
 				// Save block to database
-				err = db.Save([]dotidx.BlockData{block}, config)
+				err = db.Save([]dix.BlockData{block}, config)
 				if err != nil {
 					log.Printf("Error saving block %d: %v", nextBlockID, err)
 					break

@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/pierreaubert/dotidx"
+	dix "github.com/pierreaubert/dotidx"
 )
 
 type BlocksResponse struct {
-	Blocks []dotidx.BlockData `json:"blocks"`
+	Blocks []dix.BlockData `json:"blocks"`
 }
 
 func (f *Frontend) handleAddressToBlocks(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +42,7 @@ func (f *Frontend) handleAddressToBlocks(w http.ResponseWriter, r *http.Request)
 		fromTimestamp = ""
 	} else {
 		// Try to parse the from parameter as a timestamp
-		fromTime, err := dotidx.ParseTimestamp(from)
+		fromTime, err := dix.ParseTimestamp(from)
 		if err != nil {
 			http.Error(w, "Invalid 'from' timestamp format", http.StatusBadRequest)
 			return
@@ -57,7 +57,7 @@ func (f *Frontend) handleAddressToBlocks(w http.ResponseWriter, r *http.Request)
 		toTimestamp = ""
 	} else {
 		// Try to parse the to parameter as a timestamp
-		toTime, err := dotidx.ParseTimestamp(to)
+		toTime, err := dix.ParseTimestamp(to)
 		if err != nil {
 			http.Error(w, "Invalid 'to' timestamp format", http.StatusBadRequest)
 			return
@@ -66,7 +66,7 @@ func (f *Frontend) handleAddressToBlocks(w http.ResponseWriter, r *http.Request)
 		toTimestamp = toTime.Format("2006-01-02 15:04:05")
 	}
 
-	if !dotidx.IsValidAddress(address) {
+	if !dix.IsValidAddress(address) {
 		http.Error(w, "Invalid address format", http.StatusBadRequest)
 		return
 	}
@@ -86,8 +86,8 @@ func (f *Frontend) handleAddressToBlocks(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (f *Frontend) getBlocksByAddress(address string, count, from, to string) ([]dotidx.BlockData, error) {
-	if !dotidx.IsValidAddress(address) {
+func (f *Frontend) getBlocksByAddress(address string, count, from, to string) ([]dix.BlockData, error) {
+	if !dix.IsValidAddress(address) {
 		return nil, fmt.Errorf("invalid address format")
 	}
 
@@ -111,8 +111,8 @@ func (f *Frontend) getBlocksByAddress(address string, count, from, to string) ([
 		%s
 		ORDER BY b.block_id DESC
 		LIMIT %s) ORDER BY block_id ASC;`,
-		dotidx.GetBlocksTableName(f.config),
-		dotidx.GetAddressTableName(f.config),
+		dix.GetBlocksTableName(f.config),
+		dix.GetAddressTableName(f.config),
 		address,
 		cond,
 		count,
@@ -125,10 +125,10 @@ func (f *Frontend) getBlocksByAddress(address string, count, from, to string) ([
 
 	log.Printf("Query: %s", query)
 
-	var blocks []dotidx.BlockData
+	var blocks []dix.BlockData
 
 	for rows.Next() {
-		var block dotidx.BlockData
+		var block dix.BlockData
 		err = rows.Scan(
 			&block.ID,
 			&block.Timestamp,

@@ -13,10 +13,10 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
-	"github.com/pierreaubert/dotidx"
+	dix "github.com/pierreaubert/dotidx"
 )
 
-func validateConfig(config dotidx.Config) error {
+func validateConfig(config dix.Config) error {
 
 	if config.ChainReaderURL == "" {
 		return fmt.Errorf("chainReader url is required")
@@ -35,7 +35,7 @@ func validateConfig(config dotidx.Config) error {
 
 func main() {
 
-	config, err := dotidx.ParseFlags()
+	config, err := dix.ParseFlags()
 	if err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
@@ -49,7 +49,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	dotidx.SetupSignalHandler(cancel)
+	dix.SetupSignalHandler(cancel)
 
 	var db *sql.DB
 	if strings.Contains(config.DatabaseURL, "postgres") {
@@ -73,7 +73,7 @@ func main() {
 		log.Fatalf("unsupported database: %s", config.DatabaseURL)
 	}
 
-	database := dotidx.NewSQLDatabaseWithDB(db)
+	database := dix.NewSQLDatabaseWithDB(db)
 	if err := database.Ping(); err != nil {
 		log.Fatalf("Failed to ping PostgreSQL: %v", err)
 	}
@@ -89,19 +89,19 @@ func main() {
 	}
 }
 
-// Frontend handles the REST API for dotidx
+// Frontend handles the REST API for dix
 type Frontend struct {
-	database       *dotidx.SQLDatabase
+	database       *dix.SQLDatabase
 	db             *sql.DB
-	config         dotidx.Config
+	config         dix.Config
 	listenAddr     string
-	metricsHandler *dotidx.Metrics
+	metricsHandler *dix.Metrics
 	staticPath     string
 	proxy          *httputil.ReverseProxy
 }
 
 // NewFrontend creates a new Frontend instance
-func NewFrontend(database *dotidx.SQLDatabase, db *sql.DB, config dotidx.Config) *Frontend {
+func NewFrontend(database *dix.SQLDatabase, db *sql.DB, config dix.Config) *Frontend {
 	listenAddr := fmt.Sprintf("%s:%d", config.FrontendIP, config.FrontendPort)
 	remote, _ := url.Parse(config.ChainReaderURL)
 	proxy := httputil.NewSingleHostReverseProxy(remote)
@@ -110,7 +110,7 @@ func NewFrontend(database *dotidx.SQLDatabase, db *sql.DB, config dotidx.Config)
 		db:             db,
 		config:         config,
 		listenAddr:     listenAddr,
-		metricsHandler: dotidx.NewMetrics("Frontend"),
+		metricsHandler: dix.NewMetrics("Frontend"),
 		staticPath:     config.FrontendStatic,
 		proxy:          proxy,
 	}
@@ -121,17 +121,22 @@ func (f *Frontend) Start(cancelCtx <-chan struct{}) error {
 	mux := http.NewServeMux()
 
 	log.Printf("Serving at http://%s/index.html", f.listenAddr)
+
+	// serving static files for convenience
 	log.Printf("Serving static files from: %s", f.staticPath)
 	fs := http.FileServer(http.Dir(f.staticPath))
-	mux.Handle("/", http.StripPrefix("/", fs))
 
+	mux.Handle("GET /index.html", http.StripPrefix("/", fs))
+	mux.Handle("GET /", http.StripPrefix("/", fs))
+
+	// fe functions
 	mux.HandleFunc("GET /address2blocks", f.handleAddressToBlocks)
 	mux.HandleFunc("GET /balances", f.handleBalances)
 	mux.HandleFunc("GET /staking", f.handleStaking)
 	mux.HandleFunc("GET /stats/completion_rate", f.handleCompletionRate)
 	mux.HandleFunc("GET /stats/per_month", f.handleStatsPerMonth)
+	// proxy to sidecar
 	mux.HandleFunc("GET /block/{blockid}", f.handleBlock)
-	mux.HandleFunc("GET /accounts/{address}/balance-info", f.handleProxy)
 
 	server := &http.Server{
 		Addr:    f.listenAddr,

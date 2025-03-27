@@ -4,7 +4,8 @@ export async function updateNav() {
         <div class="navbar-brand">
             <a class="navbar-item" href="/index.html">
                 <h1 class="is-size-2">DIX</h1>
-                <p class="">A block explorer for Polkadot:</p>
+                <p>A block explorer<br>
+                for Polkadot!</p>
             </a>
             <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbarMenu">
                 <span aria-hidden="true"></span>

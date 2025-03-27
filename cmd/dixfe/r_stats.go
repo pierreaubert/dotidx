@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/pierreaubert/dotidx"
+	dix "github.com/pierreaubert/dotidx"
 )
 
 type CompletionRateResponse struct {
@@ -21,7 +21,7 @@ func (f *Frontend) getCompletionRate(relaychain, chain string) (float64, int, er
 
 	query := fmt.Sprintf(
 		`SELECT sum(total*100)/max(max_block_id), max(max_block_id) FROM %s;`,
-		dotidx.GetStatsPerMonthTableName(relaychain, chain))
+		dix.GetStatsPerMonthTableName(relaychain, chain))
 
 	log.Printf("%s", query)
 
@@ -156,7 +156,7 @@ func (f *Frontend) getMonthlyStats(relaychain, chain string) ([]MonthlyStats, er
 	query := fmt.Sprintf(`
 		SELECT *
 		FROM %s;
-	`, dotidx.GetStatsPerMonthTableName(relaychain, chain))
+	`, dix.GetStatsPerMonthTableName(relaychain, chain))
 
 	// log.Printf("%s", query)
 

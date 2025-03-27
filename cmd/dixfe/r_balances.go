@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/pierreaubert/dotidx"
+	dix "github.com/pierreaubert/dotidx"
 )
 
 func (f *Frontend) handleBalances(w http.ResponseWriter, r *http.Request) {
@@ -24,7 +24,7 @@ func (f *Frontend) handleBalances(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if the address is a valid Polkadot address
-	if !dotidx.IsValidAddress(address) {
+	if !dix.IsValidAddress(address) {
 		http.Error(w, "Invalid address format", http.StatusBadRequest)
 		return
 	}
@@ -42,7 +42,7 @@ func (f *Frontend) handleBalances(w http.ResponseWriter, r *http.Request) {
 		fromTimestamp = ""
 	} else {
 		// Try to parse the from parameter as a timestamp
-		fromTime, err := dotidx.ParseTimestamp(from)
+		fromTime, err := dix.ParseTimestamp(from)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Invalid 'from' %s timestamp format", from), http.StatusBadRequest)
 			return
@@ -57,7 +57,7 @@ func (f *Frontend) handleBalances(w http.ResponseWriter, r *http.Request) {
 		toTimestamp = ""
 	} else {
 		// Try to parse the to parameter as a timestamp
-		toTime, err := dotidx.ParseTimestamp(to)
+		toTime, err := dix.ParseTimestamp(to)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Invalid 'to' %s timestamp format", to), http.StatusBadRequest)
 			return
@@ -74,7 +74,7 @@ func (f *Frontend) handleBalances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	eb := dotidx.NewEventsBalance(address)
+	eb := dix.NewEventsBalance(address)
 	for block := range blocks {
 		filtered, err := eb.Process(blocks[block].Extrinsics)
 		if err != nil {
