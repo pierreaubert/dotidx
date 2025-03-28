@@ -1,4 +1,4 @@
-import { updateHero, updateFooter, updateNav, updateSearchBlocks } from './components.js';
+import { updateFooter, updateNav, updateSearchBlocks } from './components.js';
 import { showError, escapeHtml, highlightAddressMatches } from './misc.js';
 
 function renderBlockContent(content, searchAddress) {
@@ -73,7 +73,7 @@ async function fetchBlocks() {
         return;
     }
 
-    const response = await fetch(`/fe/block/${blockid}`);
+    const response = await fetch(`/fe/blocks/${blockid}`);
     if (!response.ok) {
         throw new Error(`HTTP error ${response.status}`);
     }
@@ -237,7 +237,6 @@ function updateFromUrl() {
 
 async function initBlocks() {
     await updateNav();
-    await updateHero();
     await updateFooter();
     await updateSearchBlocks();
 

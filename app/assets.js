@@ -1,7 +1,7 @@
 // balances and staking are very similar
 // this file contains functions shared by both
 
-import { updateHero, updateFooter, updateNav, updateSearchAssets } from './components.js';
+import { updateFooter, updateNav, updateSearchAssets } from './components.js';
 
 function updateUrl(target, name) {
     const searchInput = document.getElementById(target);
@@ -82,7 +82,6 @@ function clearFilters() {
 // fetchIt: a function that will be called back when clicking
 export async function initAddresses(target, name, fetchIt) {
     await updateNav();
-    await updateHero();
     await updateFooter();
     await updateSearchAssets(target);
 

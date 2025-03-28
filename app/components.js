@@ -47,17 +47,6 @@ export async function updateNav() {
     });
 }
 
-export async function updateHero() {
-    const elem = document.getElementById('hero');
-    const content = `
-        <div class="hero-body">
-            <p class="title">A Polkadot Blockchain Data Explorer</p>
-            <p class="subtitle">Explore balances, staking or blocks per address, accross chains and some statistics!</p>
-        </div>
-`;
-    elem.innerHTML = content;
-}
-
 export async function updateFooter() {
     const elem = document.getElementById('footer');
     const content = `
@@ -79,7 +68,7 @@ export async function updateSearchAssets(target) {
             </span>
           </div>
           <div class="control">
-            <button id="action-button" class="button is-primary">Go</button>
+            <button id="action-button" class="button is-link">Go</button>
           </div>
         </div>
 
@@ -135,7 +124,18 @@ export async function updateSearchBlocks() {
             </span>
           </div>
           <div class="control">
-            <button id="action-button" class="button is-primary">Go</button>
+          <div class="select">
+              <select>
+                <option>Select a chain</option>
+                <option selected>Polkadot</option>
+                <option>AssetHub</option>
+                <option>People</option>
+                <option>Collectives</option>
+              </select>
+            </div>
+          </div>
+          <div class="control">
+            <button id="action-button" class="button is-warning">Go</button>
           </div>
         </div>
 `;

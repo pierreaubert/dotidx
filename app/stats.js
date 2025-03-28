@@ -1,5 +1,5 @@
 // import Plotly from "plotly.js-dist-min";
-import { updateHero, updateFooter, updateNav } from './components.js';
+import { updateFooter, updateNav } from './components.js';
 import { showError } from './misc.js';
 
 // Function to fetch and display completion rate
@@ -11,7 +11,7 @@ async function fetchCompletionRate() {
         return "Element dont't exists"; // Exit if elements don't exist
     }
 
-    const response = await fetch('/stats/completion_rate');
+    const response = await fetch('/fe/stats/completion_rate');
     if (!response.ok) {
         throw new Error(`HTTP error ${response.status}`);
     }
@@ -60,7 +60,7 @@ async function fetchMonthlyStats() {
         return "Element dont't exists";
     }
 
-    const response = await fetch('/stats/per_month');
+    const response = await fetch('/fe/stats/per_month');
     if (!response.ok) {
         throw new Error(`HTTP error ${response.status}`);
     }
@@ -114,7 +114,6 @@ async function fetchMonthlyStats() {
 }
 
 async function initStats() {
-    await updateHero();
     await updateNav();
     await updateFooter();
 

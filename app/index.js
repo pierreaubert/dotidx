@@ -1,4 +1,4 @@
-import { updateHero, updateFooter, updateNav } from './components.js';
+import { updateFooter, updateNav } from './components.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
