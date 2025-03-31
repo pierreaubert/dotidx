@@ -39,6 +39,107 @@ func main() {
 	if err := generateFileFromTemplate(*config, *templateDir, targetDir); err != nil {
 		log.Fatal(err)
 	}
+
+
+	if err := generateFilePerRelaychain(*config, *templateDir, targetDir); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := generateFilePerChain(*config, *templateDir, targetDir); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func toTitle(s string) string {
+    return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
+}
+
+func generateFilePerChain(config dix.MgrConfig, sourceDir, destDir string) error {
+	confDir := fmt.Sprintf(`%s/conf`, destDir)
+	err := os.Mkdir(confDir, 0700)
+	if err != nil && !os.IsExist(err) {
+		fmt.Printf("failed creating directory: %s\n", confDir)
+		log.Fatal(err)
+	}
+
+	for relay := range config.Parachains {
+		for chain := range config.Parachains[relay] {
+			dst := fmt.Sprintf(`%s/conf/%s-%s-node-archive.conf`,
+				destDir,
+				relay,
+				chain,
+			)
+  			outFile, err := os.Create(dst)
+ 			if err != nil {
+ 				return fmt.Errorf("failed to create output file %s: %w", dst, err)
+ 			}
+ 			defer outFile.Close()
+
+			nodeTmpl := fmt.Sprintf(`
+# configuration for the relay chain
+NODE_BIN={{.DotidxBin}}/polkadot-parachain
+NODE_CHAIN={{.Parachains.%[2]s.%[4]s.Name}}
+NODE_NAME=10%[1]s%[3]s
+NODE_BASE_PATH={{.Parachains.%[2]s.%[4]s.Basepath}}
+NODE_PORT_WS={{.Parachains.%[2]s.%[4]s.PortWS}}
+NODE_PORT_RPC={{.Parachains.%[2]s.%[4]s.PortRPC}}
+NODE_RELAY="ws://{{.Parachains.%[2]s.%[2]s.RelayIP}}:{{.Parachains.%[2]s.%[2]s.PortWS}}"
+NODE_PROM_PORT={{.Parachains.%[2]s.%[4]s.PrometheusPort}}
+`, toTitle(relay), relay, toTitle(chain), chain);
+
+			log.Printf(nodeTmpl)
+ 			node, err := template.New("node").Parse(nodeTmpl)
+ 			if err != nil {
+ 				return fmt.Errorf("failed to parse template relay: %w", err)
+ 			}
+ 			if err := node.Execute(outFile, config); err != nil {
+ 				return fmt.Errorf("failed to execute template relay: %w", err)
+ 			}
+		}
+	}
+	return nil
+}
+
+func generateFilePerRelaychain(config dix.MgrConfig, sourceDir, destDir string) error {
+	confDir := fmt.Sprintf(`%s/conf`, destDir)
+	err := os.Mkdir(confDir, 0700)
+	if err != nil && !os.IsExist(err) {
+		fmt.Printf("failed creating directory: %s\n", confDir)
+		log.Fatal(err)
+	}
+
+	for relay := range config.Parachains {
+		dst := fmt.Sprintf(`%s/conf/%s-relay-archive.conf`,
+			destDir,
+			relay,
+		)
+  		outFile, err := os.Create(dst)
+ 		if err != nil {
+ 			return fmt.Errorf("failed to create output file %s: %w", dst, err)
+ 		}
+ 		defer outFile.Close()
+
+		relayTmpl := fmt.Sprintf(`
+# configuration for the relay chain
+NODE_BIN={{.DotidxBin}}/polkadot
+NODE_CHAIN=%[2]s
+NODE_NAME=10%[1]s
+NODE_BASE_PATH={{.Parachains.%[2]s.%[2]s.Basepath}}
+NODE_PORT_WS={{.Parachains.%[2]s.%[2]s.PortWS}}
+NODE_PORT_RPC={{.Parachains.%[2]s.%[2]s.PortRPC}}
+NODE_PROM_PORT={{.Parachains.%[2]s.%[2]s.PrometheusPort}}
+`, toTitle(relay), relay);
+
+		// log.Printf(relayTmpl)
+ 		relay, err := template.New("relay").Parse(relayTmpl)
+ 		if err != nil {
+ 			return fmt.Errorf("failed to parse template relay: %w", err)
+ 		}
+ 		if err := relay.Execute(outFile, config); err != nil {
+ 			return fmt.Errorf("failed to execute template relay: %w", err)
+ 		}
+	}
+	return nil
 }
 
 func generateFileFromTemplate(config dix.MgrConfig, sourceDir, destDir string) error {

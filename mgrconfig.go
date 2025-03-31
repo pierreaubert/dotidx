@@ -3,27 +3,26 @@ package dotidx
 import (
 	"fmt"
 	"os"
-	// "path/filepath"
-	// "strings"
-	// "text/template"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
 )
 
 type MgrConfig struct {
-	TargetDir    string                                `toml:"target_dir"`
-	Name         string                                `toml:"name"`
-	DotidxRoot   string                                `toml:"dotidx_root"`
-	DotidxBackup string                                `toml:"dotidx_backup"`
-	DotidxRun    string                                `toml:"dotidx_run"`
-	DotidxLogs   string                                `toml:"dotidx_logs"`
-	DotidxBatch  DotidxBatch                           `toml:"dotidx_batch"`
-	DotidxDB     DotidxDB                              `toml:"dotidx_db"`
-	DotidxFE     DotidxFE                              `toml:"dotidx_fe"`
-	Parachains   map[string]map[string]ParaChainConfig `toml:"parachains"`
-	Filesystem   FilesystemConfig                      `toml:"filesystem"`
-	Monitoring   MonitoringConfig                      `toml:"monitoring"`
+	TargetDir     string                                `toml:"target_dir"`
+	Name          string                                `toml:"name"`
+	DotidxRoot    string                                `toml:"dotidx_root"`
+	DotidxBackup  string                                `toml:"dotidx_backup"`
+	DotidxRun     string                                `toml:"dotidx_run"`
+	DotidxRunTime string                                `toml:"dotidx_runtime"`
+	DotidxLogs    string                                `toml:"dotidx_logs"`
+	DotidxBin     string                                `toml:"dotidx_bin"`
+	DotidxBatch   DotidxBatch                           `toml:"dotidx_batch"`
+	DotidxDB      DotidxDB                              `toml:"dotidx_db"`
+	DotidxFE      DotidxFE                              `toml:"dotidx_fe"`
+	Parachains    map[string]map[string]ParaChainConfig `toml:"parachains"`
+	Filesystem    FilesystemConfig                      `toml:"filesystem"`
+	Monitoring    MonitoringConfig                      `toml:"monitoring"`
 }
 
 type DotidxDB struct {
@@ -58,17 +57,21 @@ type DotidxFE struct {
 
 type ParaChainConfig struct {
 	Name            string `toml:"name"`
-	Port            int    `toml:"port"`
+	PortRPC         int    `toml:"port_rpc"`
+	PortWS          int    `toml:"port_ws"`
 	Basepath        string `toml:"basepath"`
 	ChainreaderIP   string `toml:"chainreader_ip"`
 	ChainreaderPort int    `toml:"chainreader_port"`
 	SidecarIP       string `toml:"sidecar_ip"`
 	SidecarPort     int    `toml:"sidecar_port"`
 	SidecarCount    int    `toml:"sidecar_count"`
+	PrometheusPort  int    `toml:"prometheus_port"`
+	RelayIP         string `toml:"relay_ip"`
+	NodeIP          string `toml:"node_ip"`
 }
 
 func (ParaChainConfig) ComputePort(i, j int) int {
-	return i+j+1
+	return i + j + 1
 }
 
 type FilesystemConfig struct {
