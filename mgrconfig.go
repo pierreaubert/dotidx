@@ -12,7 +12,7 @@ import (
 )
 
 type MgrConfig struct {
-	Target       string                                `toml:"target"`
+	TargetDir    string                                `toml:"target_dir"`
 	Name         string                                `toml:"name"`
 	DotidxRoot   string                                `toml:"dotidx_root"`
 	DotidxBackup string                                `toml:"dotidx_backup"`
@@ -64,6 +64,11 @@ type ParaChainConfig struct {
 	ChainreaderPort int    `toml:"chainreader_port"`
 	SidecarIP       string `toml:"sidecar_ip"`
 	SidecarPort     int    `toml:"sidecar_port"`
+	SidecarCount    int    `toml:"sidecar_count"`
+}
+
+func (ParaChainConfig) ComputePort(i, j int) int {
+	return i+j+1
 }
 
 type FilesystemConfig struct {

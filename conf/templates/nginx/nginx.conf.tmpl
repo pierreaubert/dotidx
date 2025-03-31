@@ -1,0 +1,48 @@
+worker_processes auto;
+
+events {
+    worker_connections 1024;
+}
+
+pid        run/nginx.pid;
+
+http {
+    tcp_nopush on;
+    types {
+        application/json json;
+    }
+    default_type application/json;
+
+    gzip on;
+
+    client_body_buffer_size 64K;
+    client_max_body_size 100M;
+
+    {{range $relay, $chains := .Parachains}}
+      {{range $chain, $props := $chains}}
+    upstream sidecar_{{$relay}}_{{$chain}} {
+      {{range $cnt := $props.SidecarCount}}
+      server {{$props.SidecarIP}}:{{$props.ComputePort $props.SidecarPort $cnt}};
+      {{end}}
+      keepalive 64;
+    }
+      {{end}}
+    {{end}}
+
+    {{range $relay, $chains := .Parachains}}
+      {{range $chain, $props := $chains}}
+    server {
+        listen {{$props.SidecarPort}}:{{$props.SidecarIP}};
+        access_log logs/nginx.access.log;
+        error_log  logs/nginx.errors.log;
+        location / {
+            proxy_pass http://sidecar_{{$relay}}_{{$chain}}/;
+            limit_rate 0;
+            proxy_buffering off;
+            proxy_request_buffering off;
+        }
+    }
+      {{end}}
+    {{end}}
+
+}

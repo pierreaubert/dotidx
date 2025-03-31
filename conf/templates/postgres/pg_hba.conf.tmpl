@@ -133,5 +133,5 @@ host    replication     all             ::1/128                 scram-sha-256
 #
 local   dotidx         dotidx                                 peer
 {{range .DotidxDB.WhitelistedIP}}
-host    {{$.DotidxDB.User}}	{{$.DotidxDB.Name}}	./32	password
+host    {{$.DotidxDB.User}}	{{$.DotidxDB.Name}}	{{.}}/32	password
 {{end}}
