@@ -14,13 +14,26 @@ name = "dotidx"
 ip = "127.0.0.1"
 user = "dotidx"
 port = 5434
+password = "secret"
 memory = "64GB"
 data_dir = "/dotidx/pg"
 run_dir = "/dotidx/run"
 whitelisted_ip = ["192.168.1.1/32"]
 
+[dotidx_fe]
+ip = "127.0.0.1"
+port = 8080
+
+[dotidx_batch]
+start_range = 1
+end_range = 10
+batch_size = 10
+max_workers = 4
+batching = "batch"
+flush_timeout = "1m"
+
 [parachains.polkadot.polkadot]
-name = "polkadot"  # name for the polkadot binary --chain parameter
+name = "polkadot"
 port = 9944
 basepath = "/dotidx/polkadot-node-archive"
 chainreader_ip = "127.0.0.1"
@@ -29,7 +42,7 @@ sidecar_ip = "127.0.0.1"
 sidecar_port = 10800  # will use +1 +2 etc for each sidecar instance
 
 [parachains.polkadot.assethub]
-name = "asset-hub-polkadot"  # name for the polkadot binary --chain parameter
+name = "asset-hub-polkadot"
 port = 9946
 basepath = "/dotidx/assethub-node-archive"
 chainreader_ip = "127.0.0.1"
@@ -38,7 +51,7 @@ sidecar_ip = "127.0.0.1"
 sidecar_port = 10900  # will use +1 +2 etc for each sidecar instance
 
 [parachains.polkadot.people]
-name = "people-polkadot"  # name for the polkadot binary --chain parameter
+name = "people-polkadot"
 port = 9948
 basepath = "/dotidx/people-node-archive"
 chainreader_ip = "127.0.0.1"
@@ -47,13 +60,31 @@ sidecar_ip = "127.0.0.1"
 sidecar_port = 11000  # will use +1 +2 etc for each sidecar instance
 
 [parachains.polkadot.collectives]
-name = "collectives-polkadot"  # name for the polkadot binary --chain parameter
+name = "collectives-polkadot"
 port = 9950
 basepath = "/dotidx/collectives-node-archive"
 chainreader_ip = "127.0.0.1"
 chainreader_port = 11100
 sidecar_ip = "127.0.0.1"
 sidecar_port = 11100  # will use +1 +2 etc for each sidecar instance
+
+[parachains.polkadot.mythos]
+name = "mythos"
+port = 9952
+basepath = "/dotidx/mythos-node-archive"
+chainreader_ip = "127.0.0.1"
+chainreader_port = 11200
+sidecar_ip = "127.0.0.1"
+sidecar_port = 11200  # will use +1 +2 etc for each sidecar instance
+
+[parachains.polkadot.frequency]
+name = "frequency"
+port = 9954
+basepath = "/dotidx/frequency-node-archive"
+chainreader_ip = "127.0.0.1"
+chainreader_port = 11300
+sidecar_ip = "127.0.0.1"
+sidecar_port = 11300  # will use +1 +2 etc for each sidecar instance
 
 [filesystem]
 zfs = true

@@ -115,17 +115,11 @@ function createStakingGraph(graphData, graphDiv, address) {
         },
     ];
 
+    const text = `Cummulative rewards over time: ${cummulativeRewards.toFixed(0)} DOTs`;
+    document.getElementById('staking-summary').textContent = text;
+
     // Configure the layout
     const layout = {
-        title: {
-            text: `Cummulative rewards over time: ${cummulativeRewards.toFixed(0)} DOTs`,
-            font: {
-                size: 18,
-            },
-            xanchor: 'left',
-            x: 0,
-        },
-        showlegend: true,
         legend: {
             orientation: 'h',
             y: -0.2,
@@ -205,8 +199,15 @@ function renderStakingsRewardsTable(extrinsicsByMonth, flip) {
     });
 
     let html = '<table class="table is-fullwidth is-striped is-hoverable result-table">';
-    html +=
-        '<thead><tr><th>Timestamp</th><th>Method</th><th class="has-text-right">Amount (DOT)</th><th>Details</th></tr></thead>';
+    html += `<thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Chain</th>
+            <th>Method</th>
+            <th class="has-text-right">Amount (DOT)</th>
+            <th>Details</th>
+            </tr>
+        </thead>`;
     html += '<tbody>';
 
     sortedMonths.forEach((monthKey) => {
@@ -233,8 +234,9 @@ function renderStakingsRewardsTable(extrinsicsByMonth, flip) {
                 }
 
                 html += '<tr>';
-                html += `<td>${extrinsic.formattedTime || extrinsic.timestamp}</td>`;
-                html += `<td>${extrinsic.method.method}</td>`;
+                html += `  <td>${extrinsic.formattedTime || extrinsic.timestamp}</td>`;
+                html += `  <td>${extrinsic.chain}</td>`;
+                html += `  <td>${extrinsic.method.method}</td>`;
 
                 let amount = extrinsic.totalAmount.toFixed(2);
                 let detailsContent = {
@@ -244,10 +246,10 @@ function renderStakingsRewardsTable(extrinsicsByMonth, flip) {
                     subpallet: extrinsic.method.pallet,
                 };
 
-                html += `<td class="has-text-right">${amount}</td>`;
+                html += `  <td class="has-text-right">${amount}</td>`;
 
                 const detailsId = `extrinsic-details-${monthKey}-${index}`;
-                html += `<td><button class="button is-small toggle-details" data-target="${detailsId}">&gt;</button></td>`;
+                html += `  <td><button class="button is-small toggle-details" data-target="${detailsId}">&gt;</button></td>`;
                 html += '</tr>';
 
                 html += `<tr id="${detailsId}" class="details-row" style="display: none;">`;
@@ -261,90 +263,99 @@ function renderStakingsRewardsTable(extrinsicsByMonth, flip) {
     return html;
 }
 
-function extractStakingsFromBlocks(blocks, address) {
+function extractStakingsFromBlocks(results, address) {
     const stakings = [];
+    for (const [relay, chains] of Object.entries(results)) {
+        for (const [chain, blocks] of Object.entries(chains)) {
+            if (blocks == undefined) {
+                continue;
+            }
+            blocks.forEach((block) => {
+                if (!block.extrinsics) {
+                    return;
+                }
 
-    // Go through all blocks and collect extrinsics
-    blocks.forEach((block) => {
-        if (!block.extrinsics) {
-            return;
-        }
+                const timestamp = block.timestamp || 'N/A';
+                const blockId = block.number || 'N/A';
 
-        const timestamp = block.timestamp || 'N/A';
-        const blockId = block.number || 'N/A';
+                if (block.extrinsics['staking'] != undefined) {
+                    block.extrinsics['staking'].forEach((extrinsic) => {
+                        if (extrinsic?.method.pallet == 'staking') {
+                            let amount = 0.0;
+                            if (extrinsic.method.method === 'Transfer') {
+                                amount = parseFloat(extrinsic.data[2]);
+                                if (address === extrinsic.data[0]) {
+                                    amount = -amount;
+                                }
+                            } else if (extrinsic.method.method === 'Deposit') {
+                                amount = parseFloat(extrinsic.data[1]);
+                            } else if (extrinsic.method.method === 'Withdrawn') {
+                                amount = -parseFloat(extrinsic.data[1]);
+                            } else if (extrinsic.method.method === 'Rewarded') {
+                                amount = parseFloat(extrinsic.data[2]);
+                            } else if (extrinsic.method.method === 'Unbonded') {
+                                amount = -parseFloat(extrinsic.data[1]);
+                            } else if (extrinsic.method.method === 'Bonded') {
+                                amount = parseFloat(extrinsic.data[1]);
+                            } else {
+                                console.log('TODO: ' + extrinsic.method.pallet + ' ' + extrinsic.method.method);
+                            }
 
-        if (block.extrinsics['staking'] != undefined) {
-            block.extrinsics['staking'].forEach((extrinsic) => {
-                if (extrinsic?.method.pallet == 'staking') {
-                    let amount = 0.0;
-                    if (extrinsic.method.method === 'Transfer') {
-                        amount = parseFloat(extrinsic.data[2]);
-                        if (address === extrinsic.data[0]) {
-                            amount = -amount;
+                            amount = amount / 10 / 1000 / 1000 / 1000;
+
+                            stakings.push({
+                                timestamp: timestamp,
+                                relay: relay,
+                                chain: chain,
+                                blockId: blockId,
+                                pallet: 'staking',
+                                method: extrinsic.method,
+                                totalAmount: amount,
+                            });
                         }
-                    } else if (extrinsic.method.method === 'Deposit') {
-                        amount = parseFloat(extrinsic.data[1]);
-                    } else if (extrinsic.method.method === 'Withdrawn') {
-                        amount = -parseFloat(extrinsic.data[1]);
-                    } else if (extrinsic.method.method === 'Rewarded') {
-                        amount = parseFloat(extrinsic.data[2]);
-                    } else if (extrinsic.method.method === 'Unbonded') {
-                        amount = -parseFloat(extrinsic.data[1]);
-                    } else if (extrinsic.method.method === 'Bonded') {
-                        amount = parseFloat(extrinsic.data[1]);
-                    } else {
-                        console.log('TODO: ' + extrinsic.method.pallet + ' ' + extrinsic.method.method);
-                    }
+                    });
+                }
 
-                    amount = amount / 10 / 1000 / 1000 / 1000;
+                if (block.extrinsics['utility'] != undefined) {
+                    block.extrinsics['utility'].forEach((extrinsic) => {
+                        if (extrinsic?.method.pallet == 'staking') {
+                            let amount = 0.0;
+                            if (extrinsic.method.method === 'Transfer') {
+                                amount = parseFloat(extrinsic.data[2]);
+                                if (address === extrinsic.data[0]) {
+                                    amount = -amount;
+                                }
+                            } else if (extrinsic.method.method === 'Deposit') {
+                                amount = parseFloat(extrinsic.data[1]);
+                            } else if (extrinsic.method.method === 'Withdrawn') {
+                                amount = -parseFloat(extrinsic.data[1]);
+                            } else if (extrinsic.method.method === 'Rewarded') {
+                                amount = parseFloat(extrinsic.data[2]);
+                            } else if (extrinsic.method.method === 'Unbonded') {
+                                amount = -parseFloat(extrinsic.data[1]);
+                            } else if (extrinsic.method.method === 'Bonded') {
+                                amount = parseFloat(extrinsic.data[1]);
+                            } else {
+                                console.log('TODO: ' + extrinsic.method.pallet + ' ' + extrinsic.method.method);
+                            }
 
-                    stakings.push({
-                        timestamp,
-                        blockId,
-                        pallet: 'staking',
-                        method: extrinsic.method,
-                        totalAmount: amount,
+                            amount = amount / 10 / 1000 / 1000 / 1000;
+
+                            stakings.push({
+                                timestamp: timestamp,
+                                blockId: blockId,
+                                relay: relay,
+                                chain: chain,
+                                pallet: 'staking',
+                                method: extrinsic.method,
+                                totalAmount: amount,
+                            });
+                        }
                     });
                 }
             });
         }
-        if (block.extrinsics['utility'] != undefined) {
-            block.extrinsics['utility'].forEach((extrinsic) => {
-                if (extrinsic?.method.pallet == 'staking') {
-                    let amount = 0.0;
-                    if (extrinsic.method.method === 'Transfer') {
-                        amount = parseFloat(extrinsic.data[2]);
-                        if (address === extrinsic.data[0]) {
-                            amount = -amount;
-                        }
-                    } else if (extrinsic.method.method === 'Deposit') {
-                        amount = parseFloat(extrinsic.data[1]);
-                    } else if (extrinsic.method.method === 'Withdrawn') {
-                        amount = -parseFloat(extrinsic.data[1]);
-                    } else if (extrinsic.method.method === 'Rewarded') {
-                        amount = parseFloat(extrinsic.data[2]);
-                    } else if (extrinsic.method.method === 'Unbonded') {
-                        amount = -parseFloat(extrinsic.data[1]);
-                    } else if (extrinsic.method.method === 'Bonded') {
-                        amount = parseFloat(extrinsic.data[1]);
-                    } else {
-                        console.log('TODO: ' + extrinsic.method.pallet + ' ' + extrinsic.method.method);
-                    }
-
-                    amount = amount / 10 / 1000 / 1000 / 1000;
-
-                    stakings.push({
-                        timestamp,
-                        blockId,
-                        pallet: 'staking',
-                        method: extrinsic.method,
-                        totalAmount: amount,
-                    });
-                }
-            });
-        }
-    });
-
+    }
     return stakings;
 }
 
@@ -382,14 +393,14 @@ async function fetchStaking() {
     const textRaw = await response.text();
     const result = JSON.parse(textRaw);
 
-    const resultDiv = document.getElementById('staking-result');
+    const resultDiv = document.getElementById('staking-results');
     const othersDiv = document.getElementById('staking-others');
     const rewardsDiv = document.getElementById('staking-rewards');
     const graphDiv = document.getElementById('staking-graph');
 
     resultDiv.classList.remove('is-hidden');
 
-    if (result && Array.isArray(result) && result.length > 0) {
+    if (result) {
         const stakings = extractStakingsFromBlocks(result, address);
 
         stakings.forEach((extrinsic) => {
@@ -408,8 +419,10 @@ async function fetchStaking() {
 
         addExtrinsicToggleListeners();
     } else {
-        dataDiv.innerHTML = '<p>No staking data found for this address.</p>';
+        resultDiv.innerHTML = '<p>No staking data found for this address.</p>';
         graphDiv.innerHTML = '';
+        othersDiv.innerHTML = '';
+        rewardsDiv.innerHTML = '';
     }
 }
 

@@ -36,6 +36,8 @@ func (eb *EventsBalance) Process(extrinsics json.RawMessage) (filtered json.RawM
 		`extrinsics.#(method.pallet=="staking").events.#(data.#(%%"%s"))#|#(method.pallet=="balances")#`,
 		eb.address)
 
+	// add transactionPayment ?
+
 	// expensive ...
 	sextrinsics := fmt.Sprintf(`{"extrinsics": %s}`, string(extrinsics))
 
@@ -82,7 +84,7 @@ func (es *EventsStaking) Process(extrinsics json.RawMessage) (filtered json.RawM
 
 	// in pallet staking takes all events that match address and balances
 	patternStaking := fmt.Sprintf(
-		`extrinsics.#(method.pallet=="staking").events.#(data.#(%%"%s"))#|#(method.pallet=="balances")#`,
+		`extrinsics.#(method.pallet=="staking").events.#(data.#(%%"%s"))#`,
 		es.address)
 
 	// in pallet utility takes all events that match address and staking

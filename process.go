@@ -6,7 +6,13 @@ import (
 )
 
 // ProcessSingleBlock fetches and processes a single block using fetchBlock
-func ProcessSingleBlock(ctx context.Context, blockID int, config Config, db Database, reader ChainReader) {
+func ProcessSingleBlock(
+	ctx context.Context,
+	blockID int,
+	relayChain, chain string,
+	db Database,
+	reader ChainReader,
+) {
 	block, err := reader.FetchBlock(ctx, blockID)
 	if err != nil {
 		log.Printf("Error fetching block %d: %v", blockID, err)
@@ -14,7 +20,7 @@ func ProcessSingleBlock(ctx context.Context, blockID int, config Config, db Data
 	}
 
 	// Save block to database
-	err = db.Save([]BlockData{block}, config)
+	err = db.Save([]BlockData{block}, relayChain, chain)
 	if err != nil {
 		log.Printf("Error saving block %d: %v", blockID, err)
 		return
@@ -22,7 +28,13 @@ func ProcessSingleBlock(ctx context.Context, blockID int, config Config, db Data
 }
 
 // ProcessBlockBatch fetches and processes a batch of blocks using fetchBlockRange
-func ProcessBlockBatch(ctx context.Context, blockIDs []int, config Config, db Database, reader ChainReader) {
+func ProcessBlockBatch(
+	ctx context.Context,
+	blockIDs []int,
+	relayChain, chain string,
+	db Database,
+	reader ChainReader,
+) {
 	if len(blockIDs) == 0 {
 		return
 	}
@@ -45,7 +57,7 @@ func ProcessBlockBatch(ctx context.Context, blockIDs []int, config Config, db Da
 	}
 
 	// Save blocks to database
-	err = db.Save(blockRange, config)
+	err = db.Save(blockRange, relayChain, chain)
 	if err != nil {
 		log.Printf("Error saving blocks %d-%d: %v", blockIDs[0], blockIDs[len(blockIDs)-1], err)
 		return

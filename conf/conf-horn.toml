@@ -13,11 +13,25 @@ version = 16
 name = "dotidx"
 ip = "192.168.1.36"
 user = "dotidx"
+password = "funradio"
 port = 5434
 memory = "64GB"
 data_dir = "/polkadot/postgres_data/dotidx"
 run_dir = "/polkadot/postgres_data/run"
 whitelisted_ip = ["192.168.1.102", "192.168.1.36", "192.168.1.37"]
+
+[dotidx_batch]
+start_range = 1
+end_range = -1
+batch_size = 10
+max_workers = 4
+batching = "batch"
+flush_timeout = "15s"
+
+[dotidx_fe]
+ip = "127.0.0.1"
+port = 8080
+static_path = "./app"
 
 [parachains.polkadot.polkadot]
 name = "polkadot"  # name for the polkadot binary --chain parameter
@@ -54,6 +68,24 @@ chainreader_ip = "192.168.1.36"
 chainreader_port = 11100
 sidecar_ip = "127.0.0.1"
 sidecar_port = 11100  # will use +1 +2 etc for each sidecar instance
+
+[parachains.polkadot.mythos]
+name = "mythos"
+port = 9952
+basepath = "/dotidx/mythos-node-archive"
+chainreader_ip = "192.168.1.36"
+chainreader_port = 11200
+sidecar_ip = "127.0.0.1"
+sidecar_port = 11200  # will use +1 +2 etc for each sidecar instance
+
+[parachains.polkadot.frequency]
+name = "frequency"
+port = 9954
+basepath = "/dotidx/frequency-node-archive"
+chainreader_ip = "192.168.1.36"
+chainreader_port = 11300
+sidecar_ip = "127.0.0.1"
+sidecar_port = 11300  # will use +1 +2 etc for each sidecar instance
 
 [filesystem]
 zfs = true

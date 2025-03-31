@@ -7,14 +7,15 @@ Quality is currently *beta*. Contributions are very welcome!
 ## Features
 
 - Fetches block data from a Polkadot parachain via a sidecar API
-- Stores data in a PostgreSQL database
+- Stores data into a PostgreSQL database and can use multiple disks sata and ssd.
 - Supports concurrent processing of multiple blocks
-- Graceful shutdown on interrupt
+- Demo website at [dotidx.xyz](https://dev.dotidx.xyz/index.html)
 
 ## Requirements
 
 - Go 1.20 or higher
 - PostgreSQL database version 16 or higher
+- Lots of disk space (>= 20TB to index a subset of the parachains)
 
 ## Design
 
@@ -82,77 +83,67 @@ total 8
 
 The system built 5 binaries:
 
+- `dixmgr`: a service that launches and monitor all the various services.
 - `dixbatch` : pull large amount of blocks into the database.
 - `dixlive`: can pull the head of 1 or many chains into the database (and run continously).
 - `dixfe`: a web frontend to demonstrate how to use the data in the database.
 - `dixcron`: a cron system running long range queries on the database.
-- `dixmgr`: a service that launches and monitor all the various services (unrelease yet).
+
+### Configuration management
+
+There is a main configuration file with a TOML syntax. There are two examples, a simple one with all the services on one machine and a more complex one where each components can be on a different server.
+
+The toml file is processed by `dixmgr` and generates configurations for a set of software that are required to work together:
+- a database Postgres with a connection pooler
+- a set of Polkadot nodes one per parachain and one for the relay chain
+- a set of Sidecar frontends per node
+- a in memory cache Valkey
+- a Nginx reverse proxy
+- a batch indexer per node
+- a live indexer
+- a frontend
+- a monitoring system with
+  - Prometheus
+  - Grafana
+  - Postgres exporter
+  - Node exporter
+  - Nging exporter
+
+The current supported version is based on systemd. A docker configuration can easily be build if needed.
+
+**Do not edit the generated files! They are overriden by the configuration manager.**
+
+### Blocks ingestion
 
 ```bash
-dotidx -start=1000 -end=2000 -sidecar=http://localhost:8080 -postgres="postgres://user:pass@localhost:5432/db" -workers 5 -batch 10
+dixbatch -relaychain polkadot -chain assethub -conf simple.toml
 ```
 
-or if you want to index live blocks:
-
-```bash
-dotidx -live -sidecar=http://localhost:8080 -postgres="postgres://user:pass@localhost:5432/db" -workers 5 -batch 10
-```
-
-## Interface
-
-```bash
-dotfe -postgres="postgres://user:pass@localhost:5432/db"
-```
-
-The web API is available at 'http://localhost:8080'
-
-### Command Line Options
-
-| Option         | Description                                           | Default |
-|----------------|-------------------------------------------------------|---------|
-| `-start`       | Start of the block range                              | 1       |
-| `-end`         | End of the block range                                | HeadID  |
-| `-chainreader` | Sidecar API URL (required)                            | -       |
-| `-database`    | PostgreSQL connection URI (required)                  | -       |
-| `-batch`       | Number of items to collect before writing to database | 10      |
-| `-workers`     | Maximum number of concurrent workers                  | 5       |
-| `-flush`       | Maximum time to wait before flushing data to database | 30s     |
-| `-live`        | Index new blocks on the fly                           |         |
-
-> **Note**: The application automatically adds `sslmode=disable` to the PostgreSQL connection URI if not already specified. If you need SSL, explicitly include `sslmode=require` or another appropriate SSL mode in your connection string.
-
-You should see something like:
-```
-2025/03/11 17:56:24 workers.go:310: +-- Blocks -------------|------ Chain Reader ----|------- DBwriter -------------+
-2025/03/11 17:56:24 workers.go:311: | #----#  b/s  b/s  b/s | Latency          Error |  tr/s Latency          Error |
-2025/03/11 17:56:24 workers.go:312: |          1d   1h   5m | avg min max (ms)     % |       avg min max (ms)    %  |
-2025/03/11 17:56:24 workers.go:313: +-----------------------|------------------------|------------------------------|
-2025/03/11 17:56:24 workers.go:319: |  40201 48.5 48.5 55.8 |  21  10   74      0%   |  562.1    2   1  141      0%  |
-2025/03/11 17:56:39 workers.go:319: |  42171 48.5 48.5 47.1 |  21  10   74      0%   |  564.6    2   1  141      0%  |
-2025/03/11 17:56:54 workers.go:319: |  44221 48.5 48.5 48.9 |  21  10   74      0%   |  556.5    2   1  141      0%  |
-2025/03/11 17:57:09 workers.go:319: |  46241 48.5 48.5 48.7 |  21  10   74      0%   |  558.9    2   1  141      0%  |
-2025/03/11 17:57:24 workers.go:319: |  48441 48.7 48.7 49.7 |  21  10   74      0%   |  564.3    2   1  141      0%  |
-2025/03/11 17:57:39 workers.go:319: |  50551 48.8 48.8 49.9 |  20  10   74      0%   |  566.4    2   1  141      0%  |
-2025/03/11 17:57:54 workers.go:319: |  52561 48.8 48.8 49.9 |  20  10   74      0%   |  560.0    2   1  141      0%  |
-2025/03/11 17:58:09 workers.go:319: |  54661 48.9 48.9 50.1 |  20  10   74      0%   |  559.0    2   1  141      0%  |
-2025/03/11 17:58:24 workers.go:319: |  56861 49.1 49.1 50.4 |  20  10   74      0%   |  562.5    2   1  141      0%  |
-2025/03/11 17:58:39 workers.go:319: |  59041 49.2 49.2 50.6 |  20  10   74      0%   |  565.4    2   1  141      0%  |
-2025/03/11 17:58:54 workers.go:319: |  61231 49.3 49.3 50.8 |  20  10   74      0%   |  569.5    2   1  141      0%  |
-2025/03/11 17:59:09 workers.go:319: |  63301 49.3 49.3 50.8 |  20  10   74      0%   |  567.7    2   1  141      0%  |
-2025/03/11 17:59:24 workers.go:319: |  65431 49.4 49.4 50.8 |  20  10   74      0%   |  570.6    2   1  141      0%  |
-2025/03/11 17:59:39 workers.go:319: |  67521 49.4 49.4 50.8 |  20  10   74      0%   |  568.4    2   1  141      0%  |
-2025/03/11 17:59:54 workers.go:319: |  69561 49.4 49.4 50.7 |  20  10   74      0%   |  567.1    2   1  141      0%  |
-2025/03/11 18:00:09 workers.go:319: |  71551 49.4 49.4 50.5 |  20  10   74      0%   |  564.8    2   1  141      0%  |
-2025/03/11 18:00:24 workers.go:319: |  73721 49.5 49.5 50.6 |  20  10   74      0%   |  566.8    2   1  141      0%  |
-2025/03/11 18:00:39 workers.go:319: |  75891 49.5 49.5 50.7 |  20  10   74      0%   |  570.5    2   1  141      0%  |
-2025/03/11 18:00:54 workers.go:319: |  78021 49.6 49.6 50.7 |  20  10   74      0%   |  573.2    2   1  141      0%  |
-2025/03/11 18:01:09 workers.go:319: |  80191 49.6 49.6 50.8 |  20  10   74      0%   |  575.8    2   1  141      0%  |
 ```
 A mini pc machine can read ~30 blocks per second and write them to the database so roughly one week to get up to date with 25_000_000 blocks. With a larger machine (32 CPUs, 256GB RAM, 8x 1TB NVMe SSD) the indexer took 20h to get up to date. The speed at which the node can read the blocks is the limiting factor.
 
 Notes:
 - If you can put the database on a diffent set of disks it does help.
 - M2 SSD will thermal throttle hard if they are not properly cooled.
+
+### Continous ingestion of head blocks
+
+```bash
+dotidx -live -sidecar=http://localhost:8080 -postgres="postgres://user:pass@localhost:5432/db" -workers 5 -batch 10
+```
+
+### Cron
+
+Run some queries continuously in the background.
+
+### Frontend
+
+```bash
+dotfe -postgres="postgres://user:pass@localhost:5432/db"
+```
+
+The web API is available at 'http://localhost:8080' in development mode. It does have a demo site.
+The frontend does proxy duty for the static content and for sidecar which is convenient in dev mode.
 
 ## Testing
 

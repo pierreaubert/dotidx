@@ -4,11 +4,14 @@ function processBalance(b) {
     return Math.round(r * 100) / 100;
 }
 
-export async function getAccountAt(address, blockid) {
-    const balanceUrl = '/proxy/accounts/' + address + '/balance-info?at=' + blockid;
+export async function getAccountAt(relay, chain, address, blockid) {
+    let balanceUrl = `/proxy/${relay}/${chain}/accounts/${address}/balance-info`;
+    if (blockid != '') {
+        balanceUrl += `?at=${blockid}`;
+    }
     const response = await fetch(balanceUrl, { mode: 'cors' });
     if (!response.ok) {
-        throw new Error(`HTTP error ${response.status}`);
+        return {};
     }
     const textRaw = await response.text();
     const result = await JSON.parse(textRaw);

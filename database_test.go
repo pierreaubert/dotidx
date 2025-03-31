@@ -93,7 +93,7 @@ func TestSaveToDatabase(t *testing.T) {
 	}()
 
 	// Save data to database (should trigger immediate batch flush due to matching batch size)
-	err = database.Save(testData, testConfig)
+	err = database.Save(testData, testConfig.Relaychain, testConfig.Chain)
 	assert.NoError(t, err, "Should not error when saving data")
 
 	// Wait for batch processing to complete

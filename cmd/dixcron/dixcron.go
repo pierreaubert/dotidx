@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"flag"
 	"log"
 	"os"
 	"time"
@@ -12,18 +12,16 @@ import (
 	dix "github.com/pierreaubert/dotidx"
 )
 
-func validateConfig(config dix.Config) error {
+func main() {
 
-	if config.DatabaseURL == "" {
-		return fmt.Errorf("database url is required")
+	configFile := flag.String("conf", "", "toml configuration file")
+	flag.Parse()
+
+	if configFile == nil || *configFile == "" {
+		log.Fatal("Configuration file must be specified")
 	}
 
-	return nil
-}
-
-func main() {
-	// Parse command line arguments
-	config, err := dix.ParseFlags()
+	config, err := dix.LoadMgrConfig(*configFile)
 	if err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
@@ -32,26 +30,16 @@ func main() {
 	log.SetOutput(os.Stdout)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
-	// Validate configuration
-	if err := validateConfig(config); err != nil {
-		log.Fatalf("Invalid configuration: %v", err)
-	}
+	database := dix.NewSQLDatabase(*config)
 
-	// ----------------------------------------------------------------------
-	// Database
-	// ----------------------------------------------------------------------
-	database := dix.NewSQLDatabase(config)
-
-	// Test the connection
 	if err := database.Ping(); err != nil {
 		log.Fatalf("Failed to ping PostgreSQL: %v", err)
 	}
 
-	log.Printf("Successfully connected to database %s", config.DatabaseURL)
+	log.Printf("Successfully connected to database %s", dix.DBUrlSecure(*config))
 
 	ticker := time.NewTicker(1 * time.Hour)
 	startCron(context.Background(), ticker, database)
-	log.Println("All tasks completed")
 }
 
 func startCron(ctx context.Context, ticker *time.Ticker, db dix.Database) {
@@ -70,11 +58,13 @@ func startCron(ctx context.Context, ticker *time.Ticker, db dix.Database) {
 				info := infos[i]
 				if err = db.UpdateMaterializedTables(
 					info.Relaychain,
-					info.Chain); err != nil {
+					info.Chain,
+				); err != nil {
 					log.Printf("Cannot update stats for %s:%s",
 						info.Relaychain,
-						info.Chain)
-
+						info.Chain,
+					)
+					continue
 				}
 				log.Printf("Updated stats for %s:%s", info.Relaychain, info.Chain)
 			}

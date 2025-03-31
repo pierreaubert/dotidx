@@ -62,6 +62,17 @@ async function fetchBlocks() {
         dataDiv.innerHTML = '<p>No blockID, No block.</p>';
         return;
     }
+
+    const relaychain = document.getElementById('search-block-relaychain');
+    if (!relaychain || !relaychain.value) {
+        dataDiv.innerHTML = '<p>No blockID, No block.</p>';
+        return;
+    }
+    const chain = document.getElementById('search-block-chain');
+    if (!chain || !chain.value) {
+        dataDiv.innerHTML = '<p>No blockID, No block.</p>';
+        return;
+    }
     const blockid = searchInput.value.trim();
     if (!blockid) {
         dataDiv.innerHTML = '<p>No blockID, No block.</p>';
@@ -73,7 +84,7 @@ async function fetchBlocks() {
         return;
     }
 
-    const response = await fetch(`/fe/blocks/${blockid}`);
+    const response = await fetch(`/fe/${relaychain.value}/${chain.value}/blocks/${blockid}`);
     if (!response.ok) {
         throw new Error(`HTTP error ${response.status}`);
     }

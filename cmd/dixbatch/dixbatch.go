@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -13,34 +14,21 @@ import (
 	dix "github.com/pierreaubert/dotidx"
 )
 
-func validateConfig(config dix.Config) error {
-
-	if config.ChainReaderURL == "" {
-		return fmt.Errorf("chainReader url is required")
-	}
-
-	if config.DatabaseURL == "" {
-		return fmt.Errorf("database url is required")
-	}
-
-	if config.BatchSize <= 0 {
-		return fmt.Errorf("batch size must be greater than 0")
-	}
-
-	if config.MaxWorkers <= 0 {
-		return fmt.Errorf("max workers must be greater than 0")
-	}
-
-	if config.Chain == "" {
-		return fmt.Errorf("chain name is required")
-	}
-
-	return nil
-}
-
 func main() {
-	// Parse command line arguments
-	config, err := dix.ParseFlags()
+	configFile := flag.String("conf", "", "toml configuration file")
+	chain := flag.String("chain", "", "chain")
+	relayChain := flag.String("relayChain", "polkadot", "relay chain")
+	flag.Parse()
+
+	if chain == nil || *chain == "" {
+		log.Fatal("Chain must be specified")
+	}
+
+	if configFile == nil || *configFile == "" {
+		log.Fatal("Configuration file must be specified")
+	}
+
+	config, err := dix.LoadMgrConfig(*configFile)
 	if err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
@@ -49,16 +37,16 @@ func main() {
 	log.SetOutput(os.Stdout)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
-	// Validate configuration
-	if err := validateConfig(config); err != nil {
-		log.Fatalf("Invalid configuration: %v", err)
-	}
-	log.Printf("Relay chain: %s chain: %s", config.Relaychain, config.Chain)
+	log.Printf("Starting block ingestion for %s:%s", *relayChain, *chain)
 
 	// ----------------------------------------------------------------------
 	// ChainReader
 	// ----------------------------------------------------------------------
-	reader := dix.NewSidecar(config.ChainReaderURL)
+	chainReaderURL := fmt.Sprintf(`http://%s:%d`,
+		config.Parachains[*relayChain][*chain].ChainreaderIP,
+		config.Parachains[*relayChain][*chain].ChainreaderPort,
+	)
+	reader := dix.NewSidecar(chainReaderURL)
 	// Test the sidecar service
 	if err := reader.Ping(); err != nil {
 		log.Fatalf("Sidecar service test failed: %v", err)
@@ -71,16 +59,16 @@ func main() {
 	}
 	log.Printf("Current head block is %d", headBlockID)
 
-	if config.EndRange == -1 && headBlockID == 0 {
+	if config.DotidxBatch.EndRange == -1 && headBlockID == 0 {
 		log.Fatal("Cannot get head block and EndRange is not set")
 	}
 
-	if config.EndRange == -1 {
-		config.EndRange = headBlockID
+	if config.DotidxBatch.EndRange == -1 {
+		config.DotidxBatch.EndRange = headBlockID
 	}
 
 	if headBlockID == 0 {
-		headBlockID = config.EndRange
+		headBlockID = config.DotidxBatch.EndRange
 	}
 
 	// ----------------------------------------------------------------------
@@ -95,14 +83,14 @@ func main() {
 	// ----------------------------------------------------------------------
 	// Database
 	// ----------------------------------------------------------------------
-	database := dix.NewSQLDatabase(config)
+	database := dix.NewSQLDatabase(*config)
 
 	// Test the connection
 	if err := database.Ping(); err != nil {
 		log.Fatalf("Failed to ping PostgreSQL: %v", err)
 	}
 
-	log.Printf("Successfully connected to database %s", config.DatabaseURL)
+	log.Printf("Successfully connected to database %s", dix.DBUrlSecure(*config))
 
 	// Create tables
 	firstBlock, err := reader.FetchBlock(ctx, 1)
@@ -123,7 +111,7 @@ func main() {
 		lastTimestamp = time.Now().Format("2006-01-02 15:04:05")
 	}
 
-	if err := database.CreateTable(config, firstTimestamp, lastTimestamp); err != nil {
+	if err := database.CreateTable(*relayChain, *chain, firstTimestamp, lastTimestamp); err != nil {
 		log.Fatalf("Error creating tables: %v", err)
 	}
 
@@ -134,34 +122,35 @@ func main() {
 		}
 	}()
 
-	startWorkers(ctx, config, database, reader, headBlockID)
+	startWorkers(*relayChain, *chain, ctx, *config, database, reader, headBlockID)
 
 	log.Println("All tasks completed")
 }
 
 func startWorkers(
+	relayChain, chain string,
 	ctx context.Context,
-	config dix.Config,
+	config dix.MgrConfig,
 	db dix.Database,
 	reader dix.ChainReader,
 	headID int) {
 
-	config.EndRange = min(config.EndRange, headID)
+	config.DotidxBatch.EndRange = min(config.DotidxBatch.EndRange, headID)
 
 	log.Printf("Starting %d workers to process blocks %d to %d head is at %d",
-		config.MaxWorkers, config.StartRange, config.EndRange, headID)
+		config.DotidxBatch.MaxWorkers, config.DotidxBatch.StartRange, config.DotidxBatch.EndRange, headID)
 
 	// Create a channel for block IDs
-	blockCh := make(chan int, config.BatchSize)
+	blockCh := make(chan int, config.DotidxBatch.BatchSize)
 
 	// Create a channel for batch processing
-	batchCh := make(chan []int, config.MaxWorkers)
+	batchCh := make(chan []int, config.DotidxBatch.MaxWorkers)
 
 	// Create a wait group to wait for all workers to finish
 	var wg sync.WaitGroup
 
 	// Start single block workers
-	for i := 0; i < config.MaxWorkers/2; i++ {
+	for i := 0; i < config.DotidxBatch.MaxWorkers/2; i++ {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
@@ -175,16 +164,21 @@ func startWorkers(
 					if !ok {
 						return
 					}
-
-					// Process a single block
-					dix.ProcessSingleBlock(ctx, blockID, config, db, reader)
+					dix.ProcessSingleBlock(
+						ctx,
+						blockID,
+						relayChain,
+						chain,
+						db,
+						reader,
+					)
 				}
 			}
 		}(i)
 	}
 
 	// Start batch workers
-	for i := config.MaxWorkers / 2; i < config.MaxWorkers; i++ {
+	for i := config.DotidxBatch.MaxWorkers / 2; i < config.DotidxBatch.MaxWorkers; i++ {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
@@ -197,9 +191,13 @@ func startWorkers(
 					if !ok {
 						return
 					}
-
-					// Process a batch of blocks
-					dix.ProcessBlockBatch(ctx, blockIDs, config, db, reader)
+					dix.ProcessBlockBatch(
+						ctx,
+						blockIDs,
+						relayChain,
+						chain,
+						db, reader,
+					)
 				}
 			}
 		}(i)
@@ -207,16 +205,21 @@ func startWorkers(
 
 	// Get existing blocks from the database, limited to 100k in one go
 	const stepRange = 100000
-	startRange := config.StartRange
-	endRange := min(config.StartRange+stepRange, config.EndRange)
+	startRange := config.DotidxBatch.StartRange
+	endRange := min(config.DotidxBatch.StartRange+stepRange, config.DotidxBatch.EndRange)
 
-	for startRange <= config.EndRange {
+	for startRange <= config.DotidxBatch.EndRange {
 
 		// Collect blocks to process, identifying continuous ranges for batch processing
 		var currentBatch []int
 		var lastBlockID = -1
 
-		existingBlocks, err := db.GetExistingBlocks(startRange, endRange, config)
+		existingBlocks, err := db.GetExistingBlocks(
+			relayChain,
+			chain,
+			startRange,
+			endRange,
+		)
 		if err != nil {
 			log.Printf("Error getting existing blocks: %v", err)
 			// Continue with empty map if there was an error
@@ -276,7 +279,7 @@ func startWorkers(
 			lastBlockID = blockID
 
 			// If the batch is large enough, send it
-			if len(currentBatch) >= config.BatchSize {
+			if len(currentBatch) >= config.DotidxBatch.BatchSize {
 				select {
 				case <-ctx.Done():
 					log.Println("Block sender stopped due to context cancellation")
@@ -306,10 +309,10 @@ func startWorkers(
 		}
 
 		startRange = endRange
-		if startRange >= config.EndRange {
+		if startRange >= config.DotidxBatch.EndRange {
 			break
 		}
-		endRange = min(endRange+stepRange, config.EndRange)
+		endRange = min(endRange+stepRange, config.DotidxBatch.EndRange)
 	}
 
 	close(blockCh)

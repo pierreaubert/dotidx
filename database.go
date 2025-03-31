@@ -6,7 +6,6 @@ import (
 	"log"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -17,13 +16,13 @@ type DatabaseInfo struct {
 
 // Database defines the interface for database operations
 type Database interface {
-	CreateTable(config Config, firstTimestamp, lastTimestamp string) error
-	CreateIndex(config Config) error
-	Save(items []BlockData, config Config) error
-	GetExistingBlocks(startRange, endRange int, config Config) (map[int]bool, error)
+	CreateTable(relayChain, chain, firstTimestamp, lastTimestamp string) error
+	CreateIndex(relayChain, chain string) error
+	Save(items []BlockData, relayChain, chain string) error
+	GetExistingBlocks(relayChain, chain string, startRange, endRange int) (map[int]bool, error)
 	Ping() error
 	GetStats() *MetricsStats
-	DoUpgrade(config Config) error
+	DoUpgrade(relayChain, chain string) error
 	Close() error
 	UpdateMaterializedTables(relayChain, chain string) error
 	GetDatabaseInfo() ([]DatabaseInfo, error)
@@ -61,13 +60,6 @@ type SQLDatabase struct {
 	metrics *Metrics
 	poolCfg DBPoolConfig
 
-	// Batch processing
-	batchMutex    sync.Mutex
-	batchItems    []BlockData
-	batchConfig   *Config
-	batchTimer    *time.Timer
-	batchShutdown chan struct{}
-
 	// continous queries
 	materializedTicker *time.Ticker
 }
@@ -80,31 +72,18 @@ func NewSQLDatabaseWithDB(db *sql.DB) *SQLDatabase {
 }
 
 // NewSQLDatabase creates a new Database instance
-func NewSQLDatabase(config Config) *SQLDatabase {
-	var db *sql.DB
-	if strings.Contains(config.DatabaseURL, "postgres") {
-		// Ensure sslmode=disable is in the PostgreSQL URI if not already present
-		if !strings.Contains(config.DatabaseURL, "sslmode=") {
-			if strings.Contains(config.DatabaseURL, "?") {
-				config.DatabaseURL += "&sslmode=disable"
-			} else {
-				config.DatabaseURL += "?sslmode=disable"
-			}
-		}
-
-		// Create database connection
-		var err error
-		db, err = sql.Open("postgres", config.DatabaseURL)
+func NewSQLDatabase(config MgrConfig) *SQLDatabase {
+	databaseURL := DBUrl(config)
+	if strings.Contains(databaseURL, "postgres") {
+		db, err := sql.Open("postgres", databaseURL)
 		if err != nil {
 			log.Fatalf("Error opening database: %v", err)
 		}
-		defer db.Close()
-	} else {
-		log.Fatalf("unsupported database: %s", config.DatabaseURL)
+		return NewSQLDatabaseWithPool(db, DefaultDBPoolConfig())
 	}
-	return NewSQLDatabaseWithPool(
-		db,
-		DefaultDBPoolConfig())
+
+	log.Fatalf("unsupported database: %s", databaseURL)
+	return nil
 }
 
 // NewSQLDatabaseWithPool creates a new Database instance with custom connection pool settings
@@ -120,42 +99,15 @@ func NewSQLDatabaseWithPool(db *sql.DB, poolCfg DBPoolConfig) *SQLDatabase {
 		materializedTicker: time.NewTicker(15 * time.Minute),
 		metrics:            NewMetrics("Postgres"),
 		poolCfg:            poolCfg,
-		batchShutdown:      make(chan struct{}),
 	}
 }
 
 // Close closes the database connection pool
 func (s *SQLDatabase) Close() error {
-	// Flush any pending batch and shut down the batch processor
-	s.batchMutex.Lock()
-
-	// Flush any remaining items
-	if len(s.batchItems) > 0 && s.batchConfig != nil {
-		items := s.batchItems
-		config := *s.batchConfig
-
-		s.batchItems = nil
-		s.batchMutex.Unlock()
-
-		// Process remaining items synchronously before closing
-		err := s.saveBatch(items, config)
-		if err != nil {
-			log.Printf("Error flushing batch during shutdown: %v", err)
-		}
-	} else {
-		s.batchMutex.Unlock()
-	}
-
-	// Signal the batch processor to stop
-	if s.batchShutdown != nil {
-		close(s.batchShutdown)
-	}
-
-	// Close the database
 	return s.db.Close()
 }
 
-func (s *SQLDatabase) DoUpgrade(config Config) error {
+func (s *SQLDatabase) DoUpgrade(relayChain, chain string) error {
 
 	// create dotidx version table to track migrations
 	_, err := s.db.Exec(`
@@ -173,7 +125,7 @@ func (s *SQLDatabase) DoUpgrade(config Config) error {
 }
 
 // sanitizeChainName removes non-alphanumeric characters and the relaychain name from the chain name
-func sanitizeChainName(initialChainName, initialRelaychainName string) string {
+func sanitizeChainName(initialRelaychainName, initialChainName string) string {
 	chainName := strings.ToLower(initialChainName)
 	relaychainName := strings.ToLower(initialRelaychainName)
 
@@ -193,33 +145,33 @@ func sanitizeChainName(initialChainName, initialRelaychainName string) string {
 	return chainName
 }
 
-func GetBlocksTableName(config Config) (name string) {
-	chainName := sanitizeChainName(config.Chain, config.Relaychain)
-	name = fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
+func GetBlocksTableName(relayChain, chain string) (name string) {
+	chainName := sanitizeChainName(relayChain, chain)
+	name = fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(relayChain), chainName)
 	return
 }
 
-func GetBlocksPrimaryKeyName(config Config) (name string) {
-	chainName := sanitizeChainName(config.Chain, config.Relaychain)
-	name = fmt.Sprintf("blocks_%s_%s", strings.ToLower(config.Relaychain), chainName)
+func GetBlocksPrimaryKeyName(relayChain, chain string) (name string) {
+	chainName := sanitizeChainName(relayChain, chain)
+	name = fmt.Sprintf("blocks_%s_%s", strings.ToLower(relayChain), chainName)
 	return
 }
 
-func GetAddressTableName(config Config) (name string) {
-	chainName := sanitizeChainName(config.Chain, config.Relaychain)
-	name = fmt.Sprintf("%s.address2blocks_%s_%s", schemaName, strings.ToLower(config.Relaychain), chainName)
+func GetAddressTableName(relayChain, chain string) (name string) {
+	chainName := sanitizeChainName(relayChain, chain)
+	name = fmt.Sprintf("%s.address2blocks_%s_%s", schemaName, strings.ToLower(relayChain), chainName)
 	return
 }
 
 func GetStatsPerMonthTableName(relayChain, chain string) (name string) {
-	chainName := sanitizeChainName(chain, relayChain)
+	chainName := sanitizeChainName(relayChain, chain)
 	name = fmt.Sprintf("%s.stats_per_month_%s_%s", schemaName, strings.ToLower(relayChain), chainName)
 	return
 }
 
-func (s *SQLDatabase) CreateTableBlocks(config Config) error {
-	blocksTable := GetBlocksTableName(config)
-	blocksPK := GetBlocksPrimaryKeyName(config)
+func (s *SQLDatabase) CreateTableBlocks(relayChain, chain string) error {
+	blocksTable := GetBlocksTableName(relayChain, chain)
+	blocksPK := GetBlocksPrimaryKeyName(relayChain, chain)
 
 	// Create the blocks table
 	template := fmt.Sprintf(`
@@ -253,8 +205,8 @@ GRANT ALL ON TABLE %[1]s TO dotidx;
 	return nil
 }
 
-func (s *SQLDatabase) CreateTableBlocksPartitions(config Config, firstTimestamp, lastTimestamp string) error {
-	blocksTable := GetBlocksTableName(config)
+func (s *SQLDatabase) CreateTableBlocksPartitions(relayChain, chain, firstTimestamp, lastTimestamp string) error {
+	blocksTable := GetBlocksTableName(relayChain, chain)
 
 	firstYear, firstMonth := 2020, 4
 	if firstTimestamp != "" {
@@ -317,8 +269,8 @@ GRANT ALL ON TABLE %[1]s_%04[2]d_%02[3]d TO dotidx;
 	return nil
 }
 
-func (s *SQLDatabase) CreateTableAddress2Blocks(config Config) error {
-	address2blocksTable := GetAddressTableName(config)
+func (s *SQLDatabase) CreateTableAddress2Blocks(relayChain, chain string) error {
+	address2blocksTable := GetAddressTableName(relayChain, chain)
 
 	template := fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %s (
@@ -341,8 +293,8 @@ GRANT ALL ON TABLE %[1]s TO dotidx;
 	return nil
 }
 
-func (s *SQLDatabase) CreateTableAddress2BlocksPartitions(config Config) error {
-	address2blocksTable := GetAddressTableName(config)
+func (s *SQLDatabase) CreateTableAddress2BlocksPartitions(relayChain, chain string) error {
+	address2blocksTable := GetAddressTableName(relayChain, chain)
 
 	// spread across fast disks to improve access time
 	for fast := range fastTablespaceNumber {
@@ -369,9 +321,9 @@ GRANT ALL ON TABLE %[1]s_%1[2]d TO dotidx;
 	return nil
 }
 
-func (s *SQLDatabase) CreateMaterializedTableForStats(config Config) error {
-	tableName := GetBlocksTableName(config)
-	statsPerMonthViewName := GetStatsPerMonthTableName(config.Relaychain, config.Chain)
+func (s *SQLDatabase) CreateMaterializedTableForStats(relayChain, chain string) error {
+	tableName := GetBlocksTableName(relayChain, chain)
+	statsPerMonthViewName := GetStatsPerMonthTableName(relayChain, chain)
 	query := fmt.Sprintf(`
 		CREATE MATERIALIZED VIEW IF NOT EXISTS %s AS
                 SELECT
@@ -393,7 +345,7 @@ func (s *SQLDatabase) CreateMaterializedTableForStats(config Config) error {
 	return nil
 }
 
-func (s *SQLDatabase) CreateDotidxTable(config Config) error {
+func (s *SQLDatabase) CreateDotidxTable(relayChain, chain string) error {
 	query := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s.dotidx (
                     relay_chain TEXT NOT NULL,
@@ -413,8 +365,8 @@ VALUES ('%s', '%s')
 ON CONFLICT (relay_chain, chain) DO NOTHING;
 `,
 		schemaName,
-		strings.ToLower(config.Relaychain),
-		sanitizeChainName(config.Chain, config.Relaychain),
+		strings.ToLower(relayChain),
+		sanitizeChainName(relayChain, chain),
 	)
 
 	// log.Printf("%s", inserts)
@@ -427,29 +379,29 @@ ON CONFLICT (relay_chain, chain) DO NOTHING;
 	return nil
 }
 
-func (s *SQLDatabase) CreateTable(config Config, firstTimestamp, lastTimestamp string) error {
+func (s *SQLDatabase) CreateTable(relayChain, chain, firstTimestamp, lastTimestamp string) error {
 
-	if err := s.CreateDotidxTable(config); err != nil {
+	if err := s.CreateDotidxTable(relayChain, chain); err != nil {
 		return fmt.Errorf("error creating dotidx table: %w", err)
 	}
 
-	if err := s.CreateTableBlocks(config); err != nil {
+	if err := s.CreateTableBlocks(relayChain, chain); err != nil {
 		return fmt.Errorf("error creating table blocks: %w", err)
 	}
 
-	if err := s.CreateTableBlocksPartitions(config, firstTimestamp, lastTimestamp); err != nil {
+	if err := s.CreateTableBlocksPartitions(relayChain, chain, firstTimestamp, lastTimestamp); err != nil {
 		return fmt.Errorf("error creating table blocks partitions: %w", err)
 	}
 
-	if err := s.CreateTableAddress2Blocks(config); err != nil {
+	if err := s.CreateTableAddress2Blocks(relayChain, chain); err != nil {
 		return fmt.Errorf("error creating table address2blocks: %w", err)
 	}
 
-	if err := s.CreateTableAddress2BlocksPartitions(config); err != nil {
+	if err := s.CreateTableAddress2BlocksPartitions(relayChain, chain); err != nil {
 		return fmt.Errorf("error creating table address2blocks partitions: %w", err)
 	}
 
-	if err := s.CreateMaterializedTableForStats(config); err != nil {
+	if err := s.CreateMaterializedTableForStats(relayChain, chain); err != nil {
 		return fmt.Errorf("error creating materialized table for statistics: %w", err)
 	}
 
@@ -458,8 +410,8 @@ func (s *SQLDatabase) CreateTable(config Config, firstTimestamp, lastTimestamp s
 
 // TODO: adapt to the new partionning
 // when tables are full (a month) they are immutable so we can write the index once and forall
-func (s *SQLDatabase) CreateIndex(config Config) error {
-	blocksTable := GetBlocksTableName(config)
+func (s *SQLDatabase) CreateIndex(relayChain, chain string) error {
+	blocksTable := GetBlocksTableName(relayChain, chain)
 
 	template := fmt.Sprintf(`
                 CREATE INDEX IF NOT EXISTS extrinsincs_idx
@@ -475,134 +427,7 @@ func (s *SQLDatabase) CreateIndex(config Config) error {
 	return nil
 }
 
-// Save adds the given items to the batch for asynchronous processing
-func (s *SQLDatabase) Save(items []BlockData, config Config) error {
-	if len(items) == 0 {
-		return nil
-	}
-
-	s.batchMutex.Lock()
-
-	// Initialize batch if this is the first call
-	if s.batchConfig == nil {
-		configCopy := config
-		s.batchConfig = &configCopy
-
-		// Start a background goroutine to flush the batch after the timeout
-		go s.startBatchProcessor()
-	}
-
-	// Add items to the batch
-	s.batchItems = append(s.batchItems, items...)
-
-	// Check if we've reached the batch size
-	flushRequired := len(s.batchItems) >= config.BatchSize
-
-	// Handle timer reset logic
-	if !flushRequired && s.batchTimer == nil {
-		s.batchTimer = time.AfterFunc(config.FlushTimeout, func() {
-			if err := s.flushBatch(); err != nil {
-				return
-			}
-		})
-	}
-
-	// Unlock before potentially flushing to avoid deadlocks
-	s.batchMutex.Unlock()
-
-	// Flush if needed after unlocking
-	if flushRequired {
-		return s.flushBatch()
-	}
-
-	return nil
-}
-
-// startBatchProcessor runs a goroutine that periodically flushes the batch
-func (s *SQLDatabase) startBatchProcessor() {
-	for {
-		select {
-		case <-s.batchShutdown:
-			return
-		case <-time.After(5 * time.Second): // Check periodically
-			// Try to acquire lock - don't block indefinitely
-			if !s.tryLock(100 * time.Millisecond) {
-				continue
-			}
-
-			// Only flush if we have items and no active timer
-			if len(s.batchItems) > 0 && s.batchTimer == nil {
-				// Unlock before flushing to avoid deadlocks
-				s.batchMutex.Unlock()
-
-				err := s.flushBatch()
-				if err != nil {
-					log.Printf("Error in periodic batch flush: %v", err)
-				}
-			} else {
-				s.batchMutex.Unlock()
-			}
-		}
-	}
-}
-
-// tryLock attempts to acquire the mutex lock with a timeout
-func (s *SQLDatabase) tryLock(timeout time.Duration) bool {
-	c := make(chan struct{}, 1)
-	go func() {
-		s.batchMutex.Lock()
-		c <- struct{}{}
-	}()
-
-	select {
-	case <-c:
-		return true
-	case <-time.After(timeout):
-		return false
-	}
-}
-
-// flushBatch processes all batched items and saves them to the database
-func (s *SQLDatabase) flushBatch() error {
-	// Try to acquire lock with a timeout
-	if !s.tryLock(100 * time.Millisecond) {
-		return fmt.Errorf("could not acquire lock for flushing batch")
-	}
-
-	// If there are no items or no config, return early
-	if len(s.batchItems) == 0 || s.batchConfig == nil {
-		s.batchMutex.Unlock()
-		return nil
-	}
-
-	items := s.batchItems
-	config := *s.batchConfig
-
-	// Clear the batch
-	s.batchItems = nil
-
-	// Stop the timer if it's running
-	if s.batchTimer != nil {
-		s.batchTimer.Stop()
-		s.batchTimer = nil
-	}
-
-	// Unlock before processing to avoid deadlocks
-	s.batchMutex.Unlock()
-
-	// Process the items in a separate goroutine
-	go func(items []BlockData, config Config) {
-		err := s.saveBatch(items, config)
-		if err != nil {
-			log.Printf("Error saving batch: %v", err)
-		}
-	}(items, config)
-
-	return nil
-}
-
-// saveBatch saves the given items to the database immediately
-func (s *SQLDatabase) saveBatch(items []BlockData, config Config) error {
+func (s *SQLDatabase) Save(items []BlockData, relayChain, chain string) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -615,8 +440,8 @@ func (s *SQLDatabase) saveBatch(items []BlockData, config Config) error {
 	}(start)
 
 	// Get table names
-	blocksTable := GetBlocksTableName(config)
-	address2blocksTable := GetAddressTableName(config)
+	blocksTable := GetBlocksTableName(relayChain, chain)
+	address2blocksTable := GetAddressTableName(relayChain, chain)
 
 	// log.Printf("Saving batch of %d items to database", len(items))
 	// log.Printf("Blocks table: %s", blocksTable)
@@ -720,9 +545,9 @@ func (s *SQLDatabase) saveBatch(items []BlockData, config Config) error {
 }
 
 // GetExistingBlocks retrieves a list of block IDs that already exist in the database
-func (s *SQLDatabase) GetExistingBlocks(startRange, endRange int, config Config) (map[int]bool, error) {
+func (s *SQLDatabase) GetExistingBlocks(relayChain, chain string, startRange, endRange int) (map[int]bool, error) {
 	// Create blocks table name
-	blocksTable := GetBlocksTableName(config)
+	blocksTable := GetBlocksTableName(relayChain, chain)
 
 	// Query for existing blocks - explicitly create a simple query without multiple statements
 	query := fmt.Sprintf("SELECT block_id FROM %s WHERE block_id BETWEEN $1 AND $2", blocksTable)
@@ -761,7 +586,7 @@ func (s *SQLDatabase) GetStats() *MetricsStats {
 
 func (s *SQLDatabase) UpdateMaterializedTables(relayChain, chain string) error {
 
-	template := fmt.Sprintf(`REFRESH MATERIALIZED VIEW [ CONCURRENTLY ] %s`,
+	template := fmt.Sprintf(`REFRESH MATERIALIZED VIEW %s;`,
 		GetStatsPerMonthTableName(relayChain, chain))
 
 	_, err := s.db.Exec(template)

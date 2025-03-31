@@ -8,15 +8,17 @@ function buildBalanceGraphData(balances) {
     const transactionsByDay = {};
 
     // Process extrinsics to collect time series data
-    balances.forEach((extrinsic) => {
-        const date = new Date(extrinsic.timestamp);
+    balances.forEach((balance) => {
+        const date = new Date(balance.timestamp);
         const dayKey = date.toISOString().split('T')[0];
-        let amount = extrinsic.amount;
-        let totalAmount = extrinsic.totalAmount;
+        let amount = balance.amount;
+        let totalAmount = balance.totalAmount;
 
         if (!transactionsByDay[dayKey]) {
             transactionsByDay[dayKey] = {
                 date: new Date(dayKey), // Start of the day
+                relay: balance.relay,
+                chain: balance.chain,
                 amount: 0,
                 totalAmount: 0,
                 deposits: 0,
@@ -56,25 +58,24 @@ function createBalanceGraph(graphData, graphDiv, address) {
         return {
             x: item.date,
             y: runningBalance,
+            c: item.chain,
         };
     });
 
     // Create data for deposits and withdrawals
-    const deposits = graphData
-        .map((item) => ({
-            x: item.date,
-            y: item.deposits,
-            text: `Date: ${item.date.toLocaleDateString()}<br>Deposits: +${item.deposits}`,
-        }))
-        .filter((item) => item.y > 0);
+    const deposits = graphData.map((item) => ({
+        x: item.date,
+        y: item.deposits,
+        c: item.chain,
+        text: `Date: ${item.date.toLocaleDateString()}<br>Deposits: +${item.deposits}`,
+    }));
 
-    const withdrawals = graphData
-        .map((item) => ({
-            x: item.date,
-            y: item.withdrawals,
-            text: `Date: ${item.date.toLocaleDateString()}<br>Withdrawals: -${item.withdrawals}`,
-        }))
-        .filter((item) => item.y < 0);
+    const withdrawals = graphData.map((item) => ({
+        x: item.date,
+        y: item.withdrawals,
+        c: item.chain,
+        text: `Date: ${item.date.toLocaleDateString()}<br>Withdrawals: -${item.withdrawals}`,
+    }));
 
     // Create the plotly data array
     const plotData = [
@@ -84,6 +85,7 @@ function createBalanceGraph(graphData, graphDiv, address) {
             name: 'Balance ' + address,
             x: balanceSeries.map((p) => p.x),
             y: balanceSeries.map((p) => p.y),
+            color: balanceSeries.map((p) => p.c),
             text: balanceSeries.map((p) => p.text),
             line: { color: 'rgb(31, 119, 180)', width: 2 },
             marker: { size: 6 },
@@ -119,25 +121,26 @@ function createBalanceGraph(graphData, graphDiv, address) {
             y: -0.2,
         },
         hovermode: 'closest',
-        xaxis: {
-            title: 'Date',
-        },
         yaxis: {
-            title: 'Balance',
+            title: { text: 'Balance' },
             tickformat: '.0f',
+            type: 'linear',
+            showline: true,
         },
         yaxis2: {
-            title: 'Daily Activity',
+            title: { text: 'Daily Activity (log scale)' },
             titlefont: { color: 'rgb(148, 103, 189)' },
             tickfont: { color: 'rgb(148, 103, 189)' },
             overlaying: 'y',
             side: 'right',
             tickformat: '.0f',
+            type: 'log',
+            showline: true,
         },
         margin: {
             l: 80,
             r: 80,
-            b: 80,
+            b: 60,
             t: 40,
             pad: 2,
         },
@@ -148,48 +151,49 @@ function createBalanceGraph(graphData, graphDiv, address) {
 }
 
 // Function to group extrinsics by month
-function groupBalancesByMonth(allExtrinsics) {
-    const extrinsicsByMonth = {};
+function groupBalancesByMonth(balances) {
+    const balancesByMonth = {};
 
-    allExtrinsics.forEach((extrinsic) => {
-        if (extrinsic.timestamp !== 'N/A') {
+    balances.forEach((balance) => {
+        if (balance.timestamp !== 'N/A') {
             try {
                 // Parse the timestamp
-                const date = new Date(extrinsic.timestamp);
+                const date = new Date(balance.timestamp);
 
                 // Create a month key in YYYY-MM format
                 const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
                 // Initialize the month array if it doesn't exist
-                if (!extrinsicsByMonth[monthKey]) {
-                    extrinsicsByMonth[monthKey] = [];
+                if (!balancesByMonth[monthKey]) {
+                    balancesByMonth[monthKey] = [];
                 }
 
-                // Add the extrinsic to the month
-                extrinsicsByMonth[monthKey].push(extrinsic);
+                // Add the balance to the month
+                balancesByMonth[monthKey].push(balance);
             } catch (e) {
                 console.error('invalid timestamp', e);
-                if (!extrinsicsByMonth['Unknown']) {
-                    extrinsicsByMonth['Unknown'] = [];
+                if (!balancesByMonth['Unknown']) {
+                    balancesByMonth['Unknown'] = [];
                 }
-                extrinsicsByMonth['Unknown'].push(extrinsic);
+                balancesByMonth['Unknown'].push(balance);
             }
         } else {
-            if (!extrinsicsByMonth['Unknown']) {
-                extrinsicsByMonth['Unknown'] = [];
+            if (!balancesByMonth['Unknown']) {
+                balancesByMonth['Unknown'] = [];
             }
-            extrinsicsByMonth['Unknown'].push(extrinsic);
+            balancesByMonth['Unknown'].push(balance);
         }
     });
 
-    return extrinsicsByMonth;
+    return balancesByMonth;
 }
 
-function renderBalancesTable(extrinsicsByMonth) {
+function renderBalancesTable(balancesByMonth) {
     let html = '<table class="table is-fullwidth is-striped is-hoverable result-table">';
     html += `
 	 <thead>
            <tr>
+             <th>Chain</th>
              <th>Timestamp</th>
              <th>Method</th>
              <th class="has-text-right">Amount (DOT)</th>
@@ -200,7 +204,7 @@ function renderBalancesTable(extrinsicsByMonth) {
     html += '<tbody>';
 
     // Sort month keys in descending order (newest first)
-    const sortedMonths = Object.keys(extrinsicsByMonth).sort((a, b) => {
+    const sortedMonths = Object.keys(balancesByMonth).sort((a, b) => {
         // Handle 'Unknown' specially
         if (a === 'Unknown') return 1;
         if (b === 'Unknown') return -1;
@@ -220,32 +224,33 @@ function renderBalancesTable(extrinsicsByMonth) {
 
         html += `<tr class="month-header"><td colspan="4"><strong>${monthName}</strong></td></tr>`;
 
-        // Add extrinsics for this month
-        extrinsicsByMonth[monthKey].forEach((extrinsic, index) => {
+        // Add balances for this month
+        balancesByMonth[monthKey].forEach((balance, index) => {
             // Main row
             html += '<tr>';
-            html += `<td>${extrinsic.formattedTime || extrinsic.timestamp}</td>`;
-            html += `<td>${extrinsic.method.method}</td>`;
+            html += `<td>${balance.relay}/${balance.chain}</td>`;
+            html += `<td>${balance.formattedTime || balance.timestamp}</td>`;
+            html += `<td>${balance.method.method}</td>`;
 
-            let amount = extrinsic.amount.toFixed(2);
-            let totalAmount = extrinsic.totalAmount.toFixed(2);
+            let amount = balance.amount.toFixed(2);
+            let totalAmount = balance.totalAmount.toFixed(2);
             let detailsContent = {
-                blockId: extrinsic.blockId, // Add blockId to details
-                pallet: extrinsic.pallet,
-                method: extrinsic.method.method,
-                subpallet: extrinsic.method.pallet,
+                blockId: balance.blockId, // Add blockId to details
+                pallet: balance.pallet,
+                method: balance.method,
+                subpallet: balance.subpallet,
             };
 
             html += `<td class="has-text-right">${amount}</td>`;
             html += `<td class="has-text-right">${totalAmount}</td>`;
 
-            const detailsId = `extrinsic-details-${monthKey}-${index}`;
+            const detailsId = `balance-details-${monthKey}-${index}`;
             html += `<td><button class="button is-small toggle-details" data-target="${detailsId}">&gt;</button></td>`;
             html += '</tr>';
 
             // Details row (hidden by default)
             html += `<tr id="${detailsId}" class="details-row" style="display: none;">`;
-            html += `<td colspan="4"><pre class="extrinsic-details">${JSON.stringify(detailsContent, null, 2)}</pre></td>`;
+            html += `<td colspan="4"><pre class="balance-details">${JSON.stringify(detailsContent, null, 2)}</pre></td>`;
             html += '</tr>';
         });
     });
@@ -254,62 +259,69 @@ function renderBalancesTable(extrinsicsByMonth) {
     return html;
 }
 
-function extractBalancesFromBlocks(blocks, address, balanceAt) {
+function extractBalancesFromBlocks(results, address, balanceAt) {
     const balances = [];
 
     // Go through all blocks and collect extrinsics
-    blocks.forEach((block) => {
-        if (!block.extrinsics || typeof block.extrinsics !== 'object') {
-            return; // Skip blocks without extrinsics
-        }
-
-        const timestamp = block.timestamp || 'N/A';
-        const blockId = block.number || 'N/A';
-
-        // Go through each extrinsic type in the block
-        Object.entries(block.extrinsics).forEach(([palletName, extrinsicArray]) => {
-            if (!Array.isArray(extrinsicArray) || extrinsicArray.length === 0) {
-                return; // Skip empty arrays
+    for (const [relay, chains] of Object.entries(results)) {
+        for (const [chain, blocks] of Object.entries(chains)) {
+            if (blocks == undefined) {
+                continue;
             }
-
-            // Add each extrinsic to the consolidated array
-            extrinsicArray.forEach((extrinsic) => {
-                if (extrinsic?.method.pallet) {
-                    if (
-                        palletName === 'paraInclusion' ||
-                        palletName === 'staking' ||
-                        (palletName === 'utility' && extrinsic.method.method === 'Rewarded')
-                    ) {
-                        return; // Skip paraInclusion extrinsics
-                    }
-
-                    let amount = 0.0;
-                    if (extrinsic.method.pallet === 'balances' && extrinsic.method.method === 'Transfer') {
-                        amount = parseFloat(extrinsic.data[2]);
-                        if (address === extrinsic.data[0]) {
-                            amount = -amount;
-                        }
-                    } else if (extrinsic.method.pallet === 'balances' && extrinsic.method.method === 'Deposit') {
-                        amount = parseFloat(extrinsic.data[1]);
-                    } else if (extrinsic.method.pallet === 'balances' && extrinsic.method.method === 'Withdraw') {
-                        amount = -parseFloat(extrinsic.data[1]);
-                    }
-
-                    amount = amount / 10 / 1000 / 1000 / 1000;
-
-                    balances.push({
-                        timestamp,
-                        blockId,
-                        pallet: palletName,
-                        method: extrinsic.method,
-                        amount: amount,
-                        totalAmount: amount + balanceAt,
-                    });
+            blocks.forEach((block) => {
+                if (!block.extrinsics || typeof block.extrinsics !== 'object') {
+                    return; // Skip blocks without extrinsics
                 }
-            });
-        });
-    });
 
+                const timestamp = block.timestamp || 'N/A';
+                const blockId = block.number || 'N/A';
+
+                // Go through each extrinsic type in the block
+                Object.entries(block.extrinsics).forEach(([palletName, extrinsicArray]) => {
+                    if (!Array.isArray(extrinsicArray) || extrinsicArray.length === 0) {
+                        return; // Skip empty arrays
+                    }
+
+                    // Add each extrinsic to the consolidated array
+                    extrinsicArray.forEach((extrinsic) => {
+                        if (extrinsic?.method.pallet) {
+                            if (
+                                palletName === 'paraInclusion' ||
+                                palletName === 'staking' ||
+                                (palletName === 'utility' && extrinsic.method.method === 'Rewarded')
+                            ) {
+                                return; // Skip paraInclusion extrinsics
+                            }
+
+                            let amount = 0.0;
+                            if (extrinsic.method.pallet === 'balances' && extrinsic.method.method === 'Transfer') {
+                                amount = parseFloat(extrinsic.data[2]);
+                                if (address === extrinsic.data[0]) {
+                                    amount = -amount;
+                                }
+                            } else if (extrinsic.method.pallet === 'balances' && extrinsic.method.method === 'Deposit') {
+                                amount = parseFloat(extrinsic.data[1]);
+                            } else if (extrinsic.method.pallet === 'balances' && extrinsic.method.method === 'Withdraw') {
+                                amount = -parseFloat(extrinsic.data[1]);
+                            }
+                            amount = amount / 10 / 1000 / 1000 / 1000;
+                            balances.push({
+                                relay: relay,
+                                chain: chain,
+                                address: address,
+                                timestamp: timestamp,
+                                blockId: blockId,
+                                pallet: palletName,
+                                method: extrinsic.method,
+                                amount: amount,
+                                totalAmount: amount + balanceAt.get(relay).get(chain),
+                            });
+                        }
+                    });
+                });
+            });
+        }
+    }
     return balances;
 }
 
@@ -326,6 +338,81 @@ function addExtrinsicToggleListeners() {
             }
         });
     });
+}
+
+async function balancesSummary(address, results) {
+    let summaryHtml = `
+<h4 class="title is-4">Balance</h4>
+<table class="table is-fullwidth is-striped">
+  <thead>
+    <tr>
+      <th>Account</th>
+      <th>Token</th>
+      <th>State</th>
+      <th class="has-text-right">Now</th>
+    </tr>
+  </thead>
+  <tbody>
+`;
+    let balanceAt = new Map();
+    for (const [relay, chains] of Object.entries(results)) {
+        let totalFree = 0.0;
+        balanceAt.set(relay, new Map());
+        for (const [chain, result] of Object.entries(chains)) {
+            balanceAt.get(relay).set(chain, 0.0);
+            if (result && Array.isArray(result) && result.length > 0) {
+                const firstResult = result[0];
+                const lastResult = result[result.length - 1];
+                console.log(
+                    'calling sidecar ' + relay + ' chain ' + chain + ' block ' + firstResult.number + ' to ' + lastResult.number
+                );
+                const firstBalance = await getAccountAt(relay, chain, address, firstResult.number);
+                const lastBalance = await getAccountAt(relay, chain, address, lastResult.number);
+                const nowBalance = await getAccountAt(relay, chain, address, '');
+                totalFree += nowBalance.free;
+                balanceAt.get(relay).set(chain, firstBalance.free);
+                summaryHtml += `
+<tr>
+  <th>${relay}/${chain}</th>
+  <th>${firstBalance.symbol}</th>
+  <th>Free</th>
+  <td class="has-text-right">${nowBalance.free}</td>
+</tr>`;
+                if (firstBalance.reserved > 0 || lastBalance.reserved > 0 || nowBalance.reserved > 0) {
+                    summaryHtml += `
+<tr>
+  <th></th>
+  <th>${firstBalance.symbol}</th>
+  <th>Reserved</th>
+  <td class="has-text-right">${nowBalance.reserved}</td>
+</tr>`;
+                }
+                if (firstBalance.frozen > 0 || lastBalance.frozen > 0 || nowBalance.frozen > 0) {
+                    summaryHtml += `
+<tr>
+  <th></th>
+  <th>${firstBalance.symbol}</th>
+  <th>Frozen</th>
+  <td class="has-text-right">${nowBalance.frozen}</td>
+</tr>
+    `;
+                }
+            }
+        }
+        summaryHtml += `
+<tr>
+    <th>${relay}: total</th>
+    <th></th>
+    <th></th>
+    <th class="has-text-right">${totalFree}</th>
+</tr>`;
+    }
+
+    summaryHtml += `
+  </tbody>
+</table>
+`;
+    return [summaryHtml, balanceAt];
 }
 
 // Function to fetch balances
@@ -347,77 +434,35 @@ async function fetchBalances(balancesUrl) {
     const textRaw = await response.text();
     const result = await JSON.parse(textRaw);
 
-    const resultDiv = document.getElementById('balances-result');
+    const resultDiv = document.getElementById('balances-results');
     const dataDiv = document.getElementById('balances-data');
     const graphDiv = document.getElementById('balances-graph');
     const summaryDiv = document.getElementById('balances-summary');
 
     resultDiv.classList.remove('is-hidden');
 
-    if (result && Array.isArray(result) && result.length > 0) {
-        const firstResult = result[0];
-        const lastResult = result[result.length - 1];
-        const firstBalance = await getAccountAt(address, firstResult.number);
-        const lastBalance = await getAccountAt(address, lastResult.number);
+    const [summaryHtml, balanceAt] = await balancesSummary(address, result);
+    summaryDiv.innerHTML = summaryHtml;
+    const balances = extractBalancesFromBlocks(result, address, balanceAt);
+    // Format timestamps for display
+    balances.forEach((extrinsic) => {
+        if (extrinsic.timestamp !== 'N/A') {
+            extrinsic.formattedTime = formatTimestamp(extrinsic.timestamp);
+        }
+    });
 
-        const summaryHtml = `
-<h4 class="title is-4">Balance</h4>
-<table class="table is-fullwidth is-striped">
-  <thead>
-    <tr>
-      <th>${firstBalance.symbol}<th>
-      <th class="has-text-right">From ${firstResult.timestamp}<th>
-      <th class="has-text-right">To ${lastResult.timestamp}<th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>Free<th>
-      <td class="has-text-right">${firstBalance.free}<td>
-      <td class="has-text-right">${lastBalance.free}<td>
-    </tr>
-    <tr>
-      <th>Reserved<th>
-      <td class="has-text-right">${firstBalance.reserved}<td>
-      <td class="has-text-right">${lastBalance.reserved}<td>
-    </tr>
-    <tr>
-      <th>Frozen<th>
-      <td class="has-text-right">${firstBalance.frozen}<td>
-      <td class="has-text-right">${lastBalance.frozen}<td>
-    </tr>
-  </tbody>
-</table>
-`;
+    // Create graph data
+    const graphData = buildBalanceGraphData(balances);
+    createBalanceGraph(graphData, graphDiv, address);
 
-        summaryDiv.innerHTML = summaryHtml;
+    // Group extrinsics by month
+    const balancesByMonth = groupBalancesByMonth(balances);
 
-        const balances = extractBalancesFromBlocks(result, address, firstBalance.free);
-        // Format timestamps for display
-        balances.forEach((extrinsic) => {
-            if (extrinsic.timestamp !== 'N/A') {
-                extrinsic.formattedTime = formatTimestamp(extrinsic.timestamp);
-            }
-        });
+    // Render the table
+    dataDiv.innerHTML = renderBalancesTable(balancesByMonth);
 
-        // Group extrinsics by month
-        const balancesByMonth = groupBalancesByMonth(balances);
-
-        // Create graph data
-        const graphData = buildBalanceGraphData(balances);
-        createBalanceGraph(graphData, graphDiv, address);
-
-        // Render the table
-        dataDiv.innerHTML = renderBalancesTable(balancesByMonth);
-
-        // Add toggle listeners for extrinsic details
-        addExtrinsicToggleListeners();
-    } else {
-        dataDiv.innerHTML = '<p>No balance data found for this address.</p>';
-        graphDiv.innerHTML = '';
-    }
+    // Add toggle listeners for extrinsic details
+    addExtrinsicToggleListeners();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    initAddresses('search-balances', '/balances.html', fetchBalances);
-});
+document.addEventListener('DOMContentLoaded', () => initAddresses('search-balances', '/balances.html', fetchBalances));

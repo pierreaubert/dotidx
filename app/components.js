@@ -77,9 +77,12 @@ export async function updateSearchAssets(target) {
             <div class="field">
               <label class="label">Count</label>
               <div class="control">
-                <input id="search-count" class="input" type="number" value="20" min="1" max="100" title="Number of records to display">
-                            </div>
-                            <p class="help">Number of records to display</p>
+                <input id="search-count"
+                       class="input"
+                       type="number"
+                       value="20" min="1" max="100"
+                       title="Number of records to display">
+              </div>
             </div>
           </div>
           <div class="column">
@@ -124,13 +127,24 @@ export async function updateSearchBlocks() {
             </span>
           </div>
           <div class="control">
-          <div class="select">
-              <select>
+            <div class="select">
+              <select id="search-block-relaychain">
+                <option>Select a relay chain</option>
+                <option value="polkadot"selected>Polkadot</option>
+                <option value="kusama">Kusama</option>
+              </select>
+            </div>
+          </div>
+          <div class="control">
+            <div class="select">
+              <select id="search-block-chain">
                 <option>Select a chain</option>
-                <option selected>Polkadot</option>
-                <option>AssetHub</option>
-                <option>People</option>
-                <option>Collectives</option>
+                <option value="polkadot"selected>Polkadot</option>
+                <option value="assethub">AssetHub</option>
+                <option value="people">People</option>
+                <option value="collectives">Collectives</option>
+                <option value="frequency">Frequency</option>
+                <option value="mythos">Mythical</option>
               </select>
             </div>
           </div>
