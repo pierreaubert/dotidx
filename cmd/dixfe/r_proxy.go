@@ -1,16 +1,21 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
 func (f *Frontend) handleProxy(w http.ResponseWriter, r *http.Request) {
-	remote, _ := url.Parse(f.config.ChainReaderURL)
+	relay := r.PathValue("relay")
+	chain := r.PathValue("chain")
+	if _, ok := f.config.Parachains[relay][chain]; !ok {
+		http.Error(w, "Invalid relay or chain", http.StatusBadRequest)
+		return
+	}
+	proxy := f.proxys[relay][chain]
 	path := r.URL.Path
-	path = strings.TrimPrefix(path, "/proxy")
-	r.Host = remote.Host
+	path = strings.TrimPrefix(path, fmt.Sprintf("/proxy/%s/%s", relay, chain))
 	r.URL.Path = path
-	f.proxy.ServeHTTP(w, r)
+	proxy.ServeHTTP(w, r)
 }

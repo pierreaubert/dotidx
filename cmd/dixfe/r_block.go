@@ -11,8 +11,14 @@ import (
 )
 
 func (f *Frontend) handleBlock(w http.ResponseWriter, r *http.Request) {
+	relay := r.PathValue("relay")
+	chain := r.PathValue("chain")
+	if _, ok := f.config.Parachains[relay][chain]; !ok {
+		http.Error(w, "Invalid relay or chain", http.StatusBadRequest)
+		return
+	}
 	id := r.PathValue("blockid")
-	block, err := f.getBlock(id)
+	block, err := f.getBlock(relay, chain, id)
 	if err != nil {
 		log.Printf("Error getting block for id %s: %v", id, err)
 		http.Error(w, "Error retrieving a block", http.StatusInternalServerError)
@@ -27,8 +33,11 @@ func (f *Frontend) handleBlock(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (f *Frontend) getBlock(id string) (dix.BlockData, error) {
-	query := fmt.Sprintf(`SELECT * FROM %s WHERE block_id = %s;`, dix.GetBlocksTableName(f.config), id)
+func (f *Frontend) getBlock(relay, chain, id string) (dix.BlockData, error) {
+	query := fmt.Sprintf(`SELECT * FROM %s WHERE block_id = %s;`,
+		dix.GetBlocksTableName(relay, chain),
+		id,
+	)
 	var block dix.BlockData
 	if err := f.db.QueryRow(query).Scan(
 		&block.ID,

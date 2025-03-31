@@ -75,16 +75,19 @@ func (f *Frontend) handleBalances(w http.ResponseWriter, r *http.Request) {
 	}
 
 	eb := dix.NewEventsBalance(address)
-	for block := range blocks {
-		filtered, err := eb.Process(blocks[block].Extrinsics)
-		if err != nil {
-			http.Error(w, "Failed to extract balances from block", http.StatusInternalServerError)
-			return
+	for relay := range blocks {
+		for chain := range blocks[relay] {
+			for block := range blocks[relay][chain] {
+				filtered, err := eb.Process(blocks[relay][chain][block].Extrinsics)
+				if err != nil {
+					log.Printf("Error processing block %s on chain %s:%s: %v",
+						blocks[relay][chain][block].ID,
+						relay, chain, err)
+					continue
+				}
+				blocks[relay][chain][block].Extrinsics = filtered
+			}
 		}
-		blocks[block].OnInitialize = []byte("[]")
-		blocks[block].OnFinalize = []byte("[]")
-		blocks[block].Logs = []byte("[]")
-		blocks[block].Extrinsics = filtered
 	}
 
 	// Set content type header

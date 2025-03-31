@@ -22,10 +22,7 @@ func TestHandleAddressToBlocks(t *testing.T) {
 	defer db.Close()
 
 	// Create test config
-	config := dotidx.Config{
-		Relaychain: "Polkadot",
-		Chain:      "Polkadot",
-	}
+	config := dotidx.MgrConfig{}
 
 	// Create frontend instance
 	frontend := NewFrontend(nil, db, config)
@@ -185,10 +182,7 @@ func TestFrontendStart(t *testing.T) {
 	defer db.Close()
 
 	// Create test config
-	config := dotidx.Config{
-		Relaychain: "Polkadot",
-		Chain:      "Polkadot",
-	}
+	config := dotidx.MgrConfig{}
 
 	// Create frontend instance with a random port (to avoid conflicts)
 	frontend := NewFrontend(nil, db, config)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	dix "github.com/pierreaubert/dotidx"
@@ -86,7 +87,7 @@ func (f *Frontend) handleAddressToBlocks(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (f *Frontend) getBlocksByAddress(address string, count, from, to string) ([]dix.BlockData, error) {
+func (f *Frontend) getBlocksByAddressForChain(relay, chain, address string, count, from, to string) ([]dix.BlockData, error) {
 	if !dix.IsValidAddress(address) {
 		return nil, fmt.Errorf("invalid address format")
 	}
@@ -111,8 +112,8 @@ func (f *Frontend) getBlocksByAddress(address string, count, from, to string) ([
 		%s
 		ORDER BY b.block_id DESC
 		LIMIT %s) ORDER BY block_id ASC;`,
-		dix.GetBlocksTableName(f.config),
-		dix.GetAddressTableName(f.config),
+		dix.GetBlocksTableName(relay, chain),
+		dix.GetAddressTableName(relay, chain),
 		address,
 		cond,
 		count,
@@ -154,5 +155,30 @@ func (f *Frontend) getBlocksByAddress(address string, count, from, to string) ([
 		return nil, fmt.Errorf("error iterating blocks: %w", err)
 	}
 
+	return blocks, nil
+}
+
+func (f *Frontend) getBlocksByAddress(address string, count, from, to string) (
+	map[string]map[string][]dix.BlockData,
+	error,
+) {
+	blocks := make(map[string]map[string][]dix.BlockData)
+	var wg sync.WaitGroup
+	var err error
+
+	for relay := range f.config.Parachains {
+		blocks[relay] = make(map[string][]dix.BlockData)
+		for chain := range f.config.Parachains[relay] {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				blocks[relay][chain], err = f.getBlocksByAddressForChain(relay, chain, address, count, from, to)
+				if err != nil {
+					log.Printf("Error getting blocks for address %s: %v", address, err)
+				}
+			}()
+		}
+	}
+	wg.Wait()
 	return blocks, nil
 }

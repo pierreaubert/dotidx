@@ -75,16 +75,19 @@ func (f *Frontend) handleStaking(w http.ResponseWriter, r *http.Request) {
 	}
 
 	es := dix.NewEventsStaking(address)
-	for block := range blocks {
-		filtered, err := es.Process(blocks[block].Extrinsics)
-		if err != nil {
-			http.Error(w, "Failed to extract stakings from block", http.StatusInternalServerError)
-			return
+	for relay := range blocks {
+		for chain := range blocks[relay] {
+			for block := range blocks[relay][chain] {
+				filtered, err := es.Process(blocks[relay][chain][block].Extrinsics)
+				if err != nil {
+					log.Printf("Failed to extract stakings from block %s on chain %s:%s: %v",
+						blocks[relay][chain][block].ID,
+						relay, chain, err)
+					return
+				}
+				blocks[relay][chain][block].Extrinsics = filtered
+			}
 		}
-		blocks[block].OnInitialize = []byte("[]")
-		blocks[block].OnFinalize = []byte("[]")
-		blocks[block].Logs = []byte("[]")
-		blocks[block].Extrinsics = filtered
 	}
 
 	// Set content type header
