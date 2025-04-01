@@ -201,7 +201,7 @@ SAS_METRICS_PROM_HOST="{{.Monitoring.PrometheusIP}}"
 SAS_METRICS_PROM_PORT={{.Monitoring.PrometheusPort}}
 SAS_EXPRESS_BIND_HOST="{{.Parachains.%[2]s.%[4]s.SidecarIP}}"
 SAS_WRITE_PATH="{{.DotidxLogs}}"
-SAS_SUBSTRATE_URL="ws://{{.Parachains.%[2]s.%[4]s.RelayIP}}:{{.Parachains.%[2]s.%[4]s.PortRPC}}"
+SAS_SUBSTRATE_URL="ws://{{.Parachains.%[2]s.%[4]s.NodeIP}}:{{.Parachains.%[2]s.%[4]s.PortRPC}}"
 SAS_EXPRESS_PORT=%d
 `, toTitle(relay), relay, toTitle(chain), chain, port);
 
