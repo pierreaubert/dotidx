@@ -1,0 +1,10 @@
+#!/bin/sh
+# -------------------------------------------------------------- -*- sh -*--
+
+cp /dotidx/etc-horn/systemd/*.service ~/.config/systemd/user
+chmod 644 ~/.config/systemd/user/*.service
+systemctl --user daemon-reload
+systemctl --user status --failed
+
+
+

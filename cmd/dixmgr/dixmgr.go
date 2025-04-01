@@ -19,7 +19,8 @@ func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
 	configFile := flag.String("conf", "", "toml configuration file")
-	templateDir := flag.String("template", "./conf/templates", "toml configuration file")
+	templatesDir := flag.String("templates", "./conf/templates", "templated configuration files")
+	scriptsDir := flag.String("scripts", "./conf/scripts", "templated script files")
 	flag.Parse()
 
 	if configFile == nil || *configFile == "" {
@@ -38,23 +39,44 @@ func main() {
 		log.Fatal("Config validation failed!")
 	}
 
+
+	dirs := []string{
+		config.DotidxRoot,
+		config.DotidxBin,
+	}
+	for i := range dirs {
+		if err = os.Mkdir(dirs[i], 0700); err != nil && !os.IsExist(err) {
+			log.Fatal(err)
+		}
+	}
+
 	targetDir := fmt.Sprintf(`%s-%s`, config.TargetDir, config.Name)
 	if err = os.Mkdir(targetDir, 0700); err != nil && !os.IsExist(err) {
 		log.Fatal(err)
 	}
 
-	if err := generateFileFromTemplate(*config, *templateDir, targetDir); err != nil {
+	if err := generateFileFromTemplate(*config, *templatesDir, targetDir); err != nil {
 		log.Fatal(err)
 	}
 
 
-	if err := generateFilePerRelaychain(*config, *templateDir, targetDir); err != nil {
+	if err := generateFilePerRelaychain(*config, *templatesDir, targetDir); err != nil {
 		log.Fatal(err)
 	}
 
-	if err := generateFilePerChain(*config, *templateDir, targetDir); err != nil {
+	if err := generateFilePerChain(*config, *templatesDir, targetDir); err != nil {
 		log.Fatal(err)
 	}
+
+	if err = os.Mkdir(config.DotidxBin, 0700); err != nil && !os.IsExist(err) {
+		log.Fatal(err)
+	}
+
+	if err := generateScriptsFromTemplate(*config, *scriptsDir, config.DotidxBin); err != nil {
+		log.Fatal(err)
+	}
+
+
 }
 
 func checkConfigPortCollision(config dix.MgrConfig) error {
@@ -133,7 +155,7 @@ NODE_RELAY="ws://{{.Parachains.%[2]s.%[2]s.RelayIP}}:{{.Parachains.%[2]s.%[2]s.P
 NODE_PROM_PORT={{.Parachains.%[2]s.%[4]s.PrometheusPort}}
 `, toTitle(relay), relay, toTitle(chain), chain);
 
-			log.Printf(nodeTmpl)
+			// log.Printf(nodeTmpl)
  			node, err := template.New("node").Parse(nodeTmpl)
  			if err != nil {
  				return fmt.Errorf("failed to parse template relay: %w", err)
@@ -141,6 +163,7 @@ NODE_PROM_PORT={{.Parachains.%[2]s.%[4]s.PrometheusPort}}
  			if err := node.Execute(outFile, config); err != nil {
  				return fmt.Errorf("failed to execute template relay: %w", err)
  			}
+			fmt.Printf("Generated %s\n", dst)
 		}
 	}
 	return nil
@@ -184,6 +207,7 @@ NODE_PROM_PORT={{.Parachains.%[2]s.%[2]s.PrometheusPort}}
  		if err := relay.Execute(outFile, config); err != nil {
  			return fmt.Errorf("failed to execute template relay: %w", err)
  		}
+		fmt.Printf("Generated %s\n", dst)
 	}
 	return nil
 }
@@ -230,6 +254,38 @@ func generateFileFromTemplate(config dix.MgrConfig, sourceDir, destDir string) e
  		return nil
 	}
 
+	return filepath.WalkDir(sourceDir, processDir)
+}
+
+func generateScriptsFromTemplate(config dix.MgrConfig, sourceDir, destDir string) error {
+	err := os.Mkdir(destDir, 0700)
+	if err != nil && !os.IsExist(err) {
+		fmt.Printf("failed creating directory: %s\n", destDir)
+		log.Fatal(err)
+	}
+	processDir := func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.HasSuffix(path, "~") || strings.HasPrefix(path, "#") {
+ 			fmt.Printf("Skipping backup file: %s\n", path)
+ 			return nil
+ 		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		if strings.HasSuffix(path, ".tmpl") {
+			filename := filepath.Join(
+				destDir,
+				filepath.Base(strings.TrimSuffix(path, ".tmpl")),
+			)
+			return processFileAsTemplate(path, filename, &config)
+		}
+
+		return nil
+	}
 	return filepath.WalkDir(sourceDir, processDir)
 }
 
