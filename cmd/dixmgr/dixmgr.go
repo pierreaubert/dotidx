@@ -145,7 +145,7 @@ func generateFilePerChain(config dix.MgrConfig, sourceDir, destDir string) error
 
 			nodeTmpl := fmt.Sprintf(`
 # configuration for the relay chain
-NODE_BIN={{.DotidxBin}}/polkadot-parachain
+NODE_BIN={{.Parachains.%[2]s.%[4]s.Bin}}
 NODE_CHAIN={{.Parachains.%[2]s.%[4]s.Name}}
 NODE_NAME=10%[1]s%[3]s
 NODE_BASE_PATH={{.Parachains.%[2]s.%[4]s.Basepath}}
@@ -190,7 +190,7 @@ func generateFilePerRelaychain(config dix.MgrConfig, sourceDir, destDir string) 
 
 		relayTmpl := fmt.Sprintf(`
 # configuration for the relay chain
-NODE_BIN={{.DotidxBin}}/polkadot
+NODE_BIN={{.Parachains.%[2]s.%[2]s.Bin}}
 NODE_CHAIN=%[2]s
 NODE_NAME=10%[1]s
 NODE_BASE_PATH={{.Parachains.%[2]s.%[2]s.Basepath}}

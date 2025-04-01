@@ -57,6 +57,7 @@ type DotidxFE struct {
 
 type ParaChainConfig struct {
 	Name            string `toml:"name"`
+	Bin             string `toml:"bin"`
 	PortRPC         int    `toml:"port_rpc"`
 	PortWS          int    `toml:"port_ws"`
 	Basepath        string `toml:"basepath"`

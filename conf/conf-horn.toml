@@ -37,6 +37,7 @@ static_path = "./app"
 
 [parachains.polkadot.polkadot]
 name = "polkadot"  # name for the polkadot binary --chain parameter
+bin = "/dotidx/bin/polkadot"
 relay_ip = "192.168.1.36"
 port_ws = 9943
 port_rpc = 9944
@@ -50,6 +51,7 @@ prometheus_port = 9615
 
 [parachains.polkadot.assethub]
 name = "asset-hub-polkadot"  # name for the polkadot binary --chain parameter
+bin = "/dotidx/bin/polkadot-parachain"
 node_ip = "192.168.1.36"
 port_ws = 9945
 port_rpc = 9946
@@ -63,6 +65,7 @@ prometheus_port = 9616
 
 [parachains.polkadot.people]
 name = "people-polkadot"  # name for the polkadot binary --chain parameter
+bin = "/dotidx/bin/polkadot-parachain"
 node_ip = "192.168.1.36"
 port_ws = 9947
 port_rpc = 9948
@@ -76,6 +79,7 @@ prometheus_port = 9617
 
 [parachains.polkadot.collectives]
 name = "collectives-polkadot"  # name for the polkadot binary --chain parameter
+bin = "/dotidx/bin/polkadot-parachain"
 node_ip = "192.168.1.36"
 port_ws = 9949
 port_rpc = 9950
@@ -89,6 +93,7 @@ prometheus_port = 9618
 
 [parachains.polkadot.mythos]
 name = "mythos"
+bin = "/dotidx/bin/mythos-node"
 node_ip = "192.168.1.36"
 port_ws = 9951
 port_rpc = 9952
@@ -102,6 +107,7 @@ prometheus_port = 9619
 
 [parachains.polkadot.frequency]
 name = "frequency"
+bin = "/dotidx/bin/frequency-v1.15.2"
 node_ip = "192.168.1.36"
 port_ws = 9953
 port_rpc = 9954
@@ -115,6 +121,7 @@ prometheus_port = 9620
 
 [parachains.kusama.kusama]
 name = "polkadot"  # name for the polkadot binary --chain parameter
+bin = "/dotidx/bin/polkadot"
 relay_ip = "192.168.1.36"
 port_ws = 19943
 port_rpc = 19944
@@ -128,6 +135,7 @@ prometheus_port = 19615
 
 [parachains.kusama.assethub]
 name = "kusama-assethub"  # name for the polkadot binary --chain parameter
+bin = "/dotidx/bin/polkadot-parachain"
 node_ip = "192.168.1.36"
 port_ws = 19945
 port_rpc = 19946
@@ -141,6 +149,7 @@ prometheus_port = 19616
 
 [parachains.kusama.accurast]
 name = "kusama-accurast"  # name for the polkadot binary --chain parameter
+bin = "/dotidx/bin/polkadot-parachain"
 node_ip = "192.168.1.36"
 port_ws = 19947
 port_rpc = 19948
