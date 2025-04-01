@@ -32,9 +32,9 @@ http {
     {{range $relay, $chains := .Parachains}}
       {{range $chain, $props := $chains}}
     server {
-        listen {{$props.SidecarPort}}:{{$props.SidecarIP}};
-        access_log logs/nginx.access.log;
-        error_log  logs/nginx.errors.log;
+        listen {{$props.SidecarIP}}:{{$props.SidecarPort}};
+        access_log {{$.DotidxLogs}}/nginx.access.log;
+        error_log  {{$.DotidxLogs}}/nginx.errors.log;
         location / {
             proxy_pass http://sidecar_{{$relay}}_{{$chain}}/;
             limit_rate 0;

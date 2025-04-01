@@ -1,0 +1,13 @@
+[Unit]
+Description=Dix cron service running long queries periodically on the db
+After=network.target
+
+[Service]
+ExecStart={{.DotidxBin}}/dixbatch -conf {{.TargetDir}}-{{.Name}}/conf-{{.Name}}.toml
+Restart=on-failure
+RestartSec=120
+
+[Install]
+WantedBy=default.target
+
+

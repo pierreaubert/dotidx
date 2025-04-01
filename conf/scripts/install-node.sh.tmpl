@@ -1,0 +1,13 @@
+#!/bin/sh
+# -------------------------------------------------------------- -*- sh -*--
+
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.2/install.sh | bash
+
+\. "$HOME/.nvm/nvm.sh"
+
+nvm install 20
+
+node -v # Should print "v22.14.0".
+nvm current # Should print "v22.14.0".
+
+npm -v # Should print "10.9.2".

@@ -14,9 +14,10 @@ type MgrConfig struct {
 	DotidxRoot    string                                `toml:"dotidx_root"`
 	DotidxBackup  string                                `toml:"dotidx_backup"`
 	DotidxRun     string                                `toml:"dotidx_run"`
-	DotidxRunTime string                                `toml:"dotidx_runtime"`
+	DotidxRuntime string                                `toml:"dotidx_runtime"`
 	DotidxLogs    string                                `toml:"dotidx_logs"`
 	DotidxBin     string                                `toml:"dotidx_bin"`
+	DotidxStatic  string                                `toml:"dotidx_static"`
 	DotidxBatch   DotidxBatch                           `toml:"dotidx_batch"`
 	DotidxDB      DotidxDB                              `toml:"dotidx_db"`
 	DotidxFE      DotidxFE                              `toml:"dotidx_fe"`
@@ -80,7 +81,11 @@ type FilesystemConfig struct {
 }
 
 type MonitoringConfig struct {
-	User string `toml:"user"`
+	User           string `toml:"user"`
+	PrometheusIP   string `toml:"prometheus_ip"`
+	PrometheusPort int    `toml:"prometheus_port"`
+	GrafanaIP      string `toml:"grafana_ip"`
+	GrafanaPort    int    `toml:"grafana_port"`
 }
 
 func LoadMgrConfig(file string) (*MgrConfig, error) {

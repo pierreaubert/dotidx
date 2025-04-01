@@ -1,0 +1,19 @@
+[Unit]
+Description=Reverse proxy for Dotidx
+Documentation=man:nginx(8)
+After=network-online.target remote-fs.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+PIDFile=/dotidx/run/nginx.pid
+ExecStartPre=/usr/sbin/nginx -t -p {{.DotidxRoot}} -c {{.DotidxRoot}}/etc-{{.Name}}/nginx/nginx.conf
+ExecStart=/usr/sbin/nginx -p {{.DotidxRoot}} -c {{.DotidxRoot}}/etc-{{.Name}}/nginx/nginx.conf
+ExecReload=/usr/sbin/nginx -p {{.DotidxRoot}} -s reload -c {{.DotidxRoot}}/etc-{{.Name}}/nginx/nginx.conf
+ExecStop=-/sbin/start-stop-daemon --quiet --stop --retry QUIT/5 --p {{.DotidxRoot}}
+TimeoutStopSec=5
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
+
