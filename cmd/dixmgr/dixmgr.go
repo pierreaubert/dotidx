@@ -31,6 +31,13 @@ func main() {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
 
+	if errs := checkConfig(*config); len(errs) > 0 {
+		for i := range errs {
+			log.Printf("%s", errs[i])
+		}
+		log.Fatal("Config validation failed!")
+	}
+
 	targetDir := fmt.Sprintf(`%s-%s`, config.TargetDir, config.Name)
 	if err = os.Mkdir(targetDir, 0700); err != nil && !os.IsExist(err) {
 		log.Fatal(err)
@@ -48,6 +55,45 @@ func main() {
 	if err := generateFilePerChain(*config, *templateDir, targetDir); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func checkConfigPortCollision(config dix.MgrConfig) error {
+	ports := make(map[int]bool, 0)
+
+	add:= func (port int) error {
+		if ports[port] == true {
+			return fmt.Errorf("port %d is already in use", port)
+		}
+		ports[port] = true
+		return nil
+	}
+
+	if err := add(config.DotidxDB.Port); err != nil { return err }
+	if err := add(config.DotidxFE.Port); err != nil { return err }
+
+	for relay := range config.Parachains {
+		for chain := range config.Parachains[relay] {
+			chainConfig := config.Parachains[relay][chain]
+			if err := add(chainConfig.PortRPC); err != nil { return err }
+			if err := add(chainConfig.PortWS); err != nil { return err }
+			if err := add(chainConfig.ChainreaderPort); err != nil { return err }
+			if err := add(chainConfig.PrometheusPort); err != nil { return err }
+			for i := range chainConfig.SidecarCount {
+				if err := add(chainConfig.SidecarPort+1+i); err != nil { return err }
+			}
+		}
+	}
+	return nil
+}
+
+func checkConfig(config dix.MgrConfig) []error {
+	errs := make([]error, 0)
+
+	if err := checkConfigPortCollision(config) ; err != nil {
+		errs = append(errs, err)
+	}
+
+	return errs
 }
 
 func toTitle(s string) string {
@@ -83,7 +129,7 @@ NODE_NAME=10%[1]s%[3]s
 NODE_BASE_PATH={{.Parachains.%[2]s.%[4]s.Basepath}}
 NODE_PORT_WS={{.Parachains.%[2]s.%[4]s.PortWS}}
 NODE_PORT_RPC={{.Parachains.%[2]s.%[4]s.PortRPC}}
-NODE_RELAY="ws://{{.Parachains.%[2]s.%[2]s.RelayIP}}:{{.Parachains.%[2]s.%[2]s.PortWS}}"
+NODE_RELAY="ws://{{.Parachains.%[2]s.%[2]s.RelayIP}}:{{.Parachains.%[2]s.%[2]s.PortRPC}}"
 NODE_PROM_PORT={{.Parachains.%[2]s.%[4]s.PrometheusPort}}
 `, toTitle(relay), relay, toTitle(chain), chain);
 

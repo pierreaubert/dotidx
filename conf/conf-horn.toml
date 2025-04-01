@@ -150,7 +150,7 @@ chainreader_port = 21000
 sidecar_ip = "127.0.0.1"
 sidecar_port = 21000  # will use +1 +2 etc for each sidecar instance
 sidecar_count = 2
-prometheus_port = 19616
+prometheus_port = 19617
 
 [filesystem]
 zfs = true

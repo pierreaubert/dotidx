@@ -25,7 +25,7 @@ ExecStart=/bin/sh -c '${NODE_BIN} \
     --port ${NODE_PORT_WS} \
     --rpc-port ${NODE_PORT_RPC} \
     --prometheus-port ${NODE_PROM_PORT} \
-    --relay-chain-rpc-urls=${NODE_RELAY} \
+    --relay-chain-rpc-urls ${NODE_RELAY} \
     --base-path ${NODE_BASE_PATH}'
 Restart=on-failure
 RestartSec=120
