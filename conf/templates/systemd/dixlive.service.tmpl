@@ -5,7 +5,7 @@ After=network.target
 [Service]
 ExecStart={{.DotidxBin}}/dixlive -conf {{.TargetDir}}-{{.Name}}/conf-{{.Name}}.toml
 Restart=on-failure
-RestartSec=120
+RestartSec=20
 
 [Install]
 WantedBy=default.target

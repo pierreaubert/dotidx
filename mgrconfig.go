@@ -57,19 +57,20 @@ type DotidxFE struct {
 }
 
 type ParaChainConfig struct {
-	Name            string `toml:"name"`
-	Bin             string `toml:"bin"`
-	PortRPC         int    `toml:"port_rpc"`
-	PortWS          int    `toml:"port_ws"`
-	Basepath        string `toml:"basepath"`
-	ChainreaderIP   string `toml:"chainreader_ip"`
-	ChainreaderPort int    `toml:"chainreader_port"`
-	SidecarIP       string `toml:"sidecar_ip"`
-	SidecarPort     int    `toml:"sidecar_port"`
-	SidecarCount    int    `toml:"sidecar_count"`
-	PrometheusPort  int    `toml:"prometheus_port"`
-	RelayIP         string `toml:"relay_ip"`
-	NodeIP          string `toml:"node_ip"`
+	Name                  string `toml:"name"`
+	Bin                   string `toml:"bin"`
+	PortRPC               int    `toml:"port_rpc"`
+	PortWS                int    `toml:"port_ws"`
+	Basepath              string `toml:"basepath"`
+	ChainreaderIP         string `toml:"chainreader_ip"`
+	ChainreaderPort       int    `toml:"chainreader_port"`
+	SidecarIP             string `toml:"sidecar_ip"`
+	SidecarPort           int    `toml:"sidecar_port"`
+	SidecarPrometheusPort int    `toml:"sidecar_prometheus_port"`
+	SidecarCount          int    `toml:"sidecar_count"`
+	PrometheusPort        int    `toml:"prometheus_port"`
+	RelayIP               string `toml:"relay_ip"`
+	NodeIP                string `toml:"node_ip"`
 }
 
 func (ParaChainConfig) ComputePort(i, j int) int {

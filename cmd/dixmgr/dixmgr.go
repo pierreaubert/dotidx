@@ -132,6 +132,7 @@ func checkConfigPortCollision(config dix.MgrConfig) error {
 			if err := add(chainConfig.PrometheusPort); err != nil { return err }
 			for i := range chainConfig.SidecarCount {
 				if err := add(chainConfig.SidecarPort+1+i); err != nil { return err }
+				if err := add(chainConfig.SidecarPrometheusPort+1+i); err != nil { return err }
 			}
 		}
 	}
@@ -194,16 +195,23 @@ func generateSidecarFilePerChain(config dix.MgrConfig, sourceDir, destDir string
  				defer outFile.Close()
 
 				port := config.Parachains[relay][chain].SidecarPort + 1 + i
+				prom_port := config.Parachains[relay][chain].SidecarPrometheusPort + 1 + i
+				ip := config.Parachains[relay][chain].NodeIP
+				if relay == chain {
+					ip = config.Parachains[relay][chain].RelayIP
+				}
 				nodeTmpl := fmt.Sprintf(`
 # configuration for a sidecar per chain
 SAS_METRICS_ENABLED=true
-SAS_METRICS_PROM_HOST="{{.Monitoring.PrometheusIP}}"
-SAS_METRICS_PROM_PORT={{.Monitoring.PrometheusPort}}
-SAS_EXPRESS_BIND_HOST="{{.Parachains.%[2]s.%[4]s.SidecarIP}}"
+SAS_METRICS_PROM_HOST="{{.Parachains.%[2]s.%[4]s.SidecarIP}}"
+SAS_METRICS_PROM_PORT=%[6]d
+SAS_METRICS_LOKI_HOST="127.0.0.1"
+SAS_METRICS_LOKI_PORT=3100
 SAS_WRITE_PATH="{{.DotidxLogs}}"
-SAS_SUBSTRATE_URL="ws://{{.Parachains.%[2]s.%[4]s.NodeIP}}:{{.Parachains.%[2]s.%[4]s.PortRPC}}"
-SAS_EXPRESS_PORT=%d
-`, toTitle(relay), relay, toTitle(chain), chain, port);
+SAS_SUBSTRATE_URL="ws://%[7]s:{{.Parachains.%[2]s.%[4]s.PortRPC}}"
+SAS_EXPRESS_BIND_HOST="{{.Parachains.%[2]s.%[4]s.SidecarIP}}"
+SAS_EXPRESS_PORT=%[5]d
+`, toTitle(relay), relay, toTitle(chain), chain, port, prom_port, ip);
 
 				// log.Printf(nodeTmpl)
  				node, err := template.New("node").Parse(nodeTmpl)

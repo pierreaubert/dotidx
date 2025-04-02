@@ -4,7 +4,7 @@ events {
     worker_connections 1024;
 }
 
-pid        run/nginx.pid;
+pid {{.DotidxRun}}/nginx.pid;
 
 http {
     tcp_nopush on;
