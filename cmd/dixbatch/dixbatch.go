@@ -310,7 +310,15 @@ func startWorkers(
 
 		startRange = endRange
 		if startRange >= config.DotidxBatch.EndRange {
-			break
+			// execution can take a long time and head could move significantly in the meantime
+			headBlockID, err := reader.GetChainHeadID()
+			if err != nil {
+				log.Fatalf("Failed to fetch head block: %v", err)
+			}
+			config.DotidxBatch.EndRange = headBlockID
+			if startRange >= headBlockID {
+				break
+			}
 		}
 		endRange = min(endRange+stepRange, config.DotidxBatch.EndRange)
 	}
