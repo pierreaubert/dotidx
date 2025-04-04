@@ -1,3 +1,29 @@
+// Set polkadot colors https://polkadot.com/community/brand-hub/
+
+$pink: #ff2670;
+$lime: #e4ff07;
+$cyan: #0F7777;
+$violet: #7916F3;
+$storm200: #DCE2E9;
+$storm400: #AEB7CB;
+$storm700: #6e7391;
+$black: #000000;
+$white: #FFFFFF;
+
+
+// Path to Bulma's sass folder
+@use "bulma/sass" with (
+    $family-primary: '"Unbunded", sans-serif',
+    $primary: $pink,
+    $warning: $pink,
+    $link: $lime,
+    $control-border-width: 2px,
+);
+
+// Import the Google Font
+@import
+url("https://fonts.googleapis.com/css2?family=Unbounded:wght@200..900&display=swap");
+
 .section {
     padding: 2rem 1.5rem;
     margin-bottom: 1rem;
@@ -83,4 +109,5 @@ pre.json-display {
 .balance-summary {
     margin-bottom: 1.5rem;
 }
+
 

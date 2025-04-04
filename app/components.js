@@ -3,9 +3,8 @@ export async function updateNav() {
     const content = `
         <div class="navbar-brand">
             <a class="navbar-item" href="/index.html">
-                <h1 class="is-size-2">DIX<sup>10</sup></h1>
-                <p>A block explorer<br>
-                for Polkadot!</p>
+               <h1 class="is-size-2">DIX<sup>10</sup></h1>
+               <p>A block explorer<br>for Polkadot!</p>
             </a>
             <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbarMenu">
                 <span aria-hidden="true"></span>

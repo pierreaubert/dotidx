@@ -3,10 +3,22 @@
     static_configs:
       - targets: ["{{.DotidxDB.IP}}:9187"]
 
-  - job_name: polkadot-nodes
+    {{range $relay, $chains := .Parachains}}
+  - job_name: {{$relay}}-nodes
     static_configs:
       - targets: [
-    {{range $relay, $chains := .Parachains}}
+      {{range $chain, $props := $chains}}
+        {{if eq $relay $chain}}
+                {{$props.RelayIP}}:{{$props.PrometheusPort}},
+        {{else}}
+                {{$props.NodeIP}}:{{$props.PrometheusPort}},
+        {{end}}
+      {{end}}
+        ]
+
+  - job_name: {{$relay}}-sidecar
+    static_configs:
+      - targets: [
       {{range $chain, $props := $chains}}
         {{if eq $relay $chain}}
                 {{$props.RelayIP}}:{{$props.PrometheusPort}},
@@ -15,16 +27,4 @@
         {{end}}
       {{end}}
     {{end}}
-                 ]
-  - job_name: polkadot-sidecar
-    static_configs:
-      - targets: [
-    {{range $relay, $chains := .Parachains}}
-      {{range $chain, $props := $chains}}
-        {{if eq $relay $chain}}
-                {{$props.RelayIP}}:{{$props.PrometheusPort}},
-        {{else}}
-                {{$props.NodeIP}}:{{$props.PrometheusPort}},
-        {{end}}
-      {{end}}
-    {{end}}
+        ]
