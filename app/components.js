@@ -50,7 +50,7 @@ export async function updateFooter() {
     const elem = document.getElementById('footer');
     const content = `
 <div class="content has-text-centered">
-   <p><strong>DIX</strong> - An open source Polkadot Block Explorer</p>
+   <p><strong>DIX</strong> - An open source Block Explorer for Polkadot</p>
 </div>
 `;
     elem.innerHTML = content;
