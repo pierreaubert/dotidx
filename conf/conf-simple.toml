@@ -1,11 +1,36 @@
+## ------------------------------------------------------ -*- toml -*- --
+## This file generates all the other configuration files.
+## Usage:
+##     dixmgr -conf this.file.toml
+## ----------------------------------------------------------------------
+## Example of a simple config with 1 machine
+## it stats relaychain and assethub on polkadot
+## you need around
+##  - 8TB of disk space
+##  - 32 GB of RAM
+##  - and as many core as you can get: 16 works well.
+## Tested configuration:
+##  - It does work on a MacMini M1 with 16 GB but it is slow.
+##  - It works significantly faster on a MacMini M4 with 64 GB and a 8 TB
+##    ssd
+##  - It works very well on a AMD threadripper 64 core, 256 GB of RAM which
+##    is good enough for production use with 10 users in parallel. You need
+##    more disks and or more memory to go faster.
+## ----------------------------------------------------------------------
+
+
 # where do you want to generate the config files
-target_dir = "./dist"
+target_dir = "/dotidx/etc"
+
 # name of your configuration
 name = "horn"
-dotidx_root_dir = "/dotidx"
-dotidx_backup_dir = "/dotidx/backup"
-dotidx_root = "/dotidx/run"
+dotidx_root = "/dotidx"
+dotidx_backup = "/dotidx/backup"
+dotidx_run = "/dotidx/run"
+dotidx_runtime = "/dotidx/runtim"
 dotidx_logs = "/dotidx/logs"
+dotidx_bin = "/dotidx/bin"
+dotidx_static = "/dotidx/static"
 
 [dotidx_db]
 type = "postgres"
@@ -13,81 +38,60 @@ version = 16
 name = "dotidx"
 ip = "127.0.0.1"
 user = "dotidx"
+password = "funradio"
 port = 5434
-password = "secret"
-memory = "64GB"
-data_dir = "/dotidx/pg"
-run_dir = "/dotidx/run"
-whitelisted_ip = ["192.168.1.1/32"]
+memory = "16GB"
+data_dir = "/polkadot/postgres_data/dotidx"
+run_dir = "/polkadot/postgres_data/run"
+whitelisted_ip = []
+
+[dotidx_batch]
+start_range = 1
+end_range = -1
+batch_size = 10
+max_workers = 8
+batching = "batch"
+flush_timeout = "15s"
 
 [dotidx_fe]
 ip = "127.0.0.1"
 port = 8080
-
-[dotidx_batch]
-start_range = 1
-end_range = 10
-batch_size = 10
-max_workers = 4
-batching = "batch"
-flush_timeout = "1m"
+static_path = "/dotidx/static"
 
 [parachains.polkadot.polkadot]
-name = "polkadot"
-port = 9944
-basepath = "/dotidx/polkadot-node-archive"
+name = "polkadot"  # name for the polkadot binary --chain parameter
+bin = "/dotidx/bin/polkadot"
+relay_ip = "127.0.0.1"
+port_ws = 9943
+port_rpc = 9944
+basepath = "/polkadot/polkadot-relay-archive"
 chainreader_ip = "127.0.0.1"
 chainreader_port = 10800
 sidecar_ip = "127.0.0.1"
 sidecar_port = 10800  # will use +1 +2 etc for each sidecar instance
+sidecar_count = 5
+prometheus_port = 9615
+sidecar_prometheus_port = 10850
 
 [parachains.polkadot.assethub]
-name = "asset-hub-polkadot"
-port = 9946
-basepath = "/dotidx/assethub-node-archive"
+name = "asset-hub-polkadot"  # name for the polkadot binary --chain parameter
+bin = "/dotidx/bin/polkadot-parachain"
+node_ip = "127.0.0.1"
+port_ws = 9945
+port_rpc = 9946
+basepath = "/dotidx/polkadot-assethub-node-archive"
 chainreader_ip = "127.0.0.1"
 chainreader_port = 10900
 sidecar_ip = "127.0.0.1"
 sidecar_port = 10900  # will use +1 +2 etc for each sidecar instance
-
-[parachains.polkadot.people]
-name = "people-polkadot"
-port = 9948
-basepath = "/dotidx/people-node-archive"
-chainreader_ip = "127.0.0.1"
-chainreader_port = 11000
-sidecar_ip = "127.0.0.1"
-sidecar_port = 11000  # will use +1 +2 etc for each sidecar instance
-
-[parachains.polkadot.collectives]
-name = "collectives-polkadot"
-port = 9950
-basepath = "/dotidx/collectives-node-archive"
-chainreader_ip = "127.0.0.1"
-chainreader_port = 11100
-sidecar_ip = "127.0.0.1"
-sidecar_port = 11100  # will use +1 +2 etc for each sidecar instance
-
-[parachains.polkadot.mythos]
-name = "mythos"
-port = 9952
-basepath = "/dotidx/mythos-node-archive"
-chainreader_ip = "127.0.0.1"
-chainreader_port = 11200
-sidecar_ip = "127.0.0.1"
-sidecar_port = 11200  # will use +1 +2 etc for each sidecar instance
-
-[parachains.polkadot.frequency]
-name = "frequency"
-port = 9954
-basepath = "/dotidx/frequency-node-archive"
-chainreader_ip = "127.0.0.1"
-chainreader_port = 11300
-sidecar_ip = "127.0.0.1"
-sidecar_port = 11300  # will use +1 +2 etc for each sidecar instance
+sidecar_count = 2
+prometheus_port = 9616
+sidecar_prometheus_port = 10950
 
 [filesystem]
 zfs = true
 
 [monitoring]
 user = "prometheus"
+prometheus_ip = "127.0.0.1"
+prometheus_port = 9100

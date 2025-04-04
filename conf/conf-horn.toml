@@ -162,7 +162,7 @@ prometheus_port = 19615
 sidecar_prometheus_port = 20850
 
 [parachains.kusama.assethub]
-name = "kusama-assethub"  # name for the polkadot binary --chain parameter
+name = "asset-hub-kusama"  # name for the polkadot binary --chain parameter
 bin = "/dotidx/bin/polkadot-parachain"
 node_ip = "192.168.1.37"
 port_ws = 19945
