@@ -208,7 +208,11 @@ GRANT ALL ON TABLE %[1]s TO dotidx;
 func (s *SQLDatabase) CreateTableBlocksPartitions(relayChain, chain, firstTimestamp, lastTimestamp string) error {
 	blocksTable := GetBlocksTableName(relayChain, chain)
 
-	firstYear, firstMonth := 2020, 4
+	// kusame stated oct 2019
+	firstYear, firstMonth := 2019, 10
+	if relayChain == "polkadot" {
+		firstYear, firstMonth = 2020, 05
+	}
 	if firstTimestamp != "" {
 		firstTime, err := time.Parse("2000-01-01 00:00:00", firstTimestamp)
 		if err == nil {
@@ -221,14 +225,14 @@ func (s *SQLDatabase) CreateTableBlocksPartitions(relayChain, chain, firstTimest
 	// Spread by month across the partition
 	slow := 0
 	fast := 0
-	slow_or_fast := ""
-	for year_idx := range 6 {
-		year := 2020 + year_idx
+	slowOrFast := ""
+	for yearIdx := range 6 {
+		year := firstYear + yearIdx
 		if year >= time.Now().Year() {
-			slow_or_fast = fmt.Sprintf("%s%d", fastTablespaceRoot, fast)
+			slowOrFast = fmt.Sprintf("%s%d", fastTablespaceRoot, fast)
 			fast = min(fast+1, fastTablespaceNumber-1)
 		} else {
-			slow_or_fast = fmt.Sprintf("%s%d", slowTablespaceRoot, slow)
+			slowOrFast = fmt.Sprintf("%s%d", slowTablespaceRoot, slow)
 			slow = min(slow+1, slowTablespaceNumber-1)
 		}
 		for month := range 12 {
@@ -250,13 +254,13 @@ REVOKE ALL ON TABLE %[1]s_%04[2]d_%02[3]d FROM PUBLIC;
 GRANT SELECT ON TABLE %[1]s_%04[2]d_%02[3]d TO PUBLIC;
 GRANT ALL ON TABLE %[1]s_%04[2]d_%02[3]d TO dotidx;
 	`,
-				blocksTable,  // 1
-				year,         // 2
-				month+1,      // 3
-				month+2,      // 4
-				from_date,    // 5
-				to_date,      // 6
-				slow_or_fast, // 7
+				blocksTable, // 1
+				year,        // 2
+				month+1,     // 3
+				month+2,     // 4
+				from_date,   // 5
+				to_date,     // 6
+				slowOrFast,  // 7
 			)
 			_, err := s.db.Exec(parts)
 			if err != nil {
@@ -497,7 +501,7 @@ func (s *SQLDatabase) Save(items []BlockData, relayChain, chain string) error {
 			sec := (id / 1000) % 60
 			min := (id / 60000) % 60
 			hour := (id / 3600000) % 60
-			ts = fmt.Sprintf("2020-05-01 %02d:%02d:%02d.%04d", hour, min, sec, milli)
+			ts = fmt.Sprintf("2000-01-01 %02d:%02d:%02d.%04d", hour, min, sec, milli)
 		}
 
 		// Insert into blocks table using direct execution
