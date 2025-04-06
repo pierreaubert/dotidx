@@ -157,7 +157,7 @@ chainreader_ip = "192.168.1.37"
 chainreader_port = 20800
 sidecar_ip = "192.168.1.37"
 sidecar_port = 20800  # will use +1 +2 etc for each sidecar instance
-sidecar_count = 2
+sidecar_count = 5
 prometheus_port = 19615
 sidecar_prometheus_port = 20850
 
@@ -172,7 +172,7 @@ chainreader_ip = "192.168.1.37"
 chainreader_port = 20900
 sidecar_ip = "192.168.1.37"
 sidecar_port = 20900  # will use +1 +2 etc for each sidecar instance
-sidecar_count = 2
+sidecar_count = 5
 prometheus_port = 19616
 sidecar_prometheus_port = 20950
 

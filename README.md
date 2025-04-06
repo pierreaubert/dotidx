@@ -30,15 +30,15 @@ make
 
 ## Prework
 
-Until the `dixmgr` is operational:
+Until the `dixmgr` is fully operational:
 
-- Find 4 free TB of disk ideally on SSD disks. It also works on SATA but is sloooow. A mix is also working well. The more disks you have the faster this will be.
+- Find 6 free TB of disk ideally on SSD disks. It also works on SATA but is sloooow. A mix is also working well. The more disks you have the faster this will be.
   - With 2 SATA disks, indexer run around 25 blocks per second.
   - With 4 NVME disks, indexer run around 300 blocks per second.
 - Prepare your storage
   - ZFS or not: if ZFS then have a look at `./scripts/prep_zfs.sh`
   - Create a `/dotidx` directory owned by the database owner
-  - Database uses more that 1 tablespace to optimise for permanance and cost. It expect 4 fast tablespaces and 6 slow ones.
+  - Database uses more that 1 tablespace to optimise for performance and cost. It expect 4 fast tablespaces and 6 slow ones.
   - Create links in `/dotidx` for each tablespace: it should look like this where each directory points to a different disk or partition. If you only have 1 disk, point all the links to the same disk.
 ```
 total 8
@@ -81,7 +81,7 @@ total 8
 
 ## Usage
 
-The system built 5 binaries:
+The system build 5 binaries:
 
 - `dixmgr`: a service that launches and monitor all the various services.
 - `dixbatch` : pull large amount of blocks into the database.
@@ -91,13 +91,14 @@ The system built 5 binaries:
 
 ### Configuration management
 
-There is a main configuration file with a TOML syntax. There are two examples, a simple one with all the services on one machine and a more complex one where each components can be on a different server.
+There is a main configuration file with a TOML syntax. There are two examples:
+1. a simple one with all the services on one machine
+2. a more complex one where each components can be on a different server.
 
 The toml file is processed by `dixmgr` and generates configurations for a set of software that are required to work together:
 - a database Postgres with a connection pooler
 - a set of Polkadot nodes one per parachain and one for the relay chain
 - a set of Sidecar frontends per node
-- a in memory cache Valkey
 - a Nginx reverse proxy
 - a batch indexer per node
 - a live indexer
@@ -109,14 +110,15 @@ The toml file is processed by `dixmgr` and generates configurations for a set of
   - Node exporter
   - Nging exporter
 
-The current supported version is based on systemd. A docker configuration can easily be build if needed.
+The current supported version is based on systemd. A docker or vagrant configuration can easily be build if needed. Setting up helm for K8s is also doable.
 
 **Do not edit the generated files! They are overriden by the configuration manager.**
 
 ### Blocks ingestion
 
+For example, if you want to ingest assethub on Polkadot:
 ```bash
-dixbatch -relaychain polkadot -chain assethub -conf simple.toml
+dixbatch -conf conf/conf-simple.toml -relayChain polkadot -chain assethub
 ```
 
 ```
@@ -124,22 +126,26 @@ A mini pc machine can read ~30 blocks per second and write them to the database 
 
 Notes:
 - If you can put the database on a diffent set of disks it does help.
-- M2 SSD will thermal throttle hard if they are not properly cooled.
+- M2 SSD will thermal throttle hard if they are not properly cooled. Look at the monitoring dashboard in Grafana to see what the temperature is.
 
 ### Continous ingestion of head blocks
 
 ```bash
-dotidx -live -sidecar=http://localhost:8080 -postgres="postgres://user:pass@localhost:5432/db" -workers 5 -batch 10
+dotlive -conf conf/conf-simple.toml
 ```
 
 ### Cron
 
 Run some queries continuously in the background.
 
+```bash
+dotcron -conf conf/conf-simple.toml
+```
+
 ### Frontend
 
 ```bash
-dotfe -postgres="postgres://user:pass@localhost:5432/db"
+dotfe -conf conf/conf-simple.toml
 ```
 
 The web API is available at 'http://localhost:8080' in development mode. It does have a demo site.

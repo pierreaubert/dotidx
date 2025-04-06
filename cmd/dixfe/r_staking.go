@@ -29,13 +29,6 @@ func (f *Frontend) handleStaking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count := query.Get("count")
-	log.Printf("Count: %s", count)
-	if count == "" {
-		count = "10"
-	}
-	log.Printf("Count: %s", count)
-
 	from := query.Get("from")
 	var fromTimestamp string
 	if from == "" {
@@ -67,6 +60,7 @@ func (f *Frontend) handleStaking(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Retrieve blocks for this address using the existing function
+	count := "5000"
 	blocks, err := f.getBlocksByAddress(address, count, fromTimestamp, toTimestamp)
 	if err != nil {
 		log.Printf("Error getting blocks for address %s: %v", address, err)

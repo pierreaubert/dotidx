@@ -12,10 +12,6 @@ function updateUrl(target, name) {
         newUrl += `?address=${address}`;
     }
 
-    const count = document.getElementById('search-count').value.trim();
-    if (count) {
-        newUrl += `&count=${encodeURIComponent(count)}`;
-    }
     const fromDate = document.getElementById('search-from').value;
     if (fromDate) {
         const fromDateTime = new Date(fromDate);

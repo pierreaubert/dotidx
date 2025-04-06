@@ -3,7 +3,7 @@ Description=Dix cron service running long queries periodically on the db
 After=network.target
 
 [Service]
-ExecStart={{.DotidxBin}}/dixbatch -conf {{.TargetDir}}-{{.Name}}/conf-{{.Name}}.toml
+ExecStart={{.DotidxBin}}/dixcron -conf {{.TargetDir}}-{{.Name}}/conf-{{.Name}}.toml
 Restart=on-failure
 RestartSec=120
 

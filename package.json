@@ -18,7 +18,7 @@
   "scripts": {
     "test": "npx vitest",
     "coverage": "npx vitest run --coverage",
-    "format": "npx prettier --write \"**/*.{js,ts}\"",
+    "format": "npx prettier --write \"app/*.js\"",
     "oxlint": "npx oxlint@latest",
     "upgrade": "npx npm-check-updates -u",
     "build-bulma": "sass --load-path=node_modules app/dix.scss app/dix.css",

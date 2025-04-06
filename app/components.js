@@ -57,6 +57,14 @@ export async function updateFooter() {
 }
 
 export async function updateSearchAssets(target) {
+    let now = new Date();
+    now.setMonth(now.getMonth() - 3);
+    const date = now.toISOString();
+    const dot = date.indexOf('.');
+    let valid = date;
+    if (dot !== -1) {
+	valid = date.slice(0, dot);
+    }
     const elem = document.getElementById(target);
     const content = `
         <div class="field has-addons">
@@ -74,29 +82,27 @@ export async function updateSearchAssets(target) {
         <div class="columns mt-3">
           <div class="column">
             <div class="field">
-              <label class="label">Count</label>
-              <div class="control">
-                <input id="search-count"
-                       class="input"
-                       type="number"
-                       value="20" min="1" max="100"
-                       title="Number of records to display">
-              </div>
-            </div>
-          </div>
-          <div class="column">
-            <div class="field">
               <label class="label">From Date</label>
               <div class="control">
-                <input id="search-from" class="input" type="datetime-local" title="Start date for filtering" placeholder="Select start date">
-                            </div>
+                <input id="search-from"
+                       class="input"
+                       type="datetime-local"
+                       title="Start date for filtering"
+                       placeholder="Select start date"
+                       value="${valid}" />
+              </div>
             </div>
           </div>
           <div class="column">
             <div class="field">
               <label class="label">To Date</label>
               <div class="control">
-                <input id="search-to" class="input" type="datetime-local" title="End date for filtering" placeholder="Select end date">
+                <input id="search-to"
+                       class="input"
+                       type="datetime-local"
+                       title="End date for filtering"
+                       placeholder="Select end date"
+                />
               </div>
             </div>
           </div>
