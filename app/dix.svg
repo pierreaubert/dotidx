@@ -23,11 +23,12 @@
 
   <circle cx="50" cy="50" r="40" fill="#E6007A" />
 
-  <g fill="#FFFFFF"> <path d="M 17.7 18.4 L 47.9 52.1 L 81.7 82.4 L 82.4 81.7 L 52.1 47.9 L 18.4 17.7 Z" />
+  <g fill="#FFFFFF">
+    <path d="M 17.7 18.4 L 47.9 52.1 L 81.7 82.4 L 82.4 81.7 L 52.1 47.9 L 18.4 17.7 Z" />
     <path d="M 81.7 17.7 L 47.9 47.9 L 17.7 81.7 L 18.4 82.4 L 52.1 52.1 L 82.4 18.4 Z" />
   </g>
 
-  <text x="25" y="63" class="label-text">1</text>
-  <text x="75" y="63" class="label-text">0</text>
+  <text x="25" y="53" class="label-text">1</text>
+  <text x="75" y="53" class="label-text">0</text>
 
 </svg>
