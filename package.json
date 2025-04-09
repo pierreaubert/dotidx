@@ -10,9 +10,13 @@
     "prettier": "^3.5.3",
     "sass": "^1.86.3",
     "terser": "^5.39.0",
-    "vitest": "^3.0.9"
+    "vitest": "^3.0.9",
+    "w3c-html-validator": "^1.8.3"
   },
   "dependencies": {
+    "@polkadot/extension-dapp": "^0.58.7",
+    "@polkadot/util": "^13.4.3",
+    "@polkadot/util-crypto": "^13.4.3",
     "plotly.js-dist-min": "^3.0.1"
   },
   "scripts": {

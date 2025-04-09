@@ -1,6 +1,6 @@
 // import {Plotly} from "plotly.js-dist-min";
 import { showError, formatTimestamp } from './misc.js';
-import { initAddresses } from './assets.js';
+import { initAddresses, getAddress } from './assets.js';
 
 function buildStakingGraphData(stakingData) {
     const transactionsByDay = {};
@@ -376,8 +376,7 @@ function addExtrinsicToggleListeners() {
 
 // Function to fetch stakings
 async function fetchStaking() {
-    const searchInput = document.getElementById('search-address');
-    const address = searchInput.value.trim();
+    const address = getAddress();
     if (!address) {
         return;
     }

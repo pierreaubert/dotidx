@@ -1,4 +1,4 @@
-import { updateFooter, updateNav } from './components.js';
+import { updateIcons, updateFooter, updateNav } from './components.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function initApp() {
     // Initialize the app
     async function init() {
+        await updateIcons();
         await updateNav();
         await updateFooter();
     }

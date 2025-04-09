@@ -1,7 +1,7 @@
 // import Plotly from "plotly.js-dist-min";
 import { showError, formatTimestamp } from './misc.js';
 import { getAccountAt } from './accounts.js';
-import { initAddresses } from './assets.js';
+import { initAddresses, getAddress } from './assets.js';
 
 // Function to build balance graph data
 function buildBalanceGraphData(balances) {
@@ -417,8 +417,7 @@ async function balancesSummary(address, results) {
 
 // Function to fetch balances
 async function fetchBalances(balancesUrl) {
-    const searchInput = document.getElementById('search-address');
-    const address = searchInput.value.trim();
+    const address = getAddress();
     if (!address) {
         return;
     }
@@ -465,4 +464,6 @@ async function fetchBalances(balancesUrl) {
     addExtrinsicToggleListeners();
 }
 
-document.addEventListener('DOMContentLoaded', () => initAddresses('search-balances', '/balances.html', fetchBalances));
+document.addEventListener('DOMContentLoaded', () => {
+    initAddresses('search-balances', '/balances.html', fetchBalances)
+});

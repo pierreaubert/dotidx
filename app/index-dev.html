@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DIX</title>
+    <title>DIX: a Polkadot block explorer</title>
     <link rel="stylesheet" href="/dix.css">
-    <script src="https://cdn.plot.ly/plotly-3.0.1.min.js" charset="utf-8"></script>
+    <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
     <link rel="icon" href="dix.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,23 +13,22 @@
 </head>
 <body>
 
-  <nav class="navbar" role="navigation" aria-label="main navigation" id="nav"></nav>
+  <svg xmlns="http://www.w3.org/2000/svg" style="display: none;" id="icons"></svg>
+  <nav class="level is-mobile mb-0 mr-3" id="nav"></nav>
 
   <div class="hero is-small is-link">
-    <div class="hero is-small-body">
       <p class="title">Your data</p>
-    </div>
   </div>
 
   <div class="grid m-5">
     <div class="cell">
-      <a class="box yourdata" href="/balances.html">
+      <a class="box yourdata" href="/balances.html" id="call-balances">
 	<p class="is-size-6 has-text-weight-bold">Balances</p>
 	<p class="is-size-7">Check your account!</p>
       </a>
     </div>
     <div class="cell">
-      <a class="box yourdata" href="/staking.html">
+      <a class="box yourdata" href="/staking.html" id="call-staking">
 	<p class="is-size-6 has-text-weight-bold">Staking</p>
 	<p class="is-size-7">Earnings?</p>
       </a>
@@ -38,8 +37,7 @@
 
   <div class="hero is-small is-warning">
     <div class="hero is-small-body">
-      <p class="title">Polkadot Chains</p>
-      <p class="subtitle">Mainnet</p>
+      <p class="title">Polkadot</p>
     </div>
   </div>
 
@@ -84,8 +82,7 @@
 
   <div class="hero is-small is-primary">
     <div class="hero is-small-body">
-      <p class="title">Kusama Chains</p>
-      <p class="subtitle">Chaotic Mainnet</p>
+      <p class="title">Kusama</p>
     </div>
   </div>
 

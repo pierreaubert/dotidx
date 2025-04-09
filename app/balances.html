@@ -10,15 +10,14 @@
 </head>
 <body>
 
-  <nav class="navbar" role="navigation" aria-label="main navigation" id="nav"></nav>
+  <script src="./bundle-polkadot-util.js"></script>
+  <script src="./bundle-polkadot-util-crypto.js"></script>
+  <script src="./bundle-polkadot-extension-dapp.js"></script>
 
-  <div class="hero is-link">
-    <div class="hero-body">
-      <p class="title">Balances</p>
-    </div>
-  </div>
+  <svg xmlns="http://www.w3.org/2000/svg" style="display: none;" id="icons"></svg>
+  <nav class="level is-mobile mb-0 mr-3" id="nav"></nav>
 
-  <div class="box mb-5" id="search-balances"></div>
+  <div class="mt-3 mb-3" id="search-balances"></div>
 
   <section class="section" id="balances-results">
 
@@ -37,6 +36,8 @@
   </section>
 
   <footer class="footer" id="footer"></footer>
+
+  <div id="modal-add-address" class="modal"></div>
 
   <script type="module" src="balances.js"></script>
 </body>

@@ -1,15 +1,39 @@
 // balances and staking are very similar
 // this file contains functions shared by both
 
-import { updateFooter, updateNav, updateSearchAssets } from './components.js';
+import { updateModals, updateIcons, updateFooter, updateNav, updateSearchAssets } from './components.js';
+import { initPJS } from './wallet.js';
+
+export function getAddress() {
+    const e = document.getElementById('addresses');
+    const value = e.options[e.selectedIndex].value;
+    // TODO: add atest to check for Polkadot/ETH address
+    if (value) {
+	return value.trim();
+    }
+    return null;
+}
+
+export function addAddress(address) {
+    let searchInput = document.getElementById('addresses');
+    const pos = [...searchInput.options].map(v => v.value).indexOf(address);
+    if (pos === -1 ) {
+	let option = document.createElement('option');
+	option.value = address;
+	option.text = address.slice(0, 6) + ' ... ' + address.slice(-6);
+	option.selected = true;
+	searchInput.add(option);
+    } else {
+        searchInput.options[pos].selected = true;
+    }
+}
 
 function updateUrl(target, name) {
-    const searchInput = document.getElementById(target);
-    let newUrl = name;
+    let newUrl = name + '?';
+    const address = getAddress();
 
-    const address = searchInput.value.trim();
-    if (address) {
-        newUrl += `?address=${address}`;
+    if (address && address.length>10) {
+        newUrl += `&address=${encodeURIComponent(address)}`;
     }
 
     const fromDate = document.getElementById('search-from').value;
@@ -33,12 +57,7 @@ function updateFromUrl() {
 
     const address = urlParams.get('address');
     if (address) {
-        document.getElementById('search-address').value = address;
-    }
-
-    const count = urlParams.get('count');
-    if (count) {
-        document.getElementById('search-count').value = count;
+	addAddress(address);
     }
 
     const fromParam = urlParams.get('from');
@@ -62,7 +81,6 @@ function updateFromUrl() {
 function clearFilters() {
     const searchInput = document.getElementById('search-address');
 
-    document.getElementById('search-count').value = '20';
     document.getElementById('search-from').value = '';
     document.getElementById('search-to').value = '';
 
@@ -73,17 +91,37 @@ function clearFilters() {
     }
 }
 
+function updateAddresses(event) {
+    const e = document.getElementById('addresses');
+    const value = e.options[e.selectedIndex].value;
+    if ( !value || value === "" ) {
+	const modal = document.getElementById('modal-add-address');
+	modal.classList.add('is-active');
+    } else {
+	document.getElementById('action-button').click();
+    }
+}
+
+function getAddressFromModal(event) {
+    const modal = document.getElementById('add-address');
+    addAddress(modal.value);
+    document.getElementById('modal-add-address').classList.remove('is-active');
+}
+
 // target: name of the div
 // name: name of the address in url (balances, staking ...)
 // fetchIt: a function that will be called back when clicking
 export async function initAddresses(target, name, fetchIt) {
+    await updateIcons();
     await updateNav();
     await updateFooter();
+    await updateModals();
     await updateSearchAssets(target);
+    await initPJS();
 
     const actionButton = document.getElementById('action-button');
     actionButton.addEventListener('click', () => {
-        const url = updateUrl('search-address', name);
+        const url = updateUrl('addresses', name);
         fetchIt(url);
     });
 
@@ -99,4 +137,24 @@ export async function initAddresses(target, name, fetchIt) {
     });
 
     updateFromUrl();
+
+    document.getElementById('addresses').addEventListener('change', (e) => {
+	updateAddresses(e);
+    });
+    document.getElementById('addresses').addEventListener('click', (e) => {
+	updateAddresses(e);
+    });
+
+    document.getElementById('add-address').addEventListener('change', (e) => {
+	getAddressFromModal(e);
+    });
+
+    document.getElementById('add-address-add-button').addEventListener('click', (e) => {
+	getAddressFromModal(e);
+    });
+
+    document.getElementById('add-address-cancel-button').addEventListener('click', (e) => {
+	getAddressFromModal(e);
+    });
+
 }

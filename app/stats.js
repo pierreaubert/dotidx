@@ -1,9 +1,9 @@
 // import Plotly from "plotly.js-dist-min";
-import { updateFooter, updateNav } from './components.js';
+import { updateIcons, updateFooter, updateNav } from './components.js';
 import { showError } from './misc.js';
 
 function printCompletionRateRelayChain(name, datas) {
-    let html = `<h4>${name}</h4>`
+    let html = `<h4>${name}</h4>`;
     html += '<table class="table is-striped is-fullwidth">';
     html += `
             <thead>
@@ -16,7 +16,7 @@ function printCompletionRateRelayChain(name, datas) {
             <tbody>
         `;
     datas.forEach((data) => {
-	if (data.RelayChain === name) {
+        if (data.RelayChain === name) {
             html += `
                 <tr>
                     <td>${data.Chain}</td>
@@ -24,12 +24,12 @@ function printCompletionRateRelayChain(name, datas) {
                     <td class="has-text-right">${data.head_id.toLocaleString('en-US')}</td>
                 </tr>
               `;
-	}
+        }
     });
     html += '</tbody>';
     html += '</table>';
     return html;
- }
+}
 
 // Function to fetch and display completion rate
 async function fetchCompletionRate() {
@@ -58,22 +58,22 @@ async function fetchCompletionRate() {
 
 // Function to fetch and display monthly statistics
 function plotMonthlyStats(name, datas) {
-    const plotDiv = document.getElementById('monthly-chart-'+name);
+    const plotDiv = document.getElementById('monthly-chart-' + name);
 
     const chains = new Set(datas.map((d) => d.Chain));
     const traces = [...chains].map((chain) => ({
-        name: '#' + chain + '.' + name.slice(0,3),
-        x:    datas.filter((d) => d.Chain == chain).map((d) => d.date),
-        y:    datas.filter((d) => d.Chain == chain).map((d) => d.count),
+        name: '#' + chain + '.' + name.slice(0, 3),
+        x: datas.filter((d) => d.Chain == chain).map((d) => d.date),
+        y: datas.filter((d) => d.Chain == chain).map((d) => d.count),
         type: 'bar',
     }));
 
-    const total =  datas.map((d) => d.count).reduce( (a,b) => a+b, 0);
+    const total = datas.map((d) => d.count).reduce((a, b) => a + b, 0);
 
     const layout = {
         title: {
-	    text: total+' blocks',
-	},
+            text: total + ' blocks',
+        },
         xaxis: {
             title: 'Month',
             tickangle: -45,
@@ -97,8 +97,7 @@ function plotMonthlyStats(name, datas) {
     };
 
     Plotly.newPlot(plotDiv, traces, layout);
-
- }
+}
 
 async function fetchMonthlyStats() {
     const monthlyDataPolkadot = document.getElementById('monthly-data-polkadot');
@@ -120,13 +119,20 @@ async function fetchMonthlyStats() {
     monthlyDataKusama.innerHTML = '<div id="monthly-chart-kusama" style="width:100%; height:400px;"></div>';
     monthlyResult.classList.remove('is-hidden');
 
-    plotMonthlyStats('polkadot', datas.filter( (d) => d.Relaychain === 'polkadot' ));
-    plotMonthlyStats('kusama', datas.filter( (d) => d.Relaychain === 'kusama' ));
+    plotMonthlyStats(
+        'polkadot',
+        datas.filter((d) => d.Relaychain === 'polkadot')
+    );
+    plotMonthlyStats(
+        'kusama',
+        datas.filter((d) => d.Relaychain === 'kusama')
+    );
 
     return '';
 }
 
 async function initStats() {
+    await updateIcons();
     await updateNav();
     await updateFooter();
 
