@@ -20,11 +20,16 @@ import (
 func main() {
 
 	configFile := flag.String("conf", "", "toml configuration file")
+	overridePort := flag.Int("port", -1, "override default port in configuration file")
 	flag.Parse()
 
 	config, err := dix.LoadMgrConfig(*configFile)
 	if err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
+	}
+
+	if *overridePort != -1 && *overridePort > 1024 {
+		config.DotidxFE.Port = *overridePort
 	}
 
 	log.SetOutput(os.Stdout)

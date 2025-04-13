@@ -75,7 +75,7 @@ func TestEventsBalanceProcess(t *testing.T) {
 			filter := NewEventsBalance(tc.address)
 
 			// Process the input
-			filtered, err := filter.Process(tc.Input)
+			filtered, _, err := filter.Process(tc.Input)
 
 			// Check error condition
 			if tc.IsError && err == nil {

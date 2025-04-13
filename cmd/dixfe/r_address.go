@@ -49,7 +49,7 @@ func (f *Frontend) handleAddressToBlocks(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		// Format as SQL timestamp
-		fromTimestamp = fromTime.Format("2006-01-02 15:04:05")
+		fromTimestamp = fromTime.Format("2006-01-02 15:04:05.0000")
 	}
 
 	to := r.URL.Query().Get("to")
@@ -64,7 +64,7 @@ func (f *Frontend) handleAddressToBlocks(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		// Format as SQL timestamp
-		toTimestamp = toTime.Format("2006-01-02 15:04:05")
+		toTimestamp = toTime.Format("2006-01-02 15:04:05.0000")
 	}
 
 	if !dix.IsValidAddress(address) {
@@ -94,14 +94,10 @@ func (f *Frontend) getBlocksByAddressForChain(relay, chain, address string, coun
 
 	cond := ""
 	if from != "" {
-		cond = fmt.Sprintf("AND b.created_at >= '%s'", from)
+		cond += fmt.Sprintf(" AND b.created_at >= '%s'", from)
 	}
 	if to != "" {
-		if cond != "" {
-			cond += fmt.Sprintf(" AND b.created_at <= '%s'", to)
-		} else {
-			cond = fmt.Sprintf("AND b.created_at <= '%s'", to)
-		}
+		cond += fmt.Sprintf("AND b.created_at <= '%s'", to)
 	}
 
 	query := fmt.Sprintf(
@@ -147,7 +143,7 @@ func (f *Frontend) getBlocksByAddressForChain(relay, chain, address string, coun
 		if err != nil {
 			return nil, fmt.Errorf("error scanning block: %w", err)
 		}
-
+		log.Printf("Found block %s", block.ID)
 		blocks = append(blocks, block)
 	}
 
@@ -166,6 +162,7 @@ func (f *Frontend) getBlocksByAddress(address string, count, from, to string) (
 	var wg sync.WaitGroup
 	var err error
 
+	// not too many chains atm but a thread pool would be a good idea at some point
 	for relay := range f.config.Parachains {
 		blocks[relay] = make(map[string][]dix.BlockData)
 		for chain := range f.config.Parachains[relay] {
@@ -176,6 +173,7 @@ func (f *Frontend) getBlocksByAddress(address string, count, from, to string) (
 				if err != nil {
 					log.Printf("Error getting blocks for address %s: %v", address, err)
 				}
+				log.Printf("Found %d blocks in chain %s", len(blocks[relay][chain]), chain)
 			}()
 		}
 	}

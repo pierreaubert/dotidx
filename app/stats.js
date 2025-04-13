@@ -1,6 +1,5 @@
 // import Plotly from "plotly.js-dist-min";
 import { updateIcons, updateFooter, updateNav } from './components.js';
-import { showError } from './misc.js';
 
 function printCompletionRateRelayChain(name, datas) {
     let html = `<h4>${name}</h4>`;

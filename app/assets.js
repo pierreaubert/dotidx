@@ -9,20 +9,20 @@ export function getAddress() {
     const value = e.options[e.selectedIndex].value;
     // TODO: add atest to check for Polkadot/ETH address
     if (value) {
-	return value.trim();
+        return value.trim();
     }
     return null;
 }
 
 export function addAddress(address) {
     let searchInput = document.getElementById('addresses');
-    const pos = [...searchInput.options].map(v => v.value).indexOf(address);
-    if (pos === -1 ) {
-	let option = document.createElement('option');
-	option.value = address;
-	option.text = address.slice(0, 6) + ' ... ' + address.slice(-6);
-	option.selected = true;
-	searchInput.add(option);
+    const pos = [...searchInput.options].map((v) => v.value).indexOf(address);
+    if (pos === -1) {
+        let option = document.createElement('option');
+        option.value = address;
+        option.text = address.slice(0, 6) + ' ... ' + address.slice(-6);
+        option.selected = true;
+        searchInput.add(option);
     } else {
         searchInput.options[pos].selected = true;
     }
@@ -32,7 +32,7 @@ function updateUrl(target, name) {
     let newUrl = name + '?';
     const address = getAddress();
 
-    if (address && address.length>10) {
+    if (address && address.length > 10) {
         newUrl += `&address=${encodeURIComponent(address)}`;
     }
 
@@ -57,7 +57,7 @@ function updateFromUrl() {
 
     const address = urlParams.get('address');
     if (address) {
-	addAddress(address);
+        addAddress(address);
     }
 
     const fromParam = urlParams.get('from');
@@ -91,18 +91,18 @@ function clearFilters() {
     }
 }
 
-function updateAddresses(event) {
+function updateAddresses(_event) {
     const e = document.getElementById('addresses');
     const value = e.options[e.selectedIndex].value;
-    if ( !value || value === "" ) {
-	const modal = document.getElementById('modal-add-address');
-	modal.classList.add('is-active');
+    if (!value || value === '') {
+        const modal = document.getElementById('modal-add-address');
+        modal.classList.add('is-active');
     } else {
-	document.getElementById('action-button').click();
+        document.getElementById('action-button').click();
     }
 }
 
-function getAddressFromModal(event) {
+function getAddressFromModal(_event) {
     const modal = document.getElementById('add-address');
     addAddress(modal.value);
     document.getElementById('modal-add-address').classList.remove('is-active');
@@ -139,22 +139,21 @@ export async function initAddresses(target, name, fetchIt) {
     updateFromUrl();
 
     document.getElementById('addresses').addEventListener('change', (e) => {
-	updateAddresses(e);
+        updateAddresses(e);
     });
     document.getElementById('addresses').addEventListener('click', (e) => {
-	updateAddresses(e);
+        updateAddresses(e);
     });
 
     document.getElementById('add-address').addEventListener('change', (e) => {
-	getAddressFromModal(e);
+        getAddressFromModal(e);
     });
 
     document.getElementById('add-address-add-button').addEventListener('click', (e) => {
-	getAddressFromModal(e);
+        getAddressFromModal(e);
     });
 
     document.getElementById('add-address-cancel-button').addEventListener('click', (e) => {
-	getAddressFromModal(e);
+        getAddressFromModal(e);
     });
-
 }

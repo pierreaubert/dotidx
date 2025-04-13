@@ -1,5 +1,5 @@
 import { updateFooter, updateNav, updateSearchBlocks } from './components.js';
-import { showError, escapeHtml, highlightAddressMatches } from './misc.js';
+import { escapeHtml, highlightAddressMatches } from './misc.js';
 
 function renderBlockContent(content, searchAddress) {
     if (content === null || content === undefined) {

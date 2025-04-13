@@ -34,23 +34,22 @@ async function connectPolkadotJs() {
         console.log('Connected Polkadot Account:', selectedPolkadotAccount);
 
         // Update UI
-	let accountDisplay = document.getElementById('addresses');
-	if (accountDisplay) {
-	    let html = '';
-	    allAccounts.forEach( (account) => {
-		const shortAddress = `${account.address.substring(0, 6)}...${account.address.substring(account.address.length - 6)}`;
-		const text = `${shortAddress} (${selectedPolkadotAccount.meta.name})`;
-		html += `<option value="${account.address}">${text}</option>`;
-	    });
-	    html += '<option value="">Add manually</option>';
-	    accountDisplay.innerHTML = html;
+        let accountDisplay = document.getElementById('addresses');
+        if (accountDisplay) {
+            let html = '';
+            allAccounts.forEach((account) => {
+                const shortAddress = `${account.address.substring(0, 6)}...${account.address.substring(account.address.length - 6)}`;
+                const text = `${shortAddress} (${selectedPolkadotAccount.meta.name})`;
+                html += `<option value="${account.address}">${text}</option>`;
+            });
+            html += '<option value="">Add manually</option>';
+            accountDisplay.innerHTML = html;
             accountDisplay.style.display = 'inline';
-	}
+        }
 
-	let newUrl = window.location.search;
-	newUrl += '&address=' + selectedPolkadotAccount.address;
-	window.history.pushState({}, '', newUrl);
-
+        let newUrl = window.location.search;
+        newUrl += '&address=' + selectedPolkadotAccount.address;
+        window.history.pushState({}, '', newUrl);
     } catch (error) {
         console.error('Error connecting to Polkadot{.js} extension:', error);
         alert(`Error connecting: ${error.message}`);
@@ -65,4 +64,3 @@ export async function initPJS() {
         console.error('Polkadot connect button not found after nav update.');
     }
 }
-

@@ -233,6 +233,9 @@ func startWorkers(
 			}
 		}
 
+		unkown := len(existingBlocks) - known
+		log.Printf("batch [%d, %d] has %d blocks to index", startRange, endRange, unkown)
+
 		// Send block IDs to the appropriate channel, skipping ones that already exist
 		for blockID := startRange; blockID <= endRange; blockID++ {
 			if existingBlocks[blockID] {

@@ -1,5 +1,5 @@
 // import Plotly from "plotly.js-dist-min";
-import { showError, formatTimestamp } from './misc.js';
+import { formatTimestamp } from './misc.js';
 import { getAccountAt } from './accounts.js';
 import { initAddresses, getAddress } from './assets.js';
 
@@ -230,7 +230,7 @@ function renderBalancesTable(balancesByMonth) {
             html += '<tr>';
             html += `<td>${balance.relay}/${balance.chain}</td>`;
             html += `<td>${balance.formattedTime || balance.timestamp}</td>`;
-            html += `<td>${balance.method.method}</td>`;
+            html += `<td>${balance.method}</td>`;
 
             let amount = balance.amount.toFixed(2);
             let totalAmount = balance.totalAmount.toFixed(2);
@@ -270,39 +270,31 @@ function extractBalancesFromBlocks(results, address, balanceAt) {
             }
             blocks.forEach((block) => {
                 if (!block.extrinsics || typeof block.extrinsics !== 'object') {
-                    return; // Skip blocks without extrinsics
+                    return;
                 }
 
                 const timestamp = block.timestamp || 'N/A';
                 const blockId = block.number || 'N/A';
 
-                // Go through each extrinsic type in the block
-                Object.entries(block.extrinsics).forEach(([palletName, extrinsicArray]) => {
-                    if (!Array.isArray(extrinsicArray) || extrinsicArray.length === 0) {
-                        return; // Skip empty arrays
-                    }
-
-                    // Add each extrinsic to the consolidated array
-                    extrinsicArray.forEach((extrinsic) => {
-                        if (extrinsic?.method.pallet) {
-                            if (
-                                palletName === 'paraInclusion' ||
-                                palletName === 'staking' ||
-                                (palletName === 'utility' && extrinsic.method.method === 'Rewarded')
-                            ) {
-                                return; // Skip paraInclusion extrinsics
-                            }
-
+                block.extrinsics.forEach((extrinsic) => {
+                    extrinsic.events.forEach((event) => {
+                        if (event?.method.pallet === 'balances') {
                             let amount = 0.0;
-                            if (extrinsic.method.pallet === 'balances' && extrinsic.method.method === 'Transfer') {
-                                amount = parseFloat(extrinsic.data[2]);
-                                if (address === extrinsic.data[0]) {
-                                    amount = -amount;
-                                }
-                            } else if (extrinsic.method.pallet === 'balances' && extrinsic.method.method === 'Deposit') {
-                                amount = parseFloat(extrinsic.data[1]);
-                            } else if (extrinsic.method.pallet === 'balances' && extrinsic.method.method === 'Withdraw') {
-                                amount = -parseFloat(extrinsic.data[1]);
+                            switch (event.method.method) {
+                                case 'Transfer':
+                                    amount = parseFloat(event.data[2]);
+                                    if (address === event.data[0]) {
+                                        amount = -amount;
+                                    }
+                                    break;
+                                case 'Deposit':
+                                    amount = parseFloat(event.data[1]);
+                                    break;
+                                case 'Withdraw':
+                                    amount = -parseFloat(event.data[1]);
+                                    break;
+                                default:
+                                    console.log('TODO: ' + event.method.pallet + ' ' + event.method.method);
                             }
                             amount = amount / 10 / 1000 / 1000 / 1000;
                             balances.push({
@@ -311,8 +303,8 @@ function extractBalancesFromBlocks(results, address, balanceAt) {
                                 address: address,
                                 timestamp: timestamp,
                                 blockId: blockId,
-                                pallet: palletName,
-                                method: extrinsic.method,
+                                pallet: event.method.pallet,
+                                method: event.method.method,
                                 amount: amount,
                                 totalAmount: amount + balanceAt.get(relay).get(chain),
                             });
@@ -416,7 +408,7 @@ async function balancesSummary(address, results) {
 }
 
 // Function to fetch balances
-async function fetchBalances(balancesUrl) {
+async function fetchBalances(_balanceUrl) {
     const address = getAddress();
     if (!address) {
         return;
@@ -465,5 +457,5 @@ async function fetchBalances(balancesUrl) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    initAddresses('search-balances', '/balances.html', fetchBalances)
+    initAddresses('search-balances', '/balances.html', fetchBalances);
 });

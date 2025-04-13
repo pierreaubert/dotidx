@@ -2,6 +2,7 @@ package dotidx
 
 import (
 	"fmt"
+	// "log"
 	"strconv"
 	"time"
 )

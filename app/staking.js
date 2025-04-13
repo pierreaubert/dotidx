@@ -1,5 +1,5 @@
 // import {Plotly} from "plotly.js-dist-min";
-import { showError, formatTimestamp } from './misc.js';
+import { formatTimestamp } from './misc.js';
 import { initAddresses, getAddress } from './assets.js';
 
 function buildStakingGraphData(stakingData) {
@@ -43,7 +43,7 @@ function buildStakingGraphData(stakingData) {
 }
 
 // Function to create plotly graph
-function createStakingGraph(graphData, graphDiv, address) {
+function createStakingGraph(graphData, graphDiv) {
     if (graphData.length === 0) {
         graphDiv.innerHTML = '<p class="has-text-centered">No transaction data available for plotting.</p>';
         return;
@@ -73,17 +73,17 @@ function createStakingGraph(graphData, graphDiv, address) {
         };
     });
 
-    const deposits = graphData.map((item) => ({
-        x: item.date,
-        y: item.deposits,
-        text: `Date: ${item.date.toLocaleDateString()}<br>Deposits: ${item.deposits.toFixed(4)}`,
-    }));
+    // const deposits = graphData.map((item) => ({
+    //     x: item.date,
+    //     y: item.deposits,
+    //     text: `Date: ${item.date.toLocaleDateString()}<br>Deposits: ${item.deposits.toFixed(4)}`,
+    // }));
 
-    const bonded = graphData.map((item) => ({
-        x: item.date,
-        y: item.bonded,
-        text: `Date: ${item.date.toLocaleDateString()}<br>Bonded: ${item.bonded.toFixed(4)}`,
-    }));
+    // const bonded = graphData.map((item) => ({
+    //     x: item.date,
+    //     y: item.bonded,
+    //     text: `Date: ${item.date.toLocaleDateString()}<br>Bonded: ${item.bonded.toFixed(4)}`,
+    // }));
 
     // Create the plotly data array
     const plotData = [
@@ -92,7 +92,7 @@ function createStakingGraph(graphData, graphDiv, address) {
             name: 'Daily',
             x: rewards.map((p) => p.x),
             y: rewards.map((p) => p.y),
-            hoverinfo: rewards.map((p) => '%{x}<br>%{y}'),
+            hoverinfo: '%{x}<br>%{y}',
         },
         {
             type: 'lines',
@@ -110,7 +110,7 @@ function createStakingGraph(graphData, graphDiv, address) {
             x: rewards.map((p) => p.x),
             y: rewards.map((p) => p.z),
             marker: { color: 'rgba(0, 200, 0, 0.7)' },
-            hoverinfo: rewards.map((p) => '%{x}<br>%{y}'),
+            hoverinfo: '%{x}<br>%{y}',
             yaxis: 'y2',
         },
     ];
@@ -177,6 +177,7 @@ function groupStakingsByMonth(allExtrinsics) {
                     extrinsicsByMonth['Unknown'] = [];
                 }
                 extrinsicsByMonth['Unknown'].push(extrinsic);
+                console.log('got an exception', e);
             }
         } else {
             // Handle invalid timestamps
@@ -278,27 +279,34 @@ function extractStakingsFromBlocks(results, address) {
                 const timestamp = block.timestamp || 'N/A';
                 const blockId = block.number || 'N/A';
 
-                if (block.extrinsics['staking'] != undefined) {
-                    block.extrinsics['staking'].forEach((extrinsic) => {
-                        if (extrinsic?.method.pallet == 'staking') {
+                block.extrinsics.forEach((extrinsic) => {
+                    extrinsic.events.forEach((event) => {
+                        if (event?.method.pallet == 'staking') {
                             let amount = 0.0;
-                            if (extrinsic.method.method === 'Transfer') {
-                                amount = parseFloat(extrinsic.data[2]);
-                                if (address === extrinsic.data[0]) {
-                                    amount = -amount;
-                                }
-                            } else if (extrinsic.method.method === 'Deposit') {
-                                amount = parseFloat(extrinsic.data[1]);
-                            } else if (extrinsic.method.method === 'Withdrawn') {
-                                amount = -parseFloat(extrinsic.data[1]);
-                            } else if (extrinsic.method.method === 'Rewarded') {
-                                amount = parseFloat(extrinsic.data[2]);
-                            } else if (extrinsic.method.method === 'Unbonded') {
-                                amount = -parseFloat(extrinsic.data[1]);
-                            } else if (extrinsic.method.method === 'Bonded') {
-                                amount = parseFloat(extrinsic.data[1]);
-                            } else {
-                                console.log('TODO: ' + extrinsic.method.pallet + ' ' + extrinsic.method.method);
+                            switch (event.method.method) {
+                                case 'Transfer':
+                                    amount = parseFloat(event.data[2]);
+                                    if (address === event.data[0]) {
+                                        amount = -amount;
+                                    }
+                                    break;
+                                case 'Deposit':
+                                    amount = parseFloat(event.data[1]);
+                                    break;
+                                case 'Withdrawn':
+                                    amount = -parseFloat(event.data[1]);
+                                    break;
+                                case 'Rewarded':
+                                    amount = parseFloat(event.data[2]);
+                                    break;
+                                case 'Unbonded':
+                                    amount = -parseFloat(event.data[1]);
+                                    break;
+                                case 'Bonded':
+                                    amount = parseFloat(event.data[1]);
+                                    break;
+                                default:
+                                    console.log('TODO: ' + event.method.pallet + ' ' + event.method.method);
                             }
 
                             amount = amount / 10 / 1000 / 1000 / 1000;
@@ -309,50 +317,12 @@ function extractStakingsFromBlocks(results, address) {
                                 chain: chain,
                                 blockId: blockId,
                                 pallet: 'staking',
-                                method: extrinsic.method,
+                                method: event.method,
                                 totalAmount: amount,
                             });
                         }
                     });
-                }
-
-                if (block.extrinsics['utility'] != undefined) {
-                    block.extrinsics['utility'].forEach((extrinsic) => {
-                        if (extrinsic?.method.pallet == 'staking') {
-                            let amount = 0.0;
-                            if (extrinsic.method.method === 'Transfer') {
-                                amount = parseFloat(extrinsic.data[2]);
-                                if (address === extrinsic.data[0]) {
-                                    amount = -amount;
-                                }
-                            } else if (extrinsic.method.method === 'Deposit') {
-                                amount = parseFloat(extrinsic.data[1]);
-                            } else if (extrinsic.method.method === 'Withdrawn') {
-                                amount = -parseFloat(extrinsic.data[1]);
-                            } else if (extrinsic.method.method === 'Rewarded') {
-                                amount = parseFloat(extrinsic.data[2]);
-                            } else if (extrinsic.method.method === 'Unbonded') {
-                                amount = -parseFloat(extrinsic.data[1]);
-                            } else if (extrinsic.method.method === 'Bonded') {
-                                amount = parseFloat(extrinsic.data[1]);
-                            } else {
-                                console.log('TODO: ' + extrinsic.method.pallet + ' ' + extrinsic.method.method);
-                            }
-
-                            amount = amount / 10 / 1000 / 1000 / 1000;
-
-                            stakings.push({
-                                timestamp: timestamp,
-                                blockId: blockId,
-                                relay: relay,
-                                chain: chain,
-                                pallet: 'staking',
-                                method: extrinsic.method,
-                                totalAmount: amount,
-                            });
-                        }
-                    });
-                }
+                });
             });
         }
     }
@@ -411,7 +381,7 @@ async function fetchStaking() {
         const stakingsByMonth = groupStakingsByMonth(stakings);
 
         const graphData = buildStakingGraphData(stakings);
-        createStakingGraph(graphData, graphDiv, address);
+        createStakingGraph(graphData, graphDiv);
 
         othersDiv.innerHTML = renderStakingsRewardsTable(stakingsByMonth, true);
         rewardsDiv.innerHTML = renderStakingsRewardsTable(stakingsByMonth, false);

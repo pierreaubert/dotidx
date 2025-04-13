@@ -69,17 +69,31 @@ func (f *Frontend) handleBalances(w http.ResponseWriter, r *http.Request) {
 	}
 
 	eb := dix.NewEventsBalance(address)
+	filteredBlocks := make(map[string]map[string][]dix.BlockData)
 	for relay := range blocks {
+		filteredBlocks[relay] = make(map[string][]dix.BlockData)
 		for chain := range blocks[relay] {
+			filteredBlocks[relay][chain] = make([]dix.BlockData, 0)
 			for block := range blocks[relay][chain] {
-				filtered, err := eb.Process(blocks[relay][chain][block].Extrinsics)
+				iblock := blocks[relay][chain][block]
+				filtered, found, err := eb.Process(iblock.Extrinsics)
 				if err != nil {
 					log.Printf("Error processing block %s on chain %s:%s: %v",
 						blocks[relay][chain][block].ID,
 						relay, chain, err)
 					continue
 				}
-				blocks[relay][chain][block].Extrinsics = filtered
+				if found {
+					log.Printf("Extracted balances events from block %s on chain %s:%s Timestamp %s", iblock.ID, relay, chain, iblock.Timestamp)
+					fblock := &dix.BlockData{
+						ID:         iblock.ID,
+						Timestamp:  iblock.Timestamp,
+						Hash:       iblock.Hash,
+						ParentHash: iblock.ParentHash,
+						Extrinsics: filtered,
+					}
+					filteredBlocks[relay][chain] = append(filteredBlocks[relay][chain], *fblock)
+				}
 			}
 		}
 	}
@@ -88,5 +102,5 @@ func (f *Frontend) handleBalances(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// Return response
-	json.NewEncoder(w).Encode(blocks)
+	json.NewEncoder(w).Encode(filteredBlocks)
 }

@@ -14,19 +14,19 @@ export async function updateIcons() {
 export async function updateNav() {
     const url = new URL(window.location.href);
     const path = url.pathname;
-	const nicePath = path[1].toUpperCase() + path.slice(2, path.length-5);
+    const nicePath = path[1].toUpperCase() + path.slice(2, path.length - 5);
     let contentNav = `
           <div class="level-left">
             <a class="level-item" href="/index.html">
                <img src="/dix.svg" alt="DIX" width="48" height="48" />
 `;
     if (path === '/' || path === '/index.html') {
-	contentNav += `
+        contentNav += `
 	      A Polkadot<br/>
 	      Block explorer
 `;
     } else {
-	contentNav += `${nicePath}`;
+        contentNav += `${nicePath}`;
     }
 
     contentNav += `
@@ -130,8 +130,8 @@ export async function updateSearchAssets(target) {
           </p>
         </div>
 
-        <div class="columns mt-3">
-          <div class="column">
+        <div class="columns mt-3 is-centered">
+          <div class="column is-narrow">
             <div class="field">
               <label class="label">From Date</label>
               <div class="control">
@@ -144,7 +144,7 @@ export async function updateSearchAssets(target) {
               </div>
             </div>
           </div>
-          <div class="column">
+          <div class="column is-narrow">
             <div class="field">
               <label class="label">To Date</label>
               <div class="control">
