@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"flag"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -40,7 +40,6 @@ func main() {
 		log.Fatal("Config validation failed!")
 	}
 
-
 	dirs := []string{
 		config.DotidxRoot,
 		config.DotidxBin,
@@ -65,7 +64,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-
 	if err := generateFilePerRelaychain(*config, *templatesDir, targetDir); err != nil {
 		log.Fatal(err)
 	}
@@ -86,24 +84,22 @@ func main() {
 		log.Fatal(err)
 	}
 
-
 	if err := copyStaticWebsite(*config, *appDir); err != nil {
 		log.Fatal(err)
 	}
 
-
 }
 
-func copyStaticWebsite(config dix.MgrConfig, appDir string)  error {
+func copyStaticWebsite(config dix.MgrConfig, appDir string) error {
 
 	processDir := func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if ! d.IsDir() {
+		if !d.IsDir() {
 			return copyFile(path, config.DotidxStatic+"/"+filepath.Base(path))
 		}
- 		return nil
+		return nil
 	}
 
 	return filepath.WalkDir(appDir, processDir)
@@ -112,7 +108,7 @@ func copyStaticWebsite(config dix.MgrConfig, appDir string)  error {
 func checkConfigPortCollision(config dix.MgrConfig) error {
 	ports := make(map[int]bool, 0)
 
-	add:= func (port int) error {
+	add := func(port int) error {
 		if ports[port] == true {
 			return fmt.Errorf("port %d is already in use", port)
 		}
@@ -120,19 +116,35 @@ func checkConfigPortCollision(config dix.MgrConfig) error {
 		return nil
 	}
 
-	if err := add(config.DotidxDB.Port); err != nil { return err }
-	if err := add(config.DotidxFE.Port); err != nil { return err }
+	if err := add(config.DotidxDB.Port); err != nil {
+		return err
+	}
+	if err := add(config.DotidxFE.Port); err != nil {
+		return err
+	}
 
 	for relay := range config.Parachains {
 		for chain := range config.Parachains[relay] {
 			chainConfig := config.Parachains[relay][chain]
-			if err := add(chainConfig.PortRPC); err != nil { return err }
-			if err := add(chainConfig.PortWS); err != nil { return err }
-			if err := add(chainConfig.ChainreaderPort); err != nil { return err }
-			if err := add(chainConfig.PrometheusPort); err != nil { return err }
+			if err := add(chainConfig.PortRPC); err != nil {
+				return err
+			}
+			if err := add(chainConfig.PortWS); err != nil {
+				return err
+			}
+			if err := add(chainConfig.ChainreaderPort); err != nil {
+				return err
+			}
+			if err := add(chainConfig.PrometheusPort); err != nil {
+				return err
+			}
 			for i := range chainConfig.SidecarCount {
-				if err := add(chainConfig.SidecarPort+1+i); err != nil { return err }
-				if err := add(chainConfig.SidecarPrometheusPort+1+i); err != nil { return err }
+				if err := add(chainConfig.SidecarPort + 1 + i); err != nil {
+					return err
+				}
+				if err := add(chainConfig.SidecarPrometheusPort + 1 + i); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -142,7 +154,7 @@ func checkConfigPortCollision(config dix.MgrConfig) error {
 func checkConfig(config dix.MgrConfig) []error {
 	errs := make([]error, 0)
 
-	if err := checkConfigPortCollision(config) ; err != nil {
+	if err := checkConfigPortCollision(config); err != nil {
 		errs = append(errs, err)
 	}
 
@@ -150,16 +162,16 @@ func checkConfig(config dix.MgrConfig) []error {
 }
 
 func toTitle(s string) string {
-    return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
+	return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
 }
 
 func generateFilePerChain(config dix.MgrConfig, sourceDir, destDir string) error {
 
-	if err := generateNodeFilePerChain(config, sourceDir, destDir) ; err != nil {
+	if err := generateNodeFilePerChain(config, sourceDir, destDir); err != nil {
 		return err
 	}
 
-	if err := generateSidecarFilePerChain(config, sourceDir, destDir) ; err != nil {
+	if err := generateSidecarFilePerChain(config, sourceDir, destDir); err != nil {
 		return err
 	}
 
@@ -183,16 +195,16 @@ func generateSidecarFilePerChain(config dix.MgrConfig, sourceDir, destDir string
 					chain,
 					i+1,
 				)
-				if _, err := os.Stat(dst) ; err == nil {
+				if _, err := os.Stat(dst); err == nil {
 					if err := os.Chmod(dst, 0600); err != nil {
 						return fmt.Errorf("failed to change permissions on %s: %w", dst, err)
 					}
 				}
-  				outFile, err := os.Create(dst)
- 				if err != nil {
- 					return fmt.Errorf("failed to create output file %s: %w", dst, err)
- 				}
- 				defer outFile.Close()
+				outFile, err := os.Create(dst)
+				if err != nil {
+					return fmt.Errorf("failed to create output file %s: %w", dst, err)
+				}
+				defer outFile.Close()
 
 				port := config.Parachains[relay][chain].SidecarPort + 1 + i
 				prom_port := config.Parachains[relay][chain].SidecarPrometheusPort + 1 + i
@@ -211,16 +223,16 @@ SAS_WRITE_PATH="{{.DotidxLogs}}"
 SAS_SUBSTRATE_URL="ws://%[7]s:{{.Parachains.%[2]s.%[4]s.PortRPC}}"
 SAS_EXPRESS_BIND_HOST="{{.Parachains.%[2]s.%[4]s.SidecarIP}}"
 SAS_EXPRESS_PORT=%[5]d
-`, toTitle(relay), relay, toTitle(chain), chain, port, prom_port, ip);
+`, toTitle(relay), relay, toTitle(chain), chain, port, prom_port, ip)
 
 				// log.Printf(nodeTmpl)
- 				node, err := template.New("node").Parse(nodeTmpl)
- 				if err != nil {
- 					return fmt.Errorf("failed to parse template relay: %w", err)
- 				}
- 				if err := node.Execute(outFile, config); err != nil {
- 					return fmt.Errorf("failed to execute template relay: %w", err)
- 				}
+				node, err := template.New("node").Parse(nodeTmpl)
+				if err != nil {
+					return fmt.Errorf("failed to parse template relay: %w", err)
+				}
+				if err := node.Execute(outFile, config); err != nil {
+					return fmt.Errorf("failed to execute template relay: %w", err)
+				}
 				if err := os.Chmod(dst, 0400); err != nil {
 					return fmt.Errorf("failed to change permissions on %s: %w", dst, err)
 				}
@@ -246,16 +258,16 @@ func generateNodeFilePerChain(config dix.MgrConfig, sourceDir, destDir string) e
 				relay,
 				chain,
 			)
-			if _, err := os.Stat(dst) ; err == nil {
+			if _, err := os.Stat(dst); err == nil {
 				if err := os.Chmod(dst, 0600); err != nil {
 					return fmt.Errorf("failed to change permissions on %s: %w", dst, err)
 				}
 			}
-  			outFile, err := os.Create(dst)
- 			if err != nil {
- 				return fmt.Errorf("failed to create output file %s: %w", dst, err)
- 			}
- 			defer outFile.Close()
+			outFile, err := os.Create(dst)
+			if err != nil {
+				return fmt.Errorf("failed to create output file %s: %w", dst, err)
+			}
+			defer outFile.Close()
 
 			nodeTmpl := fmt.Sprintf(`
 # configuration for the relay chain
@@ -267,16 +279,16 @@ NODE_PORT_WS={{.Parachains.%[2]s.%[4]s.PortWS}}
 NODE_PORT_RPC={{.Parachains.%[2]s.%[4]s.PortRPC}}
 NODE_RELAY="ws://{{.Parachains.%[2]s.%[2]s.RelayIP}}:{{.Parachains.%[2]s.%[2]s.PortRPC}}"
 NODE_PROM_PORT={{.Parachains.%[2]s.%[4]s.PrometheusPort}}
-`, toTitle(relay), relay, toTitle(chain), chain);
+`, toTitle(relay), relay, toTitle(chain), chain)
 
 			// log.Printf(nodeTmpl)
- 			node, err := template.New("node").Parse(nodeTmpl)
- 			if err != nil {
- 				return fmt.Errorf("failed to parse template relay: %w", err)
- 			}
- 			if err := node.Execute(outFile, config); err != nil {
- 				return fmt.Errorf("failed to execute template relay: %w", err)
- 			}
+			node, err := template.New("node").Parse(nodeTmpl)
+			if err != nil {
+				return fmt.Errorf("failed to parse template relay: %w", err)
+			}
+			if err := node.Execute(outFile, config); err != nil {
+				return fmt.Errorf("failed to execute template relay: %w", err)
+			}
 			if err := os.Chmod(dst, 0400); err != nil {
 				return fmt.Errorf("failed to change permissions on %s: %w", dst, err)
 			}
@@ -299,16 +311,16 @@ func generateFilePerRelaychain(config dix.MgrConfig, sourceDir, destDir string) 
 			destDir,
 			relay,
 		)
-		if _, err := os.Stat(dst) ; err == nil {
+		if _, err := os.Stat(dst); err == nil {
 			if err := os.Chmod(dst, 0600); err != nil {
 				return fmt.Errorf("failed to change permissions on %s: %w", dst, err)
 			}
 		}
-  		outFile, err := os.Create(dst)
- 		if err != nil {
- 			return fmt.Errorf("failed to create output file %s: %w", dst, err)
- 		}
- 		defer outFile.Close()
+		outFile, err := os.Create(dst)
+		if err != nil {
+			return fmt.Errorf("failed to create output file %s: %w", dst, err)
+		}
+		defer outFile.Close()
 
 		relayTmpl := fmt.Sprintf(`
 # configuration for the relay chain
@@ -319,16 +331,16 @@ NODE_BASE_PATH={{.Parachains.%[2]s.%[2]s.Basepath}}
 NODE_PORT_WS={{.Parachains.%[2]s.%[2]s.PortWS}}
 NODE_PORT_RPC={{.Parachains.%[2]s.%[2]s.PortRPC}}
 NODE_PROM_PORT={{.Parachains.%[2]s.%[2]s.PrometheusPort}}
-`, toTitle(relay), relay);
+`, toTitle(relay), relay)
 
 		// log.Printf(relayTmpl)
- 		relay, err := template.New("relay").Parse(relayTmpl)
- 		if err != nil {
- 			return fmt.Errorf("failed to parse template relay: %w", err)
- 		}
- 		if err := relay.Execute(outFile, config); err != nil {
- 			return fmt.Errorf("failed to execute template relay: %w", err)
- 		}
+		relay, err := template.New("relay").Parse(relayTmpl)
+		if err != nil {
+			return fmt.Errorf("failed to parse template relay: %w", err)
+		}
+		if err := relay.Execute(outFile, config); err != nil {
+			return fmt.Errorf("failed to execute template relay: %w", err)
+		}
 		if err := os.Chmod(dst, 0400); err != nil {
 			return fmt.Errorf("failed to change permissions on %s: %w", dst, err)
 		}
@@ -349,7 +361,7 @@ func generateFileFromTemplate(config dix.MgrConfig, sourceDir, destDir string) e
 		if err != nil {
 			return err
 		}
-		if ! d.IsDir() {
+		if !d.IsDir() {
 			if strings.HasSuffix(path, ".tmpl") {
 				filename := filepath.Join(
 					destDir,
@@ -367,11 +379,11 @@ func generateFileFromTemplate(config dix.MgrConfig, sourceDir, destDir string) e
 						strings.TrimPrefix(sourceDir, "./"))))
 		}
 		fileDir := filepath.Join(destDir, strings.TrimPrefix(d.Name(), sourceDir))
- 		if err := os.MkdirAll(fileDir, 0700); err != nil {
- 			return fmt.Errorf("failed to create directory %s: %w", fileDir, err)
- 		}
- 		// fmt.Printf("Created directory: %s\n", fileDir)
- 		return nil
+		if err := os.MkdirAll(fileDir, 0700); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", fileDir, err)
+		}
+		// fmt.Printf("Created directory: %s\n", fileDir)
+		return nil
 	}
 
 	return filepath.WalkDir(sourceDir, processDir)
@@ -407,35 +419,35 @@ func generateScriptsFromTemplate(config dix.MgrConfig, sourceDir, destDir string
 func processFileAsTemplate(src, dst string, config *dix.MgrConfig) error {
 
 	if strings.HasSuffix(dst, "~") || strings.HasPrefix(dst, "#") || strings.HasPrefix(dst, ".#") {
- 		fmt.Printf("Skipping backup file: %s\n", dst)
- 		return nil
- 	}
+		fmt.Printf("Skipping backup file: %s\n", dst)
+		return nil
+	}
 
- 	tmplData, err := os.ReadFile(src)
- 	if err != nil {
- 		return fmt.Errorf("failed to read template file %s: %w", src, err)
- 	}
+	tmplData, err := os.ReadFile(src)
+	if err != nil {
+		return fmt.Errorf("failed to read template file %s: %w", src, err)
+	}
 
- 	tmpl, err := template.New(filepath.Base(src)).Parse(string(tmplData))
- 	if err != nil {
- 		return fmt.Errorf("failed to parse template %s: %w", src, err)
- 	}
+	tmpl, err := template.New(filepath.Base(src)).Parse(string(tmplData))
+	if err != nil {
+		return fmt.Errorf("failed to parse template %s: %w", src, err)
+	}
 
-	if _, err := os.Stat(dst) ; err == nil {
+	if _, err := os.Stat(dst); err == nil {
 		if err := os.Chmod(dst, 0600); err != nil {
 			return fmt.Errorf("failed to change permissions on %s: %w", dst, err)
 		}
 	}
 
-  	outFile, err := os.Create(dst)
- 	if err != nil {
- 		return fmt.Errorf("failed to create output file %s: %w", dst, err)
- 	}
- 	defer outFile.Close()
+	outFile, err := os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("failed to create output file %s: %w", dst, err)
+	}
+	defer outFile.Close()
 
- 	if err := tmpl.Execute(outFile, config); err != nil {
- 		return fmt.Errorf("failed to execute template %s: %w", src, err)
- 	}
+	if err := tmpl.Execute(outFile, config); err != nil {
+		return fmt.Errorf("failed to execute template %s: %w", src, err)
+	}
 
 	if strings.HasSuffix(dst, ".sh") {
 		if err := os.Chmod(dst, 0500); err != nil {
@@ -447,39 +459,39 @@ func processFileAsTemplate(src, dst string, config *dix.MgrConfig) error {
 		}
 	}
 
- 	fmt.Printf("Generated %s\n", dst)
- 	return nil
- }
+	fmt.Printf("Generated %s\n", dst)
+	return nil
+}
 
 func copyFile(src, dst string) error {
 
 	if strings.HasSuffix(dst, "~") || strings.HasPrefix(dst, "#") || strings.HasPrefix(dst, ".#") {
- 		fmt.Printf("Skipping backup file: %s\n", dst)
- 		return nil
- 	}
+		fmt.Printf("Skipping backup file: %s\n", dst)
+		return nil
+	}
 
- 	srcFile, err := os.Open(src)
- 	if err != nil {
- 		return fmt.Errorf("failed to open source file %s: %w", src, err)
- 	}
- 	defer srcFile.Close()
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("failed to open source file %s: %w", src, err)
+	}
+	defer srcFile.Close()
 
-	if _, err := os.Stat(dst) ; err == nil {
+	if _, err := os.Stat(dst); err == nil {
 		if err := os.Chmod(dst, 0600); err != nil {
 			return fmt.Errorf("failed to change permissions on %s: %w", dst, err)
 		}
 	}
 
- 	dstFile, err := os.Create(dst)
- 	if err != nil {
- 		return fmt.Errorf("failed to create destination file %s: %w", dst, err)
- 	}
- 	defer dstFile.Close()
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("failed to create destination file %s: %w", dst, err)
+	}
+	defer dstFile.Close()
 
- 	_, err = io.Copy(dstFile, srcFile)
- 	if err != nil {
- 		return fmt.Errorf("failed to copy file contents from %s to %s: %w", src, dst, err)
- 	}
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy file contents from %s to %s: %w", src, dst, err)
+	}
 
 	if strings.HasSuffix(dst, ".conf") || strings.HasSuffix(dst, ".json") {
 		if err := os.Chmod(dst, 0400); err != nil {
@@ -487,6 +499,6 @@ func copyFile(src, dst string) error {
 		}
 	}
 
- 	fmt.Printf("Copied    %s\n", dst)
- 	return nil
- }
+	fmt.Printf("Copied    %s\n", dst)
+	return nil
+}
