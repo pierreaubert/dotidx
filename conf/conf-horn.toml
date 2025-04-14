@@ -41,7 +41,7 @@ port = 5434
 memory = "64GB"
 data_dir = "/polkadot/postgres_data/dotidx"
 run_dir = "/polkadot/postgres_data/run"
-whitelisted_ip = ["192.168.1.102", "192.168.1.36", "192.168.1.37", "192.168.1.32"]
+whitelisted_ip = ["192.168.1.102", "192.168.1.36", "192.168.1.36", "192.168.1.32"]
 
 [dotidx_batch]
 start_range = 1
@@ -147,15 +147,15 @@ sidecar_prometheus_port = 11350
 prometheus_port = 9620
 
 [parachains.kusama.kusama]
-name = "polkadot"  # name for the polkadot binary --chain parameter
+name = "kusama"  # name for the polkadot binary --chain parameter
 bin = "/dotidx/bin/polkadot"
-relay_ip = "192.168.1.37"
+relay_ip = "192.168.1.36"
 port_ws = 19943
 port_rpc = 19944
 basepath = "/data/backup/kusama-relay-archive"
-chainreader_ip = "192.168.1.37"
+chainreader_ip = "192.168.1.36"
 chainreader_port = 20800
-sidecar_ip = "192.168.1.37"
+sidecar_ip = "192.168.1.36"
 sidecar_port = 20800  # will use +1 +2 etc for each sidecar instance
 sidecar_count = 5
 prometheus_port = 19615
@@ -164,13 +164,13 @@ sidecar_prometheus_port = 20850
 [parachains.kusama.assethub]
 name = "asset-hub-kusama"  # name for the polkadot binary --chain parameter
 bin = "/dotidx/bin/polkadot-parachain"
-node_ip = "192.168.1.37"
+node_ip = "192.168.1.36"
 port_ws = 19945
 port_rpc = 19946
 basepath = "/data/backup/kusama-assethub-node-archive"
-chainreader_ip = "192.168.1.37"
+chainreader_ip = "192.168.1.36"
 chainreader_port = 20900
-sidecar_ip = "192.168.1.37"
+sidecar_ip = "192.168.1.36"
 sidecar_port = 20900  # will use +1 +2 etc for each sidecar instance
 sidecar_count = 5
 prometheus_port = 19616
@@ -179,14 +179,14 @@ sidecar_prometheus_port = 20950
 [parachains.kusama.accurast]
 name = "kusama-accurast"  # name for the polkadot binary --chain parameter
 bin = "/dotidx/bin/polkadot-parachain"
-node_ip = "192.168.1.37"
+node_ip = "192.168.1.36"
 port_ws = 19947
 port_rpc = 19948
 basepath = "/data/backup/kusama-accurast-node-archive"
-chainreader_ip = "192.168.1.37"
+chainreader_ip = "192.168.1.36"
 chainreader_port = 21000
-sidecar_ip = "192.168.1.37"
-sidecar_port = 21000  # will use +1 +2 etc for each sidecar instance
+sidecar_ip = "192.168.1.36"
+sidecar_port = 21000 # will use +1 +2 etc for each sidecar instance
 sidecar_count = 2
 prometheus_port = 19617
 sidecar_prometheus_port = 21050
