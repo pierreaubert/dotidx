@@ -5,6 +5,7 @@
 **/*.so
 **/*.log
 **/*.gz
+**/*.out
 TAGS
 ETAGS
 cmd/dixbatch/dixbatch
@@ -16,10 +17,11 @@ dist-simple
 dist-horn
 dixlive
 dixfe
-dixfil
 dixbatch
 dixmgr
 dixcron
+filter_cli
+address_cli
 .vscode
 .idea
 tests

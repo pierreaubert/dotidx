@@ -1,4 +1,4 @@
-import { updateFooter, updateNav, updateSearchBlocks } from './components.js';
+import { updateIcons, updateFooter, updateNav, updateSearchBlocks } from './components.js';
 import { escapeHtml, highlightAddressMatches } from './misc.js';
 
 function renderBlockContent(content, searchAddress) {
@@ -247,6 +247,7 @@ function updateFromUrl() {
 }
 
 async function initBlocks() {
+    await updateIcons();
     await updateNav();
     await updateFooter();
     await updateSearchBlocks();

@@ -105,7 +105,8 @@ function createBalanceGraph(graphData, graphDiv, address) {
             type: 'bar',
             name: 'Withdrawals',
             x: withdrawals.map((p) => p.x),
-            y: withdrawals.map((p) => p.y),
+            // log axis so invert withdrawls
+            y: withdrawals.map((p) => -p.y),
             // text: withdrawals.map(p => p.text),
             marker: { color: 'rgba(200, 0, 0, 0.7)' },
             hoverinfo: withdrawals.map((p) => p.x + ' ' + p.text),

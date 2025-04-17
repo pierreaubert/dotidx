@@ -78,6 +78,10 @@ export async function updateModals() {
     </div>
     <div class="modal-content">
       <div class="box">
+        <div class="notification is-danger is-hidden" id="modal-alert">
+          <button class="delete"></button>
+            Address does not look correct!
+        </div>
 	<div class="field">
           <div class="control is-expanded">
 	    <label class="label">Polkadot or Ethereum address</label>
@@ -110,6 +114,7 @@ export async function updateSearchAssets(target) {
     }
     const elem = document.getElementById(target);
     const content = `
+      <div class="box">
         <div class="field has-addons has-addons-centered">
           <p class="control">
             <button id="polkadot-connect-button" class="button">
@@ -118,8 +123,8 @@ export async function updateSearchAssets(target) {
               </span>
             </button>
           </p>
-          <p class="control">
-            <span class="select">
+          <p class="control is-expanded">
+            <span class="select is-fullwidth">
               <select id="addresses">
                 <option value="">Select an address</option>
               </select>
@@ -131,6 +136,7 @@ export async function updateSearchAssets(target) {
         </div>
 
         <div class="columns mt-3 is-centered">
+
           <div class="column is-narrow">
             <div class="field">
               <label class="label">From Date</label>
@@ -168,11 +174,15 @@ export async function updateSearchAssets(target) {
           </div>
         </div>
       </div>
+    </div>
 `;
     elem.innerHTML = content;
 }
 
 export async function updateSearchBlocks() {
+    const url = new URL(window.location.href);
+    const relay = url.searchParams.get('relay');
+    const chain = url.searchParams.get('chain');
     const elem = document.getElementById('search-blocks');
     const content = `
         <div class="field has-addons">

@@ -3,12 +3,12 @@
 
 import { updateModals, updateIcons, updateFooter, updateNav, updateSearchAssets } from './components.js';
 import { initPJS } from './wallet.js';
+import { isValidSubstrateAddress } from './address.js';
 
 export function getAddress() {
     const e = document.getElementById('addresses');
     const value = e.options[e.selectedIndex].value;
-    // TODO: add atest to check for Polkadot/ETH address
-    if (value) {
+    if (value && isValidSubstrateAddress(value)) {
         return value.trim();
     }
     return null;
@@ -102,10 +102,20 @@ function updateAddresses(_event) {
     }
 }
 
+function cancelModal() {
+    document.getElementById('modal-alert').classList.add('is-hidden');
+    document.getElementById('modal-add-address').classList.remove('is-active');
+}
+
 function getAddressFromModal(_event) {
     const modal = document.getElementById('add-address');
-    addAddress(modal.value);
-    document.getElementById('modal-add-address').classList.remove('is-active');
+    const alert = document.getElementById('modal-alert');
+    if (isValidSubstrateAddress(modal.value)) {
+        addAddress(modal.value);
+	cancelModal();
+    } else {
+        document.getElementById('modal-alert').classList.remove('is-hidden');
+    }
 }
 
 // target: name of the div
@@ -154,6 +164,6 @@ export async function initAddresses(target, name, fetchIt) {
     });
 
     document.getElementById('add-address-cancel-button').addEventListener('click', (e) => {
-        getAddressFromModal(e);
+        cancelModal(e);
     });
 }

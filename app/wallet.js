@@ -1,4 +1,5 @@
 // import { web3Accounts, web3Enable, web3FromAddress } from './bundle-polkadot-extension-dapp.js';
+import { substrate2polkadot } from './address.js';
 
 export let selectedPolkadotAccount = null;
 export let allPolkadotAccount = null;
@@ -39,8 +40,9 @@ async function connectPolkadotJs() {
             let html = '';
             allAccounts.forEach((account) => {
                 const shortAddress = `${account.address.substring(0, 6)}...${account.address.substring(account.address.length - 6)}`;
+                const polkadot = substrate2polkadot(account.address);
                 const text = `${shortAddress} (${selectedPolkadotAccount.meta.name})`;
-                html += `<option value="${account.address}">${text}</option>`;
+                html += `<option value="${polkadot}">${text}</option>`;
             });
             html += '<option value="">Add manually</option>';
             accountDisplay.innerHTML = html;
