@@ -112,7 +112,7 @@ function getAddressFromModal(_event) {
     const alert = document.getElementById('modal-alert');
     if (isValidSubstrateAddress(modal.value)) {
         addAddress(modal.value);
-	cancelModal();
+        cancelModal();
     } else {
         document.getElementById('modal-alert').classList.remove('is-hidden');
     }

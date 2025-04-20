@@ -179,6 +179,13 @@ export async function updateSearchAssets(target) {
     elem.innerHTML = content;
 }
 
+function markSelected(elem, name) {
+    const pos = [...elem.options].map((v) => v.value).indexOf(name);
+    if (pos !== -1) {
+        elem.options[pos].selected = true;
+    }
+}
+
 export async function updateSearchBlocks() {
     const url = new URL(window.location.href);
     const relay = url.searchParams.get('relay');
@@ -220,4 +227,8 @@ export async function updateSearchBlocks() {
         </div>
 `;
     elem.innerHTML = content;
+    const elemRelay = document.getElementById('search-block-relaychain');
+    markSelected(elemRelay, relay);
+    const elemChain = document.getElementById('search-block-chain');
+    markSelected(elemChain, chain);
 }

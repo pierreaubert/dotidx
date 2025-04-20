@@ -246,11 +246,32 @@ function updateFromUrl() {
     actionButton.click();
 }
 
+function updateColorElem(elem, relay) {
+    if (relay === 'polkadot') {
+        elem.classList.add('is-warning');
+        elem.classList.remove('is-primary');
+    } else if (relay === 'kusama') {
+        elem.classList.remove('is-warning');
+        elem.classList.add('is-primary');
+    }
+}
+
+async function updateColor() {
+    const hero = document.getElementById('hero-blocks');
+    const action = document.getElementById('action-button');
+    const url = new URL(window.location.href);
+    const relay = url.searchParams.get('relay');
+
+    updateColorElem(hero, relay);
+    updateColorElem(action, relay);
+}
+
 async function initBlocks() {
     await updateIcons();
     await updateNav();
     await updateFooter();
     await updateSearchBlocks();
+    await updateColor();
 
     const actionButton = document.getElementById('action-button');
 

@@ -82,7 +82,7 @@ chainreader_ip = "192.168.1.36"
 chainreader_port = 10900
 sidecar_ip = "192.168.1.36"
 sidecar_port = 10900  # will use +1 +2 etc for each sidecar instance
-sidecar_count = 2
+sidecar_count = 5
 prometheus_port = 9616
 sidecar_prometheus_port = 10950
 
@@ -128,7 +128,7 @@ chainreader_port = 11200
 sidecar_ip = "192.168.1.36"
 sidecar_port = 11200  # will use +1 +2 etc for each sidecar instance
 sidecar_prometheus_port = 11250
-sidecar_count = 2
+sidecar_count = 5
 prometheus_port = 9619
 
 [parachains.polkadot.frequency]
@@ -188,7 +188,7 @@ chainreader_ip = "192.168.1.36"
 chainreader_port = 21000
 sidecar_ip = "192.168.1.36"
 sidecar_port = 21000 # will use +1 +2 etc for each sidecar instance
-sidecar_count = 2
+sidecar_count = 5
 prometheus_port = 19617
 sidecar_prometheus_port = 21050
 
