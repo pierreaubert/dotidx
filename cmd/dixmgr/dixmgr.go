@@ -281,6 +281,11 @@ NODE_RELAY="ws://{{.Parachains.%[2]s.%[2]s.RelayIP}}:{{.Parachains.%[2]s.%[2]s.P
 NODE_PROM_PORT={{.Parachains.%[2]s.%[4]s.PrometheusPort}}
 `, toTitle(relay), relay, toTitle(chain), chain)
 
+			if config.Parachains[relay][chain].BootNodes != "" {
+				bootnodesTmpl := fmt.Sprintf("BOOTNODES=%s\n", config.Parachains[relay][chain].BootNodes)
+				nodeTmpl = fmt.Sprintf("%s%s", nodeTmpl, bootnodesTmpl)
+			}
+
 			// log.Printf(nodeTmpl)
 			node, err := template.New("node").Parse(nodeTmpl)
 			if err != nil {

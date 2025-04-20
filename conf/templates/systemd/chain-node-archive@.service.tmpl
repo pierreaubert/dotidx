@@ -5,10 +5,11 @@ After=network-online.target
 [Service]
 StandardOutput=journal
 EnvironmentFile={{.TargetDir}}-{{.Name}}/conf/%i-node-archive.conf
-PassEnvironment=NODE_BIN NODE_CHAIN NODE_NAME NODE_PORT_WS NODE_PORT_RPC NODE_PORT_WS NODE_BASE_PATH NODE_RELAY NODE_PROM_PORT
+PassEnvironment=NODE_BIN NODE_CHAIN NODE_NAME NODE_PORT_WS NODE_PORT_RPC NODE_PORT_WS NODE_BASE_PATH NODE_RELAY NODE_PROM_PORT BOOTNODES
 ExecStart=/bin/sh -c '${NODE_BIN} \
     --chain ${NODE_CHAIN} \
     --name ${NODE_NAME} \
+    ${BOOTNODES} \
     --state-pruning archive \
     --blocks-pruning archive \
     --db-cache 16000 \

@@ -71,6 +71,7 @@ type ParaChainConfig struct {
 	PrometheusPort        int    `toml:"prometheus_port"`
 	RelayIP               string `toml:"relay_ip"`
 	NodeIP                string `toml:"node_ip"`
+	BootNodes             string `toml:"bootnodes"`
 }
 
 func (ParaChainConfig) ComputePort(i, j int) int {
