@@ -4,14 +4,28 @@ function processBalance(b) {
     return Math.round(r * 100) / 100;
 }
 
+export const default_balance = {
+    symbol: "N/A",
+    free: 0.0,
+    frozen: 0.0,
+    reserved: 0.0
+};
+
 export async function getAccountAt(relay, chain, address, blockid) {
     let balanceUrl = `/proxy/${relay}/${chain}/accounts/${address}/balance-info`;
     if (blockid != '') {
         balanceUrl += `?at=${blockid}`;
     }
-    const response = await fetch(balanceUrl, { mode: 'cors' });
+    const response = await fetch(
+	balanceUrl, { mode: 'cors' }
+    ).catch( (err) => {
+	// network error
+	console.warn('got '+err+' when calling '+balanceUrl);
+	return default_balance;
+    });
     if (!response.ok) {
-        return {};
+	console.warn('got '+response.status+' when calling '+balanceUrl);
+        return default_balance;
     }
     const textRaw = await response.text();
     const result = await JSON.parse(textRaw);

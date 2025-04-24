@@ -1,6 +1,6 @@
 // import Plotly from "plotly.js-dist-min";
 import { formatTimestamp } from './misc.js';
-import { getAccountAt } from './accounts.js';
+import { default_balance, getAccountAt } from './accounts.js';
 import { initAddresses, getAddress } from './assets.js';
 
 // Function to build balance graph data
@@ -352,55 +352,58 @@ async function balancesSummary(address, results) {
         let totalFree = 0.0;
         balanceAt.set(relay, new Map());
         for (const [chain, result] of Object.entries(chains)) {
-            balanceAt.get(relay).set(chain, 0.0);
+            let firstBalance = default_balance;
+            let lastBalance = default_balance;
             if (result && Array.isArray(result) && result.length > 0) {
                 const firstResult = result[0];
                 const lastResult = result[result.length - 1];
-                console.log(
-                    'calling sidecar ' + relay + ' chain ' + chain + ' block ' + firstResult.number + ' to ' + lastResult.number
-                );
-                const firstBalance = await getAccountAt(relay, chain, address, firstResult.number);
-                const lastBalance = await getAccountAt(relay, chain, address, lastResult.number);
-                const nowBalance = await getAccountAt(relay, chain, address, '');
-                totalFree += nowBalance.free;
-                balanceAt.get(relay).set(chain, firstBalance.free);
-                summaryHtml += `
+                firstBalance = await getAccountAt(relay, chain, address, firstResult.number);
+                lastBalance = await getAccountAt(relay, chain, address, lastResult.number);
+	    }
+            const nowBalance = await getAccountAt(relay, chain, address, '');
+            totalFree += nowBalance.free;
+            balanceAt.get(relay).set(chain, nowBalance.free);
+	    // FREE
+            if (firstBalance.free + lastBalance.free + nowBalance.free > 0) {
+		summaryHtml += `
 <tr>
   <th>${relay}/${chain}</th>
-  <th>${firstBalance.symbol}</th>
+  <th>${nowBalance.symbol}</th>
   <th>Free</th>
   <td class="has-text-right">${nowBalance.free}</td>
 </tr>`;
-                if (firstBalance.reserved > 0 || lastBalance.reserved > 0 || nowBalance.reserved > 0) {
-                    summaryHtml += `
+	    }
+	    // RESERVED
+            if (firstBalance.reserved + lastBalance.reserved + nowBalance.reserved > 0) {
+                summaryHtml += `
 <tr>
   <th></th>
-  <th>${firstBalance.symbol}</th>
+  <th>${nowBalance.symbol}</th>
   <th>Reserved</th>
   <td class="has-text-right">${nowBalance.reserved}</td>
 </tr>`;
-                }
-                if (firstBalance.frozen > 0 || lastBalance.frozen > 0 || nowBalance.frozen > 0) {
-                    summaryHtml += `
+            }
+            if (firstBalance.frozen + lastBalance.frozen + nowBalance.frozen > 0) {
+                summaryHtml += `
 <tr>
   <th></th>
-  <th>${firstBalance.symbol}</th>
+  <th>${nowBalance.symbol}</th>
   <th>Frozen</th>
   <td class="has-text-right">${nowBalance.frozen}</td>
 </tr>
     `;
-                }
             }
-        }
-        summaryHtml += `
+	}
+	if (totalFree>0) {
+	    summaryHtml += `
 <tr>
-    <th>${relay}: total</th>
+    <th>${relay}: total free</th>
     <th></th>
     <th></th>
     <th class="has-text-right">${totalFree}</th>
 </tr>`;
+	}
     }
-
     summaryHtml += `
   </tbody>
 </table>
