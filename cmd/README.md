@@ -8,3 +8,4 @@ List of command line tools
 Lis of utility
 - filter_cli: filtering cli to check how filtering is working
 - address_cli: convert adresses from one format to another
+- block_cli: download and print a block
