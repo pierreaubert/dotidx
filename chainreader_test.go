@@ -45,7 +45,7 @@ func TestFetchHeadBlock(t *testing.T) {
 	}))
 	defer server.Close()
 
-	reader := NewSidecar(server.URL)
+	reader := NewSidecar("relay", "chain", server.URL)
 
 	// Call the fetchHeadBlock function with the test server URL
 	headBlockID, err := reader.GetChainHeadID()
@@ -94,7 +94,7 @@ func TestCallSidecar(t *testing.T) {
 	ctx := context.Background()
 
 	// Call the function
-	reader := NewSidecar(server.URL)
+	reader := NewSidecar("relay", "chain", server.URL)
 	blockData, err := reader.FetchBlock(ctx, 1)
 	if err != nil {
 		t.Fatalf("fetchData returned an error: %v", err)
@@ -192,7 +192,7 @@ func TestFetchBlockRange(t *testing.T) {
 	// Create an array of block IDs to fetch
 	blockIDs := []int{100, 101, 102, 103, 104, 105}
 
-	reader := NewSidecar(server.URL)
+	reader := NewSidecar("relay", "chain", server.URL)
 
 	// Call the function to fetch blocks with the specified IDs
 	blocks, err := reader.FetchBlockRange(ctx, blockIDs)

@@ -46,7 +46,7 @@ func main() {
 		config.Parachains[*relayChain][*chain].ChainreaderIP,
 		config.Parachains[*relayChain][*chain].ChainreaderPort,
 	)
-	reader := dix.NewSidecar(chainReaderURL)
+	reader := dix.NewSidecar(*relayChain, *chain, chainReaderURL)
 	// Test the sidecar service
 	if err := reader.Ping(); err != nil {
 		log.Fatalf("Sidecar service test failed: %v", err)

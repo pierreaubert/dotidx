@@ -58,7 +58,7 @@ func main() {
 			ip := config.Parachains[relayChain][chain].ChainreaderIP
 			port := config.Parachains[relayChain][chain].ChainreaderPort
 			url := fmt.Sprintf("http://%s:%d", ip, port)
-			reader := dix.NewSidecar(url)
+			reader := dix.NewSidecar(relayChain, chain, url)
 			if err := reader.Ping(); err != nil {
 				log.Printf("Sidecar service test for %s:%s failed: %v", relayChain, chain, err)
 				continue

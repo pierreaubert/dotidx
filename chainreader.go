@@ -20,12 +20,16 @@ type ChainReader interface {
 }
 
 type Sidecar struct {
+	relay   string
+	chain   string
 	url     string
 	metrics *Metrics
 }
 
-func NewSidecar(url string) *Sidecar {
+func NewSidecar(relay, chain, url string) *Sidecar {
 	return &Sidecar{
+		relay:   relay,
+		chain:   chain,
 		url:     url,
 		metrics: NewMetrics("Sidecar"),
 	}
@@ -53,7 +57,7 @@ func (s *Sidecar) GetChainHeadID() (int, error) {
 
 	// Check the status code
 	if resp.StatusCode != http.StatusOK {
-		return -1, fmt.Errorf("sidecar API returned status code %d", resp.StatusCode)
+		return -1, fmt.Errorf("sidecar API for (%s, %s) returned status code %d", s.relay, s.chain, resp.StatusCode)
 	}
 
 	// Read the response body
