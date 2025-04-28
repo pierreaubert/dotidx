@@ -13,6 +13,9 @@ cmd/dixfe/dixfe
 cmd/dixlive/dixlive
 cmd/dixcron/dixcron
 cmd/dixmgr/dixmgr
+cmd/block_cli/block_cli
+cmd/address_cli/address_cli
+cmd/filter_cli/filter_cli
 dist-simple
 dist-horn
 dixlive
@@ -20,6 +23,7 @@ dixfe
 dixbatch
 dixmgr
 dixcron
+block_cli
 filter_cli
 address_cli
 .vscode
