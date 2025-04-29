@@ -2,6 +2,7 @@ package dotidx
 
 import (
 	"log"
+	"sort"
 	"sync"
 	"time"
 )
@@ -159,4 +160,35 @@ func (m *Metrics) PrintStats(printHeader bool) {
 	for i := range m.Buckets {
 		m.Buckets[i].PrintStats(printHeader)
 	}
+}
+
+func CalculateAverageDurationFromSlice(durations []time.Duration) time.Duration {
+	var total time.Duration
+	if len(durations) == 0 {
+		return 0
+	}
+	for _, d := range durations {
+		total += d
+	}
+	return total / time.Duration(len(durations))
+}
+
+func CalculatePercentile(durations []time.Duration, percentile int) time.Duration {
+	if len(durations) == 0 {
+		return 0
+	}
+	// Create a copy to avoid modifying the original slice
+	sortedDurations := make([]time.Duration, len(durations))
+	copy(sortedDurations, durations)
+	sort.Slice(sortedDurations, func(i, j int) bool {
+		return sortedDurations[i] < sortedDurations[j]
+	})
+	pIndex := int(float64(len(sortedDurations))*float64(percentile)/100.0) - 1
+	if pIndex < 0 {
+		pIndex = 0 // Handle small sample sizes
+	}
+	if pIndex >= len(sortedDurations) { // Ensure index is within bounds
+		pIndex = len(sortedDurations) - 1
+	}
+	return sortedDurations[pIndex]
 }
