@@ -74,15 +74,18 @@ func (f *Frontend) handleBalances(w http.ResponseWriter, r *http.Request) {
 		filteredBlocks[relay] = make(map[string][]dix.BlockData)
 		for chain := range blocks[relay] {
 			filteredBlocks[relay][chain] = make([]dix.BlockData, 0)
-			for block := range blocks[relay][chain] {
-				iblock := blocks[relay][chain][block]
+			for i := range blocks[relay][chain] {
+				// Use a pointer to modify the original block
+				iblock := &blocks[relay][chain][i]
+				// Correctly capture the three return values
 				filtered, found, err := eb.Process(iblock.Extrinsics)
 				if err != nil {
 					log.Printf("Error processing block %s on chain %s:%s: %v",
-						blocks[relay][chain][block].ID,
+						iblock.ID,
 						relay, chain, err)
 					continue
 				}
+				// Only add the block if relevant events were found
 				if found {
 					log.Printf("Extracted balances events from block %s on chain %s:%s Timestamp %s", iblock.ID, relay, chain, iblock.Timestamp)
 					fblock := &dix.BlockData{
@@ -90,7 +93,7 @@ func (f *Frontend) handleBalances(w http.ResponseWriter, r *http.Request) {
 						Timestamp:  iblock.Timestamp,
 						Hash:       iblock.Hash,
 						ParentHash: iblock.ParentHash,
-						Extrinsics: filtered,
+						Extrinsics: filtered, // Use the filtered extrinsics
 					}
 					filteredBlocks[relay][chain] = append(filteredBlocks[relay][chain], *fblock)
 				}

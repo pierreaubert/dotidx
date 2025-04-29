@@ -137,7 +137,7 @@ func processLastBlocks(
 
 	next := state.current
 
-	log.Printf("Start processing blocks %d to %d on %s:%s", next, head, relayChain, chain)
+	log.Printf("Processing %12s:%12s:%10d+%d", relayChain, chain, next, head-next)
 
 	for next <= head {
 		block, err := state.reader.FetchBlock(ctx, next)
