@@ -1,22 +1,22 @@
 {
   "devDependencies": {
-    "@eslint/js": "^9.23.0",
-    "bulma": "^1.0.3",
-    "bun": "^1.2.7",
-    "eslint": "^9.23.0",
+    "@eslint/js": "^9.25.1",
+    "bulma": "^1.0.4",
+    "bun": "^1.2.10",
+    "eslint": "^9.25.1",
     "globals": "^16.0.0",
-    "npm-check-updates": "^17.1.16",
-    "oxlint": "^0.16.3",
+    "npm-check-updates": "^18.0.1",
+    "oxlint": "^0.16.8",
     "prettier": "^3.5.3",
-    "sass": "^1.86.3",
+    "sass": "^1.87.0",
     "terser": "^5.39.0",
-    "vitest": "^3.0.9",
+    "vitest": "^3.1.2",
     "w3c-html-validator": "^1.8.3"
   },
   "dependencies": {
-    "@polkadot/extension-dapp": "^0.58.7",
-    "@polkadot/util": "^13.4.3",
-    "@polkadot/util-crypto": "^13.4.3",
+    "@polkadot/extension-dapp": "^0.58.8",
+    "@polkadot/util": "^13.4.4",
+    "@polkadot/util-crypto": "^13.4.4",
     "plotly.js-dist-min": "^3.0.1"
   },
   "scripts": {

@@ -5,22 +5,26 @@ all: fmt vet bin app
 fe:
 	cd cmd/dixfe && go vet
 	cd cmd/dixfe && go fmt
-	go build cmd/dixfe/dixfe.go cmd/dixfe/r_*.go
+	go build -o bin/dixfe cmd/dixfe/dixfe.go cmd/dixfe/r_*.go
+
+live:
+	cd cmd/dixlive && go vet
+	cd cmd/dixlive && go fmt
+	go build -o bin/dixlive cmd/dixlive/dixlive.go
 
 mgr:
 	cd cmd/dixmgr && go vet
 	cd cmd/dixmgr && go fmt
-	go build cmd/dixmgr/dixmgr.go
+	go build -o bin/dixmgr cmd/dixmgr/dixmgr.go
 
 cli:
-	go build cmd/filter_cli/filter_cli.go
-	go build cmd/address_cli/address_cli.go
+	go build -o bin/filter_cli cmd/filter_cli/filter_cli.go
+	go build -o bin/address_cli cmd/address_cli/address_cli.go
+	go build -o bin/block_cli cmd/block_cli/block_cli.go
 
-bin: fe mgr cli
-	go build cmd/dixbatch/dixbatch.go
-	go build cmd/dixlive/dixlive.go
-	go build cmd/dixmgr/dixmgr.go
-	go build cmd/dixcron/dixcron.go
+bin: fe mgr cli live
+	go build -o bin/dixbatch cmd/dixbatch/dixbatch.go
+	go build -o bin/dixcron cmd/dixcron/dixcron.go
 
 clean:
 	./scripts/cleanup.sh
@@ -39,6 +43,7 @@ vet:
 	npm run oxlint
 	cd cmd/filter_cli && go vet
 	cd cmd/address_cli && go vet
+	cd cmd/block_cli && go vet
 
 fmt:
 	go fmt
@@ -50,6 +55,7 @@ fmt:
 	npm run format
 	cd cmd/filter_cli && go fmt
 	cd cmd/address_cli && go fmt
+	cd cmd/block_cli && go fmt
 
 app:
 	npm run build-bulma
