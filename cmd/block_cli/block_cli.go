@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	substrate "github.com/itering/substrate-api-rpc"
@@ -41,31 +42,48 @@ type EncodedDigest struct {
 }
 
 type EncodedHeader struct {
-	Number         string   `json:"number"`
-	ParentHash     string `json:"parentHash"`
-	StateRoot      string `json:"stateRoot"`
-	ExtrinsicsRoot string `json:"extrinsicsRoot"`
-	Digest         EncodedDigest    `json:"digest"`
+	Number         string        `json:"number"`
+	ParentHash     string        `json:"parentHash"`
+	StateRoot      string        `json:"stateRoot"`
+	ExtrinsicsRoot string        `json:"extrinsicsRoot"`
+	Digest         EncodedDigest `json:"digest"`
 }
 
 // block encoded received by rpc/ws
 type EncodedBlock struct {
 	Block struct {
 		Header     EncodedHeader `json:"header"`
-		Extrinsics []string    `json:"extrinsics"`
+		Extrinsics []string      `json:"extrinsics"`
 	} `json:"block"`
-	Justifications string         `json:"justifications"` // if signed
+	Justifications any `json:"justifications"` // if signed
 }
 
 // for manipulation of event, extrinsic and log data
+type BlockLogValue struct {
+	Data   string `json:"data"`
+	Engine int    `json:"engine"`
+}
+
 type BlockLog struct {
-	Type string      `json:"type"`
-	Index int         `json:"index"`
-	Value []string    `json:"value"`
+	Type  string          `json:"type"`
+	Index int             `json:"index"`
+	Value []BlockLogValue `json:"value"`
 }
 
 type BlockDigest struct {
 	Logs []*BlockLog `json:"logs"`
+}
+
+type BlockMortal struct {
+	ImmortalArea string    `json:"immortalArea"`
+	MortalArea   [2]uint64 `json:"mortalArea"`
+}
+
+func (bm BlockMortal) MarshalJSON() ([]byte, error) {
+	if bm.ImmortalArea == "0x00" {
+		return []byte(fmt.Sprintf(`{"immortalArea": "%s"}`, bm.ImmortalArea)), nil
+	}
+	return []byte(fmt.Sprintf(`{"mortalArea": ["%d", "%d"]}`, bm.MortalArea[0], bm.MortalArea[1])), nil
 }
 
 type Extrinsic = map[string]interface{}
@@ -179,6 +197,18 @@ func extractTimestamp(extrinsicName string, extrinsic Extrinsic) (blockTimestamp
 		return time.Time{}, err
 	}
 	return
+}
+
+func removeRaw(extrinsics []Extrinsic) {
+	// TODO: should be recursive
+	for _, e := range extrinsics {
+		for k := range e {
+			if strings.HasSuffix(k, "_raw") {
+				// log.Printf("Deleting extrinsic key %s", k)
+				delete(e, k)
+			}
+		}
+	}
 }
 
 // sidecar clone
@@ -307,25 +337,30 @@ func (gsc *GoSidecar) GetDecodedBlock(blockNum int) (block *dix.BlockData, err e
 	if err == nil {
 		var digest BlockDigest
 		for l, logItem := range storageLogs {
-			logValue := interface2array(logItem.Value)
-			digest.Logs = append(digest.Logs, &BlockLog{
-				Type: logItem.Type,
-				Index: l,
-				Value: logValue,
+			var values []BlockLogValue
+			value := logItem.Value.(map[string]any)
+			log.Printf("DEBUG %v", value)
+			data := value["data"].(string)
+			engine := int(value["engine"].(float64))
+			values = append(values, BlockLogValue{
+				Data:   data,
+				Engine: engine,
 			})
-			// log.Printf("DEBUG %d %v %v", l, logItem.Type, logValue)
+			digest.Logs = append(digest.Logs, &BlockLog{
+				Type:  logItem.Type,
+				Index: l,
+				Value: values,
+			})
 			if logItem.Type == "PreRuntime" {
 				validators, err := getValidators(hash)
-				// log.Printf("DEBUG Found %d validators", len(validators))
+				logValue := []byte(interface2string(logItem.Value))
 				if err == nil {
-					author := substrate.ExtractAuthor([]byte(interface2string(logItem.Value)), validators)
+					author := substrate.ExtractAuthor(logValue, validators)
 					block.AuthorID = ss58.Encode(author, 42)
 				}
-				// log.Printf("DEBUG Author: %v", block.AuthorID)
 			}
 		}
 		block.Logs, err = json.Marshal(digest)
-		// log.Printf("%v", block.Logs)
 	}
 
 	// extract data from block
@@ -357,9 +392,16 @@ func (gsc *GoSidecar) GetDecodedBlock(blockNum int) (block *dix.BlockData, err e
 		if !ok {
 			encodedEra = ""
 		}
-		mortal := substrate.DecodeMortal(encodedEra)
+		storageMortal := substrate.DecodeMortal(encodedEra)
+		blockMortal := &BlockMortal{}
+		if storageMortal == nil {
+			blockMortal.ImmortalArea = "0x00"
+		} else {
+			blockMortal.MortalArea = [...]uint64{storageMortal.Period, storageMortal.Phase}
+		}
 		delete(extrinsic, "era")
-		extrinsic["era"], err = json.Marshal(mortal)
+		extrinsic["era"] = blockMortal
+
 		// merge events
 		eventIndexes, ok := eventsSet[call_module]
 		if ok && len(eventIndexes) > 0 {
@@ -383,6 +425,7 @@ func (gsc *GoSidecar) GetDecodedBlock(blockNum int) (block *dix.BlockData, err e
 		}
 	}
 
+	removeRaw(extrinsics)
 	block.Extrinsics, err = json.Marshal(extrinsics)
 	if err != nil {
 		return nil, err
@@ -424,7 +467,7 @@ func (gsc *GoSidecar) fetchBlockDetails(blockHash string, blockNum int) (blockRe
 	if rpcBlockResult.Result == nil {
 		return EncodedBlock{}, downloadDuration, nil
 	}
-	result, ok  := rpcBlockResult.Result.(map[string]interface{})
+	result, ok := rpcBlockResult.Result.(map[string]interface{})
 	if !ok {
 		log.Printf("ERROR: [Block %d] rpcResult is not a map", blockNum)
 		return EncodedBlock{}, downloadDuration, nil // Not an error, just no data
@@ -563,7 +606,7 @@ func main() {
 		return
 	}
 
-	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
 
 	// Create and initialize GoSidecar
 	gsc := NewGoSidecar(*wsURL, *printTraces, *printDebug, *printOutput)
@@ -589,7 +632,7 @@ func main() {
 				failedBlocks++
 				continue
 			}
-			log.Printf("%v", jsBlock)
+			log.Printf("%s", string(jsBlock))
 		}
 	}
 
