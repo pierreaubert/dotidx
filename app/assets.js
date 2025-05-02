@@ -14,13 +14,17 @@ export function getAddress() {
     return null;
 }
 
+/**
+ * @param {string} address The address to add
+ * @returns {void}
+ */
 export function addAddress(address) {
-    let searchInput = document.getElementById('addresses');
+    const searchInput = document.getElementById('addresses');
     const pos = [...searchInput.options].map((v) => v.value).indexOf(address);
     if (pos === -1) {
-        let option = document.createElement('option');
+        const option = document.createElement('option');
         option.value = address;
-        option.text = address.slice(0, 6) + ' ... ' + address.slice(-6);
+        option.text = `${address.slice(0, 6)} ... ${address.slice(-6)}`;
         option.selected = true;
         searchInput.add(option);
     } else {

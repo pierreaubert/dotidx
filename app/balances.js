@@ -359,21 +359,21 @@ async function balancesSummary(address, results) {
                 const lastResult = result[result.length - 1];
                 firstBalance = await getAccountAt(relay, chain, address, firstResult.number);
                 lastBalance = await getAccountAt(relay, chain, address, lastResult.number);
-	    }
+            }
             const nowBalance = await getAccountAt(relay, chain, address, '');
             totalFree += nowBalance.free;
             balanceAt.get(relay).set(chain, nowBalance.free);
-	    // FREE
+            // FREE
             if (firstBalance.free + lastBalance.free + nowBalance.free > 0) {
-		summaryHtml += `
+                summaryHtml += `
 <tr>
   <th>${relay}/${chain}</th>
   <th>${nowBalance.symbol}</th>
   <th>Free</th>
   <td class="has-text-right">${nowBalance.free}</td>
 </tr>`;
-	    }
-	    // RESERVED
+            }
+            // RESERVED
             if (firstBalance.reserved + lastBalance.reserved + nowBalance.reserved > 0) {
                 summaryHtml += `
 <tr>
@@ -393,16 +393,16 @@ async function balancesSummary(address, results) {
 </tr>
     `;
             }
-	}
-	if (totalFree>0) {
-	    summaryHtml += `
+        }
+        if (totalFree > 0) {
+            summaryHtml += `
 <tr>
     <th>${relay}: total free</th>
     <th></th>
     <th></th>
     <th class="has-text-right">${totalFree}</th>
 </tr>`;
-	}
+        }
     }
     summaryHtml += `
   </tbody>
