@@ -1,6 +1,8 @@
 # Connection string for the PostgreSQL database.
 
-DATA_SOURCE_NAME='user={{.Monitoring.User}} host={{.DotidxRun}} dbname={{.DotidxDB.Name}} port={{.DotidxDB.Port}}'
+# DATA_SOURCE_NAME='user={{.Monitoring.User}} host={{.DotidxRun}} dbname={{.DotidxDB.Name}} port={{.DotidxDB.Port}}'
+# for reasons I do not understand, connection fails with a user
+DATA_SOURCE_NAME='host={{.DotidxRun}} dbname={{.DotidxDB.Name}} port={{.DotidxDB.Port}}'
 
 # Set the command-line arguments to pass to the server.
 # Due to shell escaping, to pass backslashes for regexes, you need to double

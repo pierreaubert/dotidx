@@ -131,7 +131,8 @@ local   replication     all                                     peer
 host    replication     all             127.0.0.1/32            scram-sha-256
 host    replication     all             ::1/128                 scram-sha-256
 #
-local   dotidx         dotidx                                 peer
+local   dotidx         dotidx                                   peer
+local   dotidx         prometheus                               peer
 {{range .DotidxDB.WhitelistedIP}}
 host    {{$.DotidxDB.User}}	{{$.DotidxDB.Name}}	{{.}}/32	password
 {{end}}
