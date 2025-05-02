@@ -113,7 +113,7 @@ function cancelModal() {
 
 function getAddressFromModal(_event) {
     const modal = document.getElementById('add-address');
-    const alert = document.getElementById('modal-alert');
+    // const alert = document.getElementById('modal-alert');
     if (isValidSubstrateAddress(modal.value)) {
         addAddress(modal.value);
         cancelModal();

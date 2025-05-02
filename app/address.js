@@ -4,7 +4,8 @@ export function isValidSubstrateAddress(address) {
             polkadotUtil.isHex(address) ? polkadotUtil.hexToU8a(address) : polkadotUtilCrypto.decodeAddress(address)
         );
         return true;
-    } catch (_error) {
+    } catch (error) {
+        console.log('invalid address: ' + address + ' ' + error);
         return false;
     }
 }

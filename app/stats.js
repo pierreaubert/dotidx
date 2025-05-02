@@ -56,18 +56,26 @@ async function fetchCompletionRate() {
 }
 
 // Function to fetch and display monthly statistics
-function plotMonthlyStats(name, datas) {
-    const plotDiv = document.getElementById('monthly-chart-' + name);
+function plotMonthlyStats(allDatas) {
+    const plotDiv = document.getElementById('monthly-chart');
 
-    const chains = new Set(datas.map((d) => d.Chain));
-    const traces = [...chains].map((chain) => ({
-        name: '#' + chain + '.' + name.slice(0, 3),
-        x: datas.filter((d) => d.Chain == chain).map((d) => d.date),
-        y: datas.filter((d) => d.Chain == chain).map((d) => d.count),
-        type: 'bar',
-    }));
+    function addTrace(relay) {
+        const datas = allDatas.filter((d) => d.Relaychain === relay);
+        const chains = new Set(datas.map((d) => d.Chain));
+        return [...chains].map((chain) => ({
+            name: '#' + chain + '.' + relay.slice(0, 3),
+            x: datas.filter((d) => d.Chain == chain).map((d) => d.date),
+            y: datas.filter((d) => d.Chain == chain).map((d) => d.count),
+            type: 'bar',
+        }));
+    }
 
-    const total = datas.map((d) => d.count).reduce((a, b) => a + b, 0);
+    let tracesPolkadot = addTrace('polkadot');
+    let tracesKusama = addTrace('kusama');
+
+    const traces = tracesPolkadot.concat(tracesKusama);
+
+    const total = allDatas.map((d) => d.count).reduce((a, b) => a + b, 0);
 
     const layout = {
         title: {
@@ -99,11 +107,10 @@ function plotMonthlyStats(name, datas) {
 }
 
 async function fetchMonthlyStats() {
-    const monthlyDataPolkadot = document.getElementById('monthly-data-polkadot');
-    const monthlyDataKusama = document.getElementById('monthly-data-kusama');
+    const monthlyData = document.getElementById('monthly-data');
     const monthlyResult = document.getElementById('monthly-result');
 
-    if (!monthlyDataPolkadot || !monthlyDataKusama || !monthlyResult) {
+    if (!monthlyData || !monthlyResult) {
         return "Element dont't exists";
     }
 
@@ -114,18 +121,10 @@ async function fetchMonthlyStats() {
     const datas = await response.json();
 
     // Create content and title
-    monthlyDataPolkadot.innerHTML = '<div id="monthly-chart-polkadot" style="width:100%; height:400px;"></div>';
-    monthlyDataKusama.innerHTML = '<div id="monthly-chart-kusama" style="width:100%; height:400px;"></div>';
+    monthlyData.innerHTML = '<div id="monthly-chart" style="width:100%; height:400px;"></div>';
     monthlyResult.classList.remove('is-hidden');
 
-    plotMonthlyStats(
-        'polkadot',
-        datas.filter((d) => d.Relaychain === 'polkadot')
-    );
-    plotMonthlyStats(
-        'kusama',
-        datas.filter((d) => d.Relaychain === 'kusama')
-    );
+    plotMonthlyStats(datas);
 
     return '';
 }
