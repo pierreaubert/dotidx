@@ -16,6 +16,7 @@ import (
 	"github.com/itering/substrate-api-rpc/metadata"
 	"github.com/itering/substrate-api-rpc/model"
 	rpc "github.com/itering/substrate-api-rpc/rpc"
+
 	// "github.com/itering/substrate-api-rpc/storage"
 	"github.com/itering/substrate-api-rpc/storageKey"
 	rpcutil "github.com/itering/substrate-api-rpc/util"
@@ -176,20 +177,20 @@ func getValidators(blockHash string) (list []string, err error) {
 func extractTimestamp(extrinsicName string, extrinsic Extrinsic) (blockTimestamp time.Time, err error) {
 	call_module := extrinsic["call_module"]
 	if call_module != "Timestamp" {
-		return time.Time{}, fmt.Errorf("call module %s not Timestamp", call_module)
+		return time.Time{}, fmt.Errorf("[Extrinsic %s] call module %s not Timestamp", extrinsicName, call_module)
 	}
 
 	params, ok := extrinsic["params"].([]interface{})
 	if !ok || len(params) == 0 {
-		return time.Time{}, fmt.Errorf("call module %s has no params", call_module)
+		return time.Time{}, fmt.Errorf("[Extrinsic %s] call module %s has no params", extrinsicName, call_module)
 	}
 	data, ok := params[0].(map[string]interface{})
 	if !ok {
-		return time.Time{}, fmt.Errorf("call module %s has no params data", call_module)
+		return time.Time{}, fmt.Errorf("[Extrinsic %s] call module %s has no params data", extrinsicName, call_module)
 	}
 	now, ok := data["value"].(float64)
 	if !ok {
-		return time.Time{}, fmt.Errorf("call module %s has no now", call_module)
+		return time.Time{}, fmt.Errorf("[Extrinsic %s] call module %s has no now", extrinsicName, call_module)
 	}
 	snow := strconv.Itoa(int(now) / 1000)
 	blockTimestamp, err = dix.ParseTimestamp(snow)
@@ -310,7 +311,7 @@ func (gsc *GoSidecar) GetDecodedBlock(blockNum int) (block *dix.BlockData, err e
 		return nil, err
 	}
 	// map events per module
-	var eventsSet map[string][]int
+	eventsSet := make(map[string][]int)
 	for e := range events {
 		key, ok := events[e]["call_module"].(string)
 		if ok {
