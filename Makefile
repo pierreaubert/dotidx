@@ -19,7 +19,6 @@ mgr:
 
 cli:
 	go build -o bin/filter_cli cmd/filter_cli/filter_cli.go
-	go build -o bin/address_cli cmd/address_cli/address_cli.go
 	go build -o bin/block_cli cmd/block_cli/block_cli.go
 
 bin: fe mgr cli live
@@ -35,30 +34,16 @@ test:
 	npm run test
 
 vet:
-	go vet
-	cd cmd/dixbatch && go vet
-	cd cmd/dixlive && go vet
-	cd cmd/dixcron && go vet
-	cd cmd/dixfe && go vet
+	go vet ./...
 	npm run oxlint
-	cd cmd/filter_cli && go vet
-	cd cmd/address_cli && go vet
-	cd cmd/block_cli && go vet
 
 fmt:
-	go fmt
-	cd cmd/dixbatch && go fmt
-	cd cmd/dixfe && go fmt
-	cd cmd/dixlive && go fmt
-	cd cmd/dixcron && go fmt
-	cd cmd/dixmgr && go fmt
+	go fmt ./...
 	npm run format
-	cd cmd/filter_cli && go fmt
-	cd cmd/address_cli && go fmt
-	cd cmd/block_cli && go fmt
 
 app:
 	npm run build-bulma
+	npm run build
 
 update_fe: fe app
 	./scripts/update_fe_dev.sh
