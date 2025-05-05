@@ -1,0 +1,16 @@
+{
+  "name": "DIX: a Polkadot block explorer",
+  "short_name": "DIX Explorer",
+  "description": "A block explorer for Polkadot built with DIX.",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/dist/assets/dix-Coe9wpgh.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
