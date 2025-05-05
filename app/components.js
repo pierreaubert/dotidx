@@ -13,8 +13,18 @@ export async function updateIcons() {
 
 export async function updateNav() {
     const url = new URL(window.location.href);
-    const path = url.pathname;
-    const nicePath = path[1].toUpperCase() + path.slice(2, path.length - 5);
+    let path = url.pathname;
+    if (path === undefined) {
+        path = '/';
+    }
+    let nicePath = path;
+    if (path.length > 7) {
+        nicePath = path[1].toUpperCase() + path.slice(2, path.length - 5);
+    } else if (path.length > 2) {
+        nicePath = path[1].toUpperCase() + path.slice(2);
+    } else {
+	nicePath = path
+    }
     let contentNav = `
           <div class="level-left">
             <a class="level-item" href="/index.html">

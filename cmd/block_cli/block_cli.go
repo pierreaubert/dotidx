@@ -328,7 +328,7 @@ func (gsc *GoSidecar) GetDecodedBlock(blockNum int) (block *dix.BlockData, err e
 	block.Logs = json.RawMessage("[]")
 	block.Extrinsics = json.RawMessage("[]")
 	block.AuthorID = ""
-	block.Finalized = false
+	block.Finalized = true
 	block.OnInitialize = nil
 	block.OnFinalize = nil
 
@@ -339,7 +339,6 @@ func (gsc *GoSidecar) GetDecodedBlock(blockNum int) (block *dix.BlockData, err e
 		for l, logItem := range storageLogs {
 			var values []BlockLogValue
 			value := logItem.Value.(map[string]any)
-			log.Printf("DEBUG %v", value)
 			data := value["data"].(string)
 			engine := int(value["engine"].(float64))
 			values = append(values, BlockLogValue{

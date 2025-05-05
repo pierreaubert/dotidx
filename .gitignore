@@ -11,6 +11,7 @@ ETAGS
 dist-simple
 dist-horn
 bin
+app/dist
 .vscode
 .idea
 tests
