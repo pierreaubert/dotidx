@@ -226,7 +226,11 @@ function renderBalancesTable(balancesByMonth) {
         html += `<tr class="month-header"><td colspan="4"><strong>${monthName}</strong></td></tr>`;
 
         // Add balances for this month
-        balancesByMonth[monthKey].forEach((balance, index) => {
+        const sortedDays = balancesByMonth[monthKey].sort((a, b) => {
+            return b.timestamp.localeCompare(a.timestamp);
+        });
+
+        sortedDays.forEach((balance, index) => {
             // Main row
             html += '<tr>';
             html += `<td>${balance.relay}/${balance.chain}</td>`;

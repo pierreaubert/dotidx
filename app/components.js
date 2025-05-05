@@ -23,7 +23,7 @@ export async function updateNav() {
     } else if (path.length > 2) {
         nicePath = path[1].toUpperCase() + path.slice(2);
     } else {
-	nicePath = path
+        nicePath = path;
     }
     let contentNav = `
           <div class="level-left">
@@ -201,6 +201,27 @@ export async function updateSearchBlocks() {
     const relay = url.searchParams.get('relay');
     const chain = url.searchParams.get('chain');
     const elem = document.getElementById('search-blocks');
+    const polkadotChains = `
+                <option>Select a chain</option>
+                <option value="polkadot"selected>Polkadot</option>
+                <option value="assethub">AssetHub</option>
+                <option value="people">People</option>
+                <option value="collectives">Collectives</option>
+                <option value="frequency">Frequency</option>
+                <option value="mythos">Mythical</option>
+	`;
+    const kusamaChains = `
+                <option>Select a chain</option>
+                <option value="kusama" selected>Kusama</option>
+                <option value="assethub">AssetHub</option>
+                <option value="acurast">Acurast</option>
+	`;
+
+    let options = polkadotChains;
+    if (relay === 'kusama') {
+        options = kusamaChains;
+    }
+
     const content = `
         <div class="field has-addons">
           <div class="control is-expanded has-icons-left">
@@ -221,13 +242,7 @@ export async function updateSearchBlocks() {
           <div class="control">
             <div class="select">
               <select id="search-block-chain">
-                <option>Select a chain</option>
-                <option value="polkadot"selected>Polkadot</option>
-                <option value="assethub">AssetHub</option>
-                <option value="people">People</option>
-                <option value="collectives">Collectives</option>
-                <option value="frequency">Frequency</option>
-                <option value="mythos">Mythical</option>
+${options}
               </select>
             </div>
           </div>
@@ -240,5 +255,15 @@ export async function updateSearchBlocks() {
     const elemRelay = document.getElementById('search-block-relaychain');
     markSelected(elemRelay, relay);
     const elemChain = document.getElementById('search-block-chain');
+    elemRelay.addEventListener('change', (event) => {
+	const ln = event.currentTarget.length;
+	if (ln>1 && event.currentTarget[1].selected && event.currentTarget[1].value === 'polkadot') {
+	    elemChain.innerHTML = polkadotChains;
+	} else if (ln>2 && event.currentTarget[2].selected && event.currentTarget[2].value === 'kusama') {
+	    elemChain.innerHTML = kusamaChains;
+	} else {
+	    console.error('Unknown relay chain: ', event.currentTarget);
+	}
+    })
     markSelected(elemChain, chain);
 }

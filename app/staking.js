@@ -222,7 +222,11 @@ function renderStakingsRewardsTable(extrinsicsByMonth, flip) {
 
         let first = true;
 
-        extrinsicsByMonth[monthKey].forEach((extrinsic, index) => {
+        const extrinsicsByDay = extrinsicsByMonth[monthKey].sort((a, b) => {
+            return b.timestamp.localeCompare(a.timestamp);
+        });
+
+        extrinsicsByDay.forEach((extrinsic, index) => {
             let doit = extrinsic.method.method === 'Rewarded';
             if (flip) {
                 doit = !doit;
@@ -241,7 +245,7 @@ function renderStakingsRewardsTable(extrinsicsByMonth, flip) {
 
                 let amount = extrinsic.totalAmount.toFixed(2);
                 let detailsContent = {
-                    blockId: extrinsic.blockId, // Add blockId to details
+                    blockId: extrinsic.blockId,
                     pallet: extrinsic.pallet,
                     method: extrinsic.method.method,
                     subpallet: extrinsic.method.pallet,

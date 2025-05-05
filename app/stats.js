@@ -98,7 +98,7 @@ function plotMonthlyStats(allDatas) {
             l: 50,
             r: 50,
             b: 100,
-            t: 50,
+            t: 80,
             pad: 4,
         },
     };
