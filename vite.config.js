@@ -16,7 +16,10 @@ export default defineConfig({
 		stats: resolve(__dirname, 'app/stats.html'),
 		maintenance: resolve(__dirname, 'app/maintenance.html'),
 	    },
-	},
+	    external: [
+		'/plotly-dotidx.min.js',
+	    ],
+	}
     },
     server: {
 	open: '/index.html',

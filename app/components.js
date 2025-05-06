@@ -1,3 +1,5 @@
+import dixSvgUrl from './dix.svg';
+
 export async function updateIcons() {
     let icons = '';
 
@@ -28,7 +30,7 @@ export async function updateNav() {
     let contentNav = `
           <div class="level-left">
             <a class="level-item" href="/index.html">
-               <img src="/dix.svg" alt="DIX" width="48" height="48" />
+               <img src="${dixSvgUrl}" alt="DIX" width="48" height="48" />
 `;
     if (path === '/' || path === '/index.html') {
         contentNav += `
@@ -256,14 +258,14 @@ ${options}
     markSelected(elemRelay, relay);
     const elemChain = document.getElementById('search-block-chain');
     elemRelay.addEventListener('change', (event) => {
-	const ln = event.currentTarget.length;
-	if (ln>1 && event.currentTarget[1].selected && event.currentTarget[1].value === 'polkadot') {
-	    elemChain.innerHTML = polkadotChains;
-	} else if (ln>2 && event.currentTarget[2].selected && event.currentTarget[2].value === 'kusama') {
-	    elemChain.innerHTML = kusamaChains;
-	} else {
-	    console.error('Unknown relay chain: ', event.currentTarget);
-	}
-    })
+        const ln = event.currentTarget.length;
+        if (ln > 1 && event.currentTarget[1].selected && event.currentTarget[1].value === 'polkadot') {
+            elemChain.innerHTML = polkadotChains;
+        } else if (ln > 2 && event.currentTarget[2].selected && event.currentTarget[2].value === 'kusama') {
+            elemChain.innerHTML = kusamaChains;
+        } else {
+            console.error('Unknown relay chain: ', event.currentTarget);
+        }
+    });
     markSelected(elemChain, chain);
 }

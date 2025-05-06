@@ -41,8 +41,13 @@ fmt:
 	go fmt ./...
 	npm run format
 
-app:
-	npm run build-bulma
+app/dix-large.css: app/dix.scss
+	npm run build-bulma-step1
+
+app/dix.css : app/dix-large.css
+	npm run build-bulma-step2
+
+app: app/dix.css
 	npm run build
 
 update_fe: fe app

@@ -8,7 +8,7 @@
   "theme_color": "#ffffff",
   "icons": [
     {
-      "src": "/dist/assets/dix-Coe9wpgh.svg",
+      "src": "/assets/dix-Coe9wpgh.svg",
       "sizes": "any",
       "type": "image/svg+xml"
     }

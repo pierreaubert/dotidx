@@ -12,6 +12,7 @@ dist-simple
 dist-horn
 bin
 app/dist
+app/dix-large.*
 .vscode
 .idea
 tests

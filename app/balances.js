@@ -1,4 +1,3 @@
-// import Plotly from "plotly.js-dist-min";
 import { formatTimestamp } from './misc.js';
 import { default_balance, getAccountAt } from './accounts.js';
 import { initAddresses, getAddress } from './assets.js';

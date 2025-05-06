@@ -19,6 +19,7 @@ $white: #FFFFFF;
     $warning: $pink,
     $info: $cyan,
     $control-border-width: 2px,
+    $cssvars-prefix: "",
 );
 
 @forward "bulma/sass/base";
@@ -28,6 +29,13 @@ $white: #FFFFFF;
 @forward "bulma/sass/elements/content";
 @forward "bulma/sass/elements/notification";
 @forward "bulma/sass/layout/footer";
+
+@use "bulma/sass/themes/light";
+@use "bulma/sass/themes/setup";
+
+:root {
+  @include light.light-theme;
+}
 
 // Import the Google Font
 @import

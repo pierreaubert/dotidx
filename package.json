@@ -1,22 +1,31 @@
 {
   "devDependencies": {
     "@eslint/js": "^9.26.0",
+    "@fullhuman/postcss-purgecss": "^6.0.0",
     "bulma": "^1.0.4",
     "bun": "^1.2.12",
+    "cssnano": "^7.0.6",
     "eslint": "^9.26.0",
     "globals": "^16.0.0",
     "npm-check-updates": "^18.0.1",
     "oxlint": "^0.16.9",
+    "postcss-cli": "^11.0.1",
+    "postcss-prune-var": "^1.1.2",
+    "postcss-variable-compress": "^3.0.0",
     "prettier": "^3.5.3",
+    "purgecss": "^7.0.2",
     "sass": "^1.87.0",
     "terser": "^5.39.0",
     "vitest": "^3.1.2",
     "w3c-html-validator": "^1.8.3"
   },
   "dependencies": {
+    "@polkadot/api": "^15.9.2",
+    "@polkadot/extension": "^0.22.1",
     "@polkadot/extension-dapp": "^0.58.8",
     "@polkadot/util": "^13.4.4",
     "@polkadot/util-crypto": "^13.4.4",
+    "@types/plotly.js": "^2.35.5",
     "plotly.js-dist-min": "^3.0.1"
   },
   "scripts": {
@@ -26,7 +35,7 @@
     "format": "npx prettier --write \"app/*.js\"",
     "oxlint": "npx oxlint@latest",
     "upgrade": "npx npm-check-updates -u",
-    "build-bulma": "sass --load-path=node_modules app/dix.scss app/dix.css",
-    "start": "npm run build-bulma -- --watch"
+    "build-bulma-step1": "sass --load-path=node_modules app/dix.scss app/dix-large.css",
+    "build-bulma-step2": "postcss app/dix-large.css --no-map --output app/dix.css"
   }
 }

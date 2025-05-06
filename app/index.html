@@ -1,1 +1,135 @@
-index-dev.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ffffff">
+    <title>DIX: a Polkadot block explorer</title>
+
+    <link rel="stylesheet" href="/dix.css">
+    <link rel="icon" href="dix.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@200..900&display=swap" rel="stylesheet">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/dix.svg">
+</head>
+<body>
+
+  <svg xmlns="http://www.w3.org/2000/svg" style="display: none;" id="icons"></svg>
+  <nav class="level is-mobile mb-0 mr-3" id="nav"></nav>
+
+  <div class="hero is-small is-link">
+      <p class="title">Your data</p>
+  </div>
+
+  <div class="grid m-5">
+    <div class="cell">
+      <a class="box yourdata" href="/balances.html" id="call-balances">
+	<p class="is-size-6 has-text-weight-bold">Balances</p>
+	<p class="is-size-7">Check your account!</p>
+      </a>
+    </div>
+    <div class="cell">
+      <a class="box yourdata" href="/staking.html" id="call-staking">
+	<p class="is-size-6 has-text-weight-bold">Staking</p>
+	<p class="is-size-7">Earnings?</p>
+      </a>
+    </div>
+  </div>
+
+  <div class="hero is-small is-warning">
+    <div class="hero is-small-body">
+      <p class="title">Polkadot</p>
+    </div>
+  </div>
+
+  <div class="grid m-5">
+    <div class="cell">
+      <a class="box polkadotdata" href="/blocks.html?relay=polkadot&chain=polkadot">
+	<p class="is-size-6 has-text-weight-bold">Polkadot</p>
+	<p class="is-size-7">The mighty!</p>
+      </a>
+    </div>
+    <div class="cell">
+      <a class="box polkadotdata" href="/blocks.html?relay=polkadot&chain=assethub">
+      <p class="is-size-6 has-text-weight-bold">AssetHub</p>
+      <p class="is-size-7">The Hub</p>
+      </a>
+    </div>
+    <div class="cell">
+      <a class="box polkadotdata" href="/blocks.html?relay=polkadot&chain=people">
+	<p class="is-size-6 has-text-weight-bold">People</p>
+	<p class="is-size-7">Who's who!</p>
+      </a>
+    </div>
+    <div class="cell">
+      <a class="box polkadotdata" href="/blocks.html?relay=polkadot&chain=collectives">
+	<p class="is-size-6 has-text-weight-bold">Collectives</p>
+	<p class="is-size-7">Governance</p>
+      </a>
+    </div>
+    <div class="cell">
+      <a class="box polkadotdata" href="/blocks.html?relay=polkadot&chain=frequency">
+	<p class="is-size-6 has-text-weight-bold">Frequency</p>
+	<p class="is-size-7">Social</p>
+      </a>
+    </div>
+    <div class="cell">
+      <a class="box polkadotdata" href="/blocks.html?relay=polkadot&chain=mythos">
+	<p class="is-size-6 has-text-weight-bold">Mythical</p>
+	<p class="is-size-7">Gaming</p>
+      </a>
+    </div>
+  </div>
+
+  <div class="hero is-small is-primary">
+    <div class="hero is-small-body">
+      <p class="title">Kusama</p>
+    </div>
+  </div>
+
+  <div class="grid m-5">
+    <div class="cell">
+      <a class="box kusamadata" href="/blocks.html?relay=kusama&chain=kusama">
+	<p class="is-size-6 has-text-weight-bold">Kusama</p>
+	<p class="is-size-7">Expect Chaos!</p>
+      </a>
+    </div>
+    <div class="cell">
+      <a class="box kusamadata" href="/blocks.html?relay=kusame&chain=assethub">
+      <p class="is-size-6 has-text-weight-bold">AssetHub</p>
+      <p class="is-size-7">The Hub</p>
+      </a>
+    </div>
+    <div class="cell">
+      <a class="box kusamadata" href="/blocks.html?relay=kusama&chain=acurast">
+	<p class="is-size-6 has-text-weight-bold">Accurast</p>
+	<p class="is-size-7">Compute</p>
+      </a>
+    </div>
+  </div>
+
+  <div class="hero is-small is-info">
+    <div class="hero is-small-body">
+      <p class="title">Statistics</p>
+    </div>
+  </div>
+
+  <div class="grid m-5">
+    <div class="cell">
+      <a class="box statsdata" href="/stats.html">
+	<p class="is-size-6 has-text-weight-bold">Overview</p>
+	<p class="is-size-7">The basic</p>
+      </a>
+    </div>
+  </div>
+
+
+
+  <footer class="footer" id="footer"></footer>
+
+  <!-- Load JavaScript modules -->
+  <script type="module" src="index.js"></script>
+</body>
+</html>
