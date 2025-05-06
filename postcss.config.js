@@ -7,10 +7,9 @@ module.exports = {
     plugins: [
         purgecss({
             // file paths to your contents to remove unused styles.
-            content: ['app/*.js', 'app/*.html', 'app/dix-large.css'],
+            content: ['app/*.js', 'app/*.html'],
             // other wise our aria-selected is removed (like with purgecss online)
             dynamicAttributes: ["aria-selected"],
-	    variables: true,
         }),
         pruneVar(), // remove unused css variables
         varCompress(), // compress css variables

@@ -17,7 +17,7 @@ export default defineConfig({
 		maintenance: resolve(__dirname, 'app/maintenance.html'),
 	    },
 	    external: [
-		'/plotly-dotidx.min.js',
+		'/3rdparties/plotly-dotidx.min.js',
 	    ],
 	}
     },
