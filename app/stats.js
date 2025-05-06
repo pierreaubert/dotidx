@@ -1,4 +1,3 @@
-// import Plotly from "plotly.js-dist-min";
 import { updateIcons, updateFooter, updateNav } from './components.js';
 
 function printCompletionRateRelayChain(name, datas) {

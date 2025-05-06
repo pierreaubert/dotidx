@@ -1,4 +1,3 @@
-// import { web3Accounts, web3Enable, web3FromAddress } from './bundle-polkadot-extension-dapp.js';
 import { substrate2polkadot } from './address.js';
 
 export let selectedPolkadotAccount = null;

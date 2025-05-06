@@ -1,7 +1,10 @@
+import {isHex, hexToU8a} from '@polkadot/util';
+import {decodeAddress, encodeAddress} from '@polkadot/util-crypto';
+
 export function isValidSubstrateAddress(address) {
     try {
-        polkadotUtilCrypto.encodeAddress(
-            polkadotUtil.isHex(address) ? polkadotUtil.hexToU8a(address) : polkadotUtilCrypto.decodeAddress(address)
+        encodeAddress(
+            isHex(address) ? hexToU8a(address) : decodeAddress(address)
         );
         return true;
     } catch (error) {
@@ -11,11 +14,11 @@ export function isValidSubstrateAddress(address) {
 }
 
 export function substrate2polkadot(address) {
-    const pubKey = polkadotUtilCrypto.decodeAddress(address);
-    return polkadotUtilCrypto.encodeAddress(pubKey, 0);
+    const pubKey = decodeAddress(address);
+    return encodeAddress(pubKey, 0);
 }
 
 export function substrate2kusama(address) {
-    const pubKey = polkadotUtilCrypto.decodeAddress(address);
-    return polkadotUtilCrypto.encodeAddress(pubKey, 2);
+    const pubKey = decodeAddress(address);
+    return encodeAddress(pubKey, 2);
 }

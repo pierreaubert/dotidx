@@ -1,5 +1,7 @@
 // Set polkadot colors https://polkadot.com/community/brand-hub/
 
+@charset "utf-8";
+
 $pink: #ff2670;
 $lime: #e4ff07;
 $cyan: #0F7777;
@@ -35,11 +37,11 @@ $white: #FFFFFF;
 
 :root {
   @include light.light-theme;
+  @include setup.setup-theme;
 }
 
 // Import the Google Font
-@import
-url("https://fonts.googleapis.com/css2?family=Unbounded:wght@200..900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Unbounded:wght@200..900&display=swap");
 
 .section {
     padding: 2rem 1.5rem;
