@@ -90,7 +90,7 @@ func TestExtractAddressesFromExtrinsics(t *testing.T) {
 
 func TestExtractAddressesFromRealData(t *testing.T) {
 	// Get all JSON files in the tests/data/blocks directory
-	blockDir := "tests/data/blocks"
+	blockDir := "../tests/data/blocks"
 	files, err := os.ReadDir(blockDir)
 	if err != nil {
 		t.Fatalf("Failed to read blocks directory: %v", err)

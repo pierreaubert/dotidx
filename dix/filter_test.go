@@ -20,51 +20,45 @@ func TestEventsBalanceProcess(t *testing.T) {
 			name:    "Multiple matching events",
 			address: "12e1d9wD5hpQuE7EMP8h78giqB8z7pU8pUrw8RGxuVtozNRZ",
 			Input: func() json.RawMessage {
-				data, err := os.ReadFile("./tests/data/blocks/ex-24731329.json")
+				data, err := os.ReadFile("../tests/data/blocks/ex-24731329.json")
 				if err != nil {
 					t.Fatalf("Failed to read test data: %v", err)
 				}
 				return json.RawMessage(data)
 			}(),
 			Expected: json.RawMessage(`
-[
- {
-    "method": {
-      "pallet": "balances",
-      "method": "Withdraw"
-    },
-    "data": ["12e1d9wD5hpQuE7EMP8h78giqB8z7pU8pUrw8RGxuVtozNRZ", "159154905"]
-  },
-  {
-    "method": {
-      "pallet": "balances",
-      "method": "Transfer"
-    },
-    "data": [
-      "12e1d9wD5hpQuE7EMP8h78giqB8z7pU8pUrw8RGxuVtozNRZ",
-      "16ffFuCAuwuSAbrrmsfTUGaqVt6vyJBcsrk82duBMqdcr6nW",
-      "745044000000"
-    ]
-  },
-  {
-    "method": {
-      "pallet": "balances",
-      "method": "Deposit"
-    },
-    "data": ["12e1d9wD5hpQuE7EMP8h78giqB8z7pU8pUrw8RGxuVtozNRZ", "0"]
-  },
-  {
-    "method": {
-      "pallet": "transactionPayment",
-      "method": "TransactionFeePaid"
-    },
-    "data": [
-      "12e1d9wD5hpQuE7EMP8h78giqB8z7pU8pUrw8RGxuVtozNRZ",
-      "159154905",
-      "0"
-    ]
-  }
-]`),
+[{
+   "events": [
+       {
+	 "data": ["12e1d9wD5hpQuE7EMP8h78giqB8z7pU8pUrw8RGxuVtozNRZ", "159154905"],
+	 "method": {
+	   "pallet": "balances",
+	   "method": "Withdraw"
+	 }
+       },
+       {
+	 "data": [
+	   "12e1d9wD5hpQuE7EMP8h78giqB8z7pU8pUrw8RGxuVtozNRZ",
+	   "16ffFuCAuwuSAbrrmsfTUGaqVt6vyJBcsrk82duBMqdcr6nW",
+	   "745044000000"
+	 ],
+	 "method": {
+	   "pallet": "balances",
+	   "method": "Transfer"
+	 }
+       },
+       {
+         "data": [
+            "12e1d9wD5hpQuE7EMP8h78giqB8z7pU8pUrw8RGxuVtozNRZ",
+            "0"
+         ],
+         "method": {
+            "method": "Deposit",
+            "pallet": "balances"
+         }
+       }
+  ]
+}]`),
 			IsError: false,
 		},
 	}
@@ -75,7 +69,12 @@ func TestEventsBalanceProcess(t *testing.T) {
 			filter := NewEventsBalance(tc.address)
 
 			// Process the input
-			filtered, _, err := filter.Process(tc.Input)
+			var block BlockData
+			err := json.Unmarshal(tc.Input, &block)
+			if err != nil {
+				t.Errorf("Failed to unmarshal input: %v", err)
+			}
+			filtered, _, err := filter.Process(block.Extrinsics)
 
 			// Check error condition
 			if tc.IsError && err == nil {
@@ -88,7 +87,7 @@ func TestEventsBalanceProcess(t *testing.T) {
 			// If we expect no error, check the output
 			if !tc.IsError {
 				// Compare the actual output with the expected output
-				var actual, expected interface{}
+				var actual, expected any
 				if err := json.Unmarshal(filtered, &actual); err != nil {
 					t.Fatalf("Failed to unmarshal actual result: %v", err)
 				}
