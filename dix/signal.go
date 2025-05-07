@@ -1,4 +1,4 @@
-package dotidx
+package dix
 
 import (
 	"context"

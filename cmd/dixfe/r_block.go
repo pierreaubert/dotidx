@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 
-	dix "github.com/pierreaubert/dotidx"
+	"github.com/pierreaubert/dotidx/dix"
 )
 
 func (f *Frontend) handleBlock(w http.ResponseWriter, r *http.Request) {

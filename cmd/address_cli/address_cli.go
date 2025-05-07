@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	dix "github.com/pierreaubert/dotidx"
+	"github.com/pierreaubert/dotidx/dix"
 )
 
 func main() {

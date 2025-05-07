@@ -11,7 +11,7 @@ import (
 	"strings"
 	"text/template"
 
-	dix "github.com/pierreaubert/dotidx"
+	"github.com/pierreaubert/dotidx/dix"
 )
 
 func main() {

@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	dix "github.com/pierreaubert/dotidx"
+	"github.com/pierreaubert/dotidx/dix"
 )
 
 func (f *Frontend) handleBalances(w http.ResponseWriter, r *http.Request) {

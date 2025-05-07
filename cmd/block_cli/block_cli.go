@@ -23,7 +23,7 @@ import (
 	ss58 "github.com/itering/substrate-api-rpc/util/ss58"
 	"github.com/itering/substrate-api-rpc/websocket"
 
-	dix "github.com/pierreaubert/dotidx"
+	"github.com/pierreaubert/dotidx/dix"
 )
 
 // Define structs based on typical JSON RPC responses if not provided by the library

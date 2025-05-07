@@ -1,11 +1,9 @@
-import {isHex, hexToU8a} from '@polkadot/util';
-import {decodeAddress, encodeAddress} from '@polkadot/util-crypto';
+import { isHex, hexToU8a } from '@polkadot/util';
+import { decodeAddress, encodeAddress } from '@polkadot/util-crypto';
 
 export function isValidSubstrateAddress(address) {
     try {
-        encodeAddress(
-            isHex(address) ? hexToU8a(address) : decodeAddress(address)
-        );
+        encodeAddress(isHex(address) ? hexToU8a(address) : decodeAddress(address));
         return true;
     } catch (error) {
         console.log('invalid address: ' + address + ' ' + error);

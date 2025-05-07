@@ -1,6 +1,6 @@
 // copy pasted from substrate-api-rpc Apache 2
 
-package dotidx
+package dix
 
 import (
 	"encoding/hex"

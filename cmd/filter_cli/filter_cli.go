@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	dix "github.com/pierreaubert/dotidx"
 	"io/ioutil"
 	"log"
+
+	"github.com/pierreaubert/dotidx/dix"
 )
 
 func readJSONFile(filePath string) (map[string]interface{}, error) {

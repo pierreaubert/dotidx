@@ -11,7 +11,7 @@ import (
 
 	_ "github.com/lib/pq"
 
-	dix "github.com/pierreaubert/dotidx"
+	"github.com/pierreaubert/dotidx/dix"
 )
 
 func main() {

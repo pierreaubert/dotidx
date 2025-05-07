@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	dix "github.com/pierreaubert/dotidx"
+	"github.com/pierreaubert/dotidx/dix"
 )
 
 type CompletionRateResponse struct {

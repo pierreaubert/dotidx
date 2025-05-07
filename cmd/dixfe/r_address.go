@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	dix "github.com/pierreaubert/dotidx"
+	"github.com/pierreaubert/dotidx/dix"
 )
 
 type BlocksResponse struct {

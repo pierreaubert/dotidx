@@ -1,4 +1,4 @@
-package dotidx
+package dix
 
 //goland:noinspection Annotator,Annotator,Annotator,Annotator,Annotator,Annotator,Annotator,Annotator
 import (

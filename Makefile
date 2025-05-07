@@ -41,7 +41,9 @@ fmt:
 	go fmt ./...
 	npm run format
 
-app: .PHONY
+.PHONY: app
+
+app:
 	npm run build-sass
 	cp app/dix-large.css app/dix.css
 	npm run build

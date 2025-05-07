@@ -1,4 +1,4 @@
-package dotidx
+package dix
 
 import (
 	"database/sql"
@@ -414,6 +414,8 @@ func (s *SQLDatabase) CreateTable(relayChain, chain, firstTimestamp, lastTimesta
 
 // TODO: adapt to the new partionning
 // when tables are full (a month) they are immutable so we can write the index once and forall
+// this index is very large and costly, currently on hold
+// it is significanlty faster to grep in the FE
 func (s *SQLDatabase) CreateIndex(relayChain, chain string) error {
 	blocksTable := GetBlocksTableName(relayChain, chain)
 
