@@ -51,12 +51,16 @@ function createStakingGraph(graphData, graphDiv) {
 
     let cummulativeRewards = 0;
     const rewards = graphData.map((item) => {
-        cummulativeRewards += item.rewards;
+	let reward = 0.0;
+	if (item.rewards && !Number.isNaN(item.rewards)) {
+	    reward = item.rewards;
+            cummulativeRewards += item.rewards;
+	}
         return {
             x: item.date,
-            y: item.rewards,
+            y: reward,
             z: cummulativeRewards,
-            text: `Date: ${item.date.toLocaleDateString()}<br>Staking: ${item.rewards}<br>Day change: ${item.rewards}<br>Transactions: ${item.count}`,
+            text: `Date: ${item.date.toLocaleDateString()}<br>Staking: ${reward}<br>Day change: ${reward}<br>Transactions: ${item.count}`,
         };
     });
 
