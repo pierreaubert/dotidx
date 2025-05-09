@@ -1,11 +1,14 @@
 package dix
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -26,6 +29,8 @@ type Database interface {
 	Close() error
 	UpdateMaterializedTables(relayChain, chain string) error
 	GetDatabaseInfo() ([]DatabaseInfo, error)
+	ExecuteNamedQuery(ctx context.Context, relayChain, chain, queryName string, year, month int, params ...interface{}) (*sql.Rows, error)
+	ExecuteAndStoreNamedQuery(ctx context.Context, relayChain, chain, queryName string, year, month int, params ...interface{}) error
 }
 
 // DBPoolConfig contains the configuration for the database connection pool
@@ -41,6 +46,80 @@ const fastTablespaceRoot = "fast"
 const fastTablespaceNumber = 4
 const slowTablespaceRoot = "slow"
 const slowTablespaceNumber = 6
+const SQLDatabaseSchemaVersion = 2
+const monthlyQueryResultsTable = "dotidx_monthly_query_results"
+
+type SQLDatabase struct {
+	db      *sql.DB
+	metrics *Metrics
+	poolCfg DBPoolConfig
+
+	materializedTicker *time.Ticker
+}
+
+type NamedQuery struct {
+	Name        string
+	SQLTemplate string
+	Description string
+}
+
+var (
+	queryRegistry = make(map[string]NamedQuery)
+	registryMutex = &sync.RWMutex{}
+)
+
+func RegisterQuery(name, sqlTemplate, description string) error {
+	registryMutex.Lock()
+	defer registryMutex.Unlock()
+	if _, exists := queryRegistry[name]; exists {
+		return fmt.Errorf("query with name '%s' already registered", name)
+	}
+	queryRegistry[name] = NamedQuery{
+		Name:        name,
+		SQLTemplate: sqlTemplate,
+		Description: description,
+	}
+	log.Printf("Registered query: %s - %s", name, description)
+	return nil
+}
+
+func GetBlocksTableName(relayChain, chain string) string {
+	chainName := sanitizeChainName(relayChain, chain)
+	return fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(relayChain), chainName)
+}
+
+func GetBlocksPrimaryKeyName(relayChain, chain string) string {
+	chainName := sanitizeChainName(relayChain, chain)
+	return fmt.Sprintf("blocks_%s_%s", strings.ToLower(relayChain), chainName)
+}
+
+func GetAddressTableName(relayChain, chain string) string {
+	chainName := sanitizeChainName(relayChain, chain)
+	return fmt.Sprintf("%s.address2blocks_%s_%s", schemaName, strings.ToLower(relayChain), chainName)
+}
+
+func GetStatsPerMonthTableName(relayChain, chain string) string {
+	chainName := sanitizeChainName(relayChain, chain)
+	return fmt.Sprintf("%s.stats_per_month_%s_%s", schemaName, strings.ToLower(relayChain), chainName)
+}
+
+func sanitizeChainName(initialRelaychainName, initialChainName string) string {
+	chainName := strings.ToLower(initialChainName)
+	relaychainName := strings.ToLower(initialRelaychainName)
+
+	var result strings.Builder
+	for _, char := range chainName {
+		if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') {
+			result.WriteRune(char)
+		}
+	}
+	chainName = result.String()
+
+	if initialChainName != initialRelaychainName && chainName != relaychainName {
+		chainName = strings.ReplaceAll(chainName, relaychainName, "")
+	}
+	return chainName
+}
 
 func DefaultDBPoolConfig() DBPoolConfig {
 	return DBPoolConfig{
@@ -51,20 +130,6 @@ func DefaultDBPoolConfig() DBPoolConfig {
 	}
 }
 
-// version of schema for upgrade
-const SQLDatabaseSchemaVersion = 2
-
-// SQLDatabase implements Database using SQL
-type SQLDatabase struct {
-	db      *sql.DB
-	metrics *Metrics
-	poolCfg DBPoolConfig
-
-	// continous queries
-	materializedTicker *time.Ticker
-}
-
-// NewSQLDatabase creates a new Database instance
 func NewSQLDatabaseWithDB(db *sql.DB) *SQLDatabase {
 	return NewSQLDatabaseWithPool(
 		db,
@@ -88,21 +153,38 @@ func NewSQLDatabase(config MgrConfig) *SQLDatabase {
 
 // NewSQLDatabaseWithPool creates a new Database instance with custom connection pool settings
 func NewSQLDatabaseWithPool(db *sql.DB, poolCfg DBPoolConfig) *SQLDatabase {
-	// Configure connection pool
 	db.SetMaxOpenConns(poolCfg.MaxOpenConns)
 	db.SetMaxIdleConns(poolCfg.MaxIdleConns)
 	db.SetConnMaxLifetime(poolCfg.ConnMaxLifetime)
 	db.SetConnMaxIdleTime(poolCfg.ConnMaxIdleTime)
 
-	return &SQLDatabase{
+	s := &SQLDatabase{
 		db:                 db,
 		materializedTicker: time.NewTicker(15 * time.Minute),
 		metrics:            NewMetrics("Postgres"),
 		poolCfg:            poolCfg,
 	}
+
+	err := RegisterQuery(
+		"count_blocks_by_author",
+		`SELECT author_id, COUNT(*) as block_count FROM %s WHERE EXTRACT(YEAR FROM created_at) = $1 AND EXTRACT(MONTH FROM created_at) = $2 AND author_id = $3 GROUP BY author_id;`,
+		"Counts blocks produced by a specific author in a given month and year.",
+	)
+	if err != nil {
+		log.Printf("Error registering query 'count_blocks_by_author': %v", err)
+	}
+	err = RegisterQuery(
+		"total_blocks_in_month",
+		`SELECT COUNT(*) as total_blocks FROM %s WHERE EXTRACT(YEAR FROM created_at) = $1 AND EXTRACT(MONTH FROM created_at) = $2;`,
+		"Counts total blocks in a given month and year.",
+	)
+	if err != nil {
+		log.Printf("Error registering query 'total_blocks_in_month': %v", err)
+	}
+
+	return s
 }
 
-// Close closes the database connection pool
 func (s *SQLDatabase) Close() error {
 	return s.db.Close()
 }
@@ -121,59 +203,17 @@ func (s *SQLDatabase) DoUpgrade(relayChain, chain string) error {
 		return fmt.Errorf("error creating table: %w", err)
 	}
 
+	if err := s.CreateTableMonthlyQueryResults(); err != nil {
+		return fmt.Errorf("error creating monthly query results table: %w", err)
+	}
+
 	return nil
-}
-
-// sanitizeChainName removes non-alphanumeric characters and the relaychain name from the chain name
-func sanitizeChainName(initialRelaychainName, initialChainName string) string {
-	chainName := strings.ToLower(initialChainName)
-	relaychainName := strings.ToLower(initialRelaychainName)
-
-	// Remove non-alphanumeric characters (like hyphens)
-	var result strings.Builder
-	for _, char := range chainName {
-		if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') {
-			result.WriteRune(char)
-		}
-	}
-	chainName = result.String()
-
-	// Remove relaychain name if it's included in the chain name
-	if initialChainName != initialRelaychainName && chainName != relaychainName {
-		chainName = strings.ReplaceAll(chainName, relaychainName, "")
-	}
-	return chainName
-}
-
-func GetBlocksTableName(relayChain, chain string) (name string) {
-	chainName := sanitizeChainName(relayChain, chain)
-	name = fmt.Sprintf("%s.blocks_%s_%s", schemaName, strings.ToLower(relayChain), chainName)
-	return
-}
-
-func GetBlocksPrimaryKeyName(relayChain, chain string) (name string) {
-	chainName := sanitizeChainName(relayChain, chain)
-	name = fmt.Sprintf("blocks_%s_%s", strings.ToLower(relayChain), chainName)
-	return
-}
-
-func GetAddressTableName(relayChain, chain string) (name string) {
-	chainName := sanitizeChainName(relayChain, chain)
-	name = fmt.Sprintf("%s.address2blocks_%s_%s", schemaName, strings.ToLower(relayChain), chainName)
-	return
-}
-
-func GetStatsPerMonthTableName(relayChain, chain string) (name string) {
-	chainName := sanitizeChainName(relayChain, chain)
-	name = fmt.Sprintf("%s.stats_per_month_%s_%s", schemaName, strings.ToLower(relayChain), chainName)
-	return
 }
 
 func (s *SQLDatabase) CreateTableBlocks(relayChain, chain string) error {
 	blocksTable := GetBlocksTableName(relayChain, chain)
 	blocksPK := GetBlocksPrimaryKeyName(relayChain, chain)
 
-	// Create the blocks table
 	template := fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %[1]s
 (
@@ -216,10 +256,9 @@ func (s *SQLDatabase) CreateTableBlocksPartitions(relayChain, chain, firstTimest
 	if firstTimestamp != "" {
 		firstTime, err := time.Parse("2000-01-01 00:00:00", firstTimestamp)
 		if err == nil {
-			return fmt.Errorf("Parsing time failed %w", err)
+			_, firstMonthAsMonth, _ := firstTime.Date()
+			firstMonth = int(firstMonthAsMonth) - 1
 		}
-		_, firstMonthAsMonth, _ := firstTime.Date()
-		firstMonth = int(firstMonthAsMonth) - 1
 	}
 
 	// Spread by month across the partition
@@ -373,8 +412,6 @@ ON CONFLICT (relay_chain, chain) DO NOTHING;
 		sanitizeChainName(relayChain, chain),
 	)
 
-	// log.Printf("%s", inserts)
-
 	if _, err := s.db.Exec(inserts); err != nil {
 		log.Printf("sql %s", inserts)
 		return fmt.Errorf("error failed to create insert in dotidx: %w", err)
@@ -478,7 +515,6 @@ func (s *SQLDatabase) Save(items []BlockData, relayChain, chain string) error {
 			"ON CONFLICT (address, block_id) DO NOTHING",
 		address2blocksTable)
 
-	// Begin transaction
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("error beginning transaction: %w", err)
@@ -492,12 +528,9 @@ func (s *SQLDatabase) Save(items []BlockData, relayChain, chain string) error {
 		}
 	}()
 
-	// Insert items directly without using prepared statements
 	for _, item := range items {
 		ts, err := ExtractTimestamp(item.Extrinsics)
 		if err != nil {
-			// log.Printf("warning: blockID %s could not find timestamp %v", item.ID, err)
-			// faking it
 			id, _ := strconv.ParseInt(item.ID, 10, 32)
 			milli := id % 1000
 			sec := (id / 1000) % 60
@@ -506,7 +539,6 @@ func (s *SQLDatabase) Save(items []BlockData, relayChain, chain string) error {
 			ts = fmt.Sprintf("2000-01-01 %02d:%02d:%02d.%04d", hour, min, sec, milli)
 		}
 
-		// Insert into blocks table using direct execution
 		_, err = tx.Exec(
 			blocksInsertQuery,
 			item.ID,
@@ -526,14 +558,12 @@ func (s *SQLDatabase) Save(items []BlockData, relayChain, chain string) error {
 			return fmt.Errorf("error inserting into blocks table: %w", err)
 		}
 
-		// Extract addresses from extrinsics
 		addresses, err := extractAddressesFromExtrinsics(item.Extrinsics)
 		if err != nil {
 			log.Printf("warning: error extracting addresses from extrinsics: %v", err)
 			continue
 		}
 
-		// Insert into address2blocks table
 		for _, address := range addresses {
 			_, err = tx.Exec(addressInsertQuery, address, item.ID)
 			if err != nil {
@@ -542,7 +572,6 @@ func (s *SQLDatabase) Save(items []BlockData, relayChain, chain string) error {
 		}
 	}
 
-	// Commit transaction
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("error committing transaction: %w", err)
 	}
@@ -550,22 +579,17 @@ func (s *SQLDatabase) Save(items []BlockData, relayChain, chain string) error {
 	return nil
 }
 
-// GetExistingBlocks retrieves a list of block IDs that already exist in the database
 func (s *SQLDatabase) GetExistingBlocks(relayChain, chain string, startRange, endRange int) (map[int]bool, error) {
-	// Create blocks table name
 	blocksTable := GetBlocksTableName(relayChain, chain)
 
-	// Query for existing blocks - explicitly create a simple query without multiple statements
 	query := fmt.Sprintf("SELECT block_id FROM %s WHERE block_id BETWEEN $1 AND $2", blocksTable)
 
-	// Execute the query directly without using getQueryTemplate to avoid potential issues with multiple statements
 	rows, err := s.db.Query(query, startRange, endRange)
 	if err != nil {
 		return nil, fmt.Errorf("error querying for existing blocks: %w", err)
 	}
 	defer rows.Close()
 
-	// Create map of existing blocks
 	existingBlocks := make(map[int]bool)
 	for rows.Next() {
 		var blockID int
@@ -622,4 +646,136 @@ func (s *SQLDatabase) GetDatabaseInfo() ([]DatabaseInfo, error) {
 		infos = append(infos, info)
 	}
 	return infos, nil
+}
+
+func (s *SQLDatabase) ExecuteNamedQuery(ctx context.Context, relayChain, chain, queryName string, year, month int, params ...interface{}) (*sql.Rows, error) {
+	registryMutex.RLock()
+	namedQuery, exists := queryRegistry[queryName]
+	registryMutex.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("query with name '%s' not found in registry", queryName)
+	}
+
+	blocksTable := GetBlocksTableName(relayChain, chain)
+	finalSQL := fmt.Sprintf(namedQuery.SQLTemplate, pqSanitizeIdentifier(blocksTable))
+
+	allParams := make([]interface{}, 0, len(params)+2)
+	allParams = append(allParams, year)
+	allParams = append(allParams, month)
+	allParams = append(allParams, params...)
+
+	return s.db.QueryContext(ctx, finalSQL, allParams...)
+}
+
+func (s *SQLDatabase) ExecuteAndStoreNamedQuery(ctx context.Context, relayChain, chain, queryName string, year, month int, params ...interface{}) error {
+	rows, err := s.ExecuteNamedQuery(ctx, relayChain, chain, queryName, year, month, params...)
+	if err != nil {
+		return fmt.Errorf("failed to execute named query '%s': %w", queryName, err)
+	}
+	defer rows.Close()
+
+	jsonData, err := rowsToJSON(rows)
+	if err != nil {
+		return fmt.Errorf("failed to convert results of query '%s' to JSON: %w", queryName, err)
+	}
+
+	if err := s.StoreMonthlyQueryResult(ctx, relayChain, chain, queryName, year, month, jsonData); err != nil {
+		return fmt.Errorf("failed to store results of query '%s': %w", queryName, err)
+	}
+
+	log.Printf("Successfully executed and stored results for query '%s' for %s/%s - %d/%d", queryName, relayChain, chain, year, month)
+	return nil
+}
+
+func (s *SQLDatabase) StoreMonthlyQueryResult(ctx context.Context, relayChain, chain, queryName string, year, month int, jsonData []byte) error {
+	query := fmt.Sprintf(`
+        INSERT INTO %s (relay_chain, chain, query_name, year, month, results, last_updated)
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        ON CONFLICT (relay_chain, chain, query_name, year, month)
+        DO UPDATE SET results = EXCLUDED.results, last_updated = NOW();`,
+		monthlyQueryResultsTable,
+	)
+
+	_, err := s.db.ExecContext(ctx, query, relayChain, chain, queryName, year, month, jsonData)
+	if err != nil {
+		return fmt.Errorf("error storing query results for '%s' into %s: %w", queryName, monthlyQueryResultsTable, err)
+	}
+	return nil
+}
+
+func (s *SQLDatabase) CreateTableMonthlyQueryResults() error {
+	query := fmt.Sprintf(`
+    CREATE TABLE IF NOT EXISTS %s (
+        relay_chain TEXT NOT NULL,
+        chain TEXT NOT NULL,
+        query_name TEXT NOT NULL,
+        year INTEGER NOT NULL,
+        month INTEGER NOT NULL,
+        results JSONB,
+        last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (relay_chain, chain, query_name, year, month)
+    );`, monthlyQueryResultsTable)
+
+	_, err := s.db.Exec(query)
+	if err != nil {
+		return fmt.Errorf("error creating %s table: %w", monthlyQueryResultsTable, err)
+	}
+	log.Printf("Ensured table %s exists", monthlyQueryResultsTable)
+	return nil
+}
+
+func pqSanitizeIdentifier(identifier string) string {
+	return `"` + strings.ReplaceAll(identifier, `"`, `""`) + `"`
+}
+
+func rowsToJSON(rows *sql.Rows) ([]byte, error) {
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get columns: %w", err)
+	}
+	count := len(columns)
+	tableData := make([]map[string]interface{}, 0)
+
+	for rows.Next() {
+		values := make([]interface{}, count)
+		valuePtrs := make([]interface{}, count)
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		entry := make(map[string]interface{})
+		for i, col := range columns {
+			val := values[i]
+
+			b, ok := val.([]byte)
+			if ok {
+				entry[col] = string(b) // Convert []byte to string for JSON
+			} else {
+				entry[col] = val
+			}
+		}
+		tableData = append(tableData, entry)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	jsonData, err := json.Marshal(tableData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal data to JSON: %w", err)
+	}
+	return jsonData, nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

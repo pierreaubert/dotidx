@@ -63,8 +63,8 @@ func (m *Bucket) RecordLatency(start time.Time, count int, err error) {
 
 	if count > 0 {
 		relativeDuration := time.Duration(int64(duration) / int64(count))
-		m.minTime = min(relativeDuration, m.minTime)
-		m.maxTime = max(relativeDuration, m.maxTime)
+		m.minTime = minDuration(relativeDuration, m.minTime)
+		m.maxTime = maxDuration(relativeDuration, m.maxTime)
 	}
 }
 
@@ -191,4 +191,18 @@ func CalculatePercentile(durations []time.Duration, percentile int) time.Duratio
 		pIndex = len(sortedDurations) - 1
 	}
 	return sortedDurations[pIndex]
+}
+
+func minDuration(a, b time.Duration) time.Duration {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func maxDuration(a, b time.Duration) time.Duration {
+	if a > b {
+		return a
+	}
+	return b
 }

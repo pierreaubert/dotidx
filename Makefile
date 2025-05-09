@@ -17,11 +17,16 @@ mgr:
 	cd cmd/dixmgr && go fmt
 	go build -o bin/dixmgr cmd/dixmgr/dixmgr.go
 
+watcher:
+	cd cmd/dixwatcher && go vet
+	cd cmd/dixwatcher && go fmt
+	go build -o bin/dixwatcher cmd/dixwatcher/dixwatcher.go
+
 cli:
 	go build -o bin/filter_cli cmd/filter_cli/filter_cli.go
 	go build -o bin/block_cli cmd/block_cli/block_cli.go
 
-bin: fe mgr cli live
+bin: fe mgr cli live watcher
 	go build -o bin/dixbatch cmd/dixbatch/dixbatch.go
 	go build -o bin/dixcron cmd/dixcron/dixcron.go
 
