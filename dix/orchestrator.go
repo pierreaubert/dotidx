@@ -331,7 +331,7 @@ func (sm *ServiceManager) checkAndEnsureServiceActive(ctx context.Context, unitN
 	}
 
 	if updatedActiveState != "active" {
-	    log.Printf("Service %s still not active (state: %s) after start attempt.", unitName, updatedActiveState)
+		log.Printf("Service %s still not active (state: %s) after start attempt.", unitName, updatedActiveState)
 	}
 
 	return updatedActiveState == "active", nil

@@ -26,7 +26,7 @@ type MgrConfig struct {
 	Parachains    map[string]map[string]ParaChainConfig `toml:"parachains"`
 	Filesystem    FilesystemConfig                      `toml:"filesystem"`
 	Monitoring    MonitoringConfig                      `toml:"monitoring"`
-	Watcher       OrchestratorSettings                 `toml:"watcher"`
+	Watcher       OrchestratorSettings                  `toml:"watcher"`
 }
 
 type DotidxDB struct {
@@ -96,7 +96,7 @@ type MonitoringConfig struct {
 type OrchestratorSettings struct {
 	WatchIntervalSeconds    int `toml:"watch_interval_seconds"`
 	MaxRestarts             int `toml:"max_restarts"`
-	RestartBackoffSeconds int `toml:"restart_backoff_seconds"`
+	RestartBackoffSeconds   int `toml:"restart_backoff_seconds"`
 	OperationTimeoutSeconds int `toml:"operation_timeout_seconds"`
 }
 

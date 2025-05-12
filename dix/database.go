@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"iter"
 	"log"
+	"maps"
 	"strconv"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 )
 
@@ -25,12 +28,13 @@ type Database interface {
 	GetExistingBlocks(relayChain, chain string, startRange, endRange int) (map[int]bool, error)
 	Ping() error
 	GetStats() *MetricsStats
-	DoUpgrade(relayChain, chain string) error
+	DoUpgrade() error
 	Close() error
 	UpdateMaterializedTables(relayChain, chain string) error
 	GetDatabaseInfo() ([]DatabaseInfo, error)
-	ExecuteNamedQuery(ctx context.Context, relayChain, chain, queryName string, year, month int, params ...interface{}) (*sql.Rows, error)
-	ExecuteAndStoreNamedQuery(ctx context.Context, relayChain, chain, queryName string, year, month int, params ...interface{}) error
+	ReadTimeNamedQuery(ctx context.Context, relayChain, chain, queryName string, year, month int) (time.Time, error)
+	ExecuteNamedQuery(ctx context.Context, relayChain, chain, queryName string, year, month int) (SqlResult, error)
+	ExecuteAndStoreNamedQuery(ctx context.Context, relayChain, chain, queryName string, year, month int) error
 }
 
 // DBPoolConfig contains the configuration for the database connection pool
@@ -47,7 +51,7 @@ const fastTablespaceNumber = 4
 const slowTablespaceRoot = "slow"
 const slowTablespaceNumber = 6
 const SQLDatabaseSchemaVersion = 2
-const monthlyQueryResultsTable = "dotidx_monthly_query_results"
+const monthlyQueryResultsTable = "chain.dotidx_monthly_query_results"
 
 type SQLDatabase struct {
 	db      *sql.DB
@@ -59,9 +63,18 @@ type SQLDatabase struct {
 
 type NamedQuery struct {
 	Name        string
-	SQLTemplate string
+	SQLTemplate *template.Template
 	Description string
 }
+
+type NamedQueryParameters struct {
+	Relaychain string
+	Chain      string
+	Year       int
+	Month      int
+}
+
+type SqlResult []map[string]interface{}
 
 var (
 	queryRegistry = make(map[string]NamedQuery)
@@ -74,9 +87,13 @@ func RegisterQuery(name, sqlTemplate, description string) error {
 	if _, exists := queryRegistry[name]; exists {
 		return fmt.Errorf("query with name '%s' already registered", name)
 	}
+	tmpl, err := template.New(name).Parse(sqlTemplate)
+	if err != nil {
+		return err
+	}
 	queryRegistry[name] = NamedQuery{
 		Name:        name,
-		SQLTemplate: sqlTemplate,
+		SQLTemplate: tmpl,
 		Description: description,
 	}
 	log.Printf("Registered query: %s - %s", name, description)
@@ -165,23 +182,6 @@ func NewSQLDatabaseWithPool(db *sql.DB, poolCfg DBPoolConfig) *SQLDatabase {
 		poolCfg:            poolCfg,
 	}
 
-	err := RegisterQuery(
-		"count_blocks_by_author",
-		`SELECT author_id, COUNT(*) as block_count FROM %s WHERE EXTRACT(YEAR FROM created_at) = $1 AND EXTRACT(MONTH FROM created_at) = $2 AND author_id = $3 GROUP BY author_id;`,
-		"Counts blocks produced by a specific author in a given month and year.",
-	)
-	if err != nil {
-		log.Printf("Error registering query 'count_blocks_by_author': %v", err)
-	}
-	err = RegisterQuery(
-		"total_blocks_in_month",
-		`SELECT COUNT(*) as total_blocks FROM %s WHERE EXTRACT(YEAR FROM created_at) = $1 AND EXTRACT(MONTH FROM created_at) = $2;`,
-		"Counts total blocks in a given month and year.",
-	)
-	if err != nil {
-		log.Printf("Error registering query 'total_blocks_in_month': %v", err)
-	}
-
 	return s
 }
 
@@ -189,15 +189,15 @@ func (s *SQLDatabase) Close() error {
 	return s.db.Close()
 }
 
-func (s *SQLDatabase) DoUpgrade(relayChain, chain string) error {
+func (s *SQLDatabase) DoUpgrade() error {
 
 	// create dotidx version table to track migrations
 	_, err := s.db.Exec(`
-    CREATE TABLE IF NOT EXISTS dotidx_version (
-	version_id INTEGER NOT NULL,
-	timestamp TIMESTAMP(4) WITHOUT TIME ZONE,
-        CONSTRAINT dotidx_version_pkey PRIMARY KEY (version_id)
-    )
+CREATE TABLE IF NOT EXISTS dotidx_version (
+    version_id INTEGER NOT NULL,
+    timestamp TIMESTAMP(4) WITHOUT TIME ZONE,
+    CONSTRAINT dotidx_version_pkey PRIMARY KEY (version_id)
+)
         `)
 	if err != nil {
 		return fmt.Errorf("error creating table: %w", err)
@@ -446,6 +446,10 @@ func (s *SQLDatabase) CreateTable(relayChain, chain, firstTimestamp, lastTimesta
 		return fmt.Errorf("error creating materialized table for statistics: %w", err)
 	}
 
+	if err := s.CreateTableMonthlyQueryResults(); err != nil {
+		return fmt.Errorf("error creating monthly table for statistics: %w", err)
+	}
+
 	return nil
 }
 
@@ -648,7 +652,7 @@ func (s *SQLDatabase) GetDatabaseInfo() ([]DatabaseInfo, error) {
 	return infos, nil
 }
 
-func (s *SQLDatabase) ExecuteNamedQuery(ctx context.Context, relayChain, chain, queryName string, year, month int, params ...interface{}) (*sql.Rows, error) {
+func (s *SQLDatabase) ExecuteNamedQuery(ctx context.Context, relayChain, chain, queryName string, year, month int) (SqlResult, error) {
 	registryMutex.RLock()
 	namedQuery, exists := queryRegistry[queryName]
 	registryMutex.RUnlock()
@@ -657,65 +661,154 @@ func (s *SQLDatabase) ExecuteNamedQuery(ctx context.Context, relayChain, chain, 
 		return nil, fmt.Errorf("query with name '%s' not found in registry", queryName)
 	}
 
-	blocksTable := GetBlocksTableName(relayChain, chain)
-	finalSQL := fmt.Sprintf(namedQuery.SQLTemplate, pqSanitizeIdentifier(blocksTable))
+	parameters := NamedQueryParameters{
+		Relaychain: relayChain,
+		Chain:      chain,
+		Year:       year,
+		Month:      month,
+	}
 
-	allParams := make([]interface{}, 0, len(params)+2)
-	allParams = append(allParams, year)
-	allParams = append(allParams, month)
-	allParams = append(allParams, params...)
+	var sqlBuilder strings.Builder
+	if err := namedQuery.SQLTemplate.Execute(&sqlBuilder, parameters); err != nil {
+		return nil, fmt.Errorf("error executing template for query '%s': %w", queryName, err)
+	}
+	sqlString := sqlBuilder.String()
 
-	return s.db.QueryContext(ctx, finalSQL, allParams...)
-}
-
-func (s *SQLDatabase) ExecuteAndStoreNamedQuery(ctx context.Context, relayChain, chain, queryName string, year, month int, params ...interface{}) error {
-	rows, err := s.ExecuteNamedQuery(ctx, relayChain, chain, queryName, year, month, params...)
+	rows, err := s.db.QueryContext(ctx, sqlString)
 	if err != nil {
-		return fmt.Errorf("failed to execute named query '%s': %w", queryName, err)
+		log.Printf("Error executing SQL query '%s'. SQL: %s, Error: %v", queryName, sqlString, err)
+		return nil, fmt.Errorf("error executing SQL query '%s': %w", queryName, err)
 	}
 	defer rows.Close()
 
-	jsonData, err := rowsToJSON(rows)
+	columns, err := rows.Columns()
 	if err != nil {
-		return fmt.Errorf("failed to convert results of query '%s' to JSON: %w", queryName, err)
+		return nil, fmt.Errorf("failed to get columns for query '%s': %w", queryName, err)
+	}
+	count := len(columns)
+	tableData := make(SqlResult, 0)
+
+	for rows.Next() {
+		values := make([]interface{}, count)
+		valuePtrs := make([]interface{}, count)
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, fmt.Errorf("failed to scan row for query '%s': %w", queryName, err)
+		}
+
+		entry := make(map[string]interface{})
+		for i, col := range columns {
+			val := values[i]
+			b, ok := val.([]byte) // Check if value is []byte (common for text, varchar, json, etc.)
+			if ok {
+				entry[col] = string(b) // Convert []byte to string for easier JSON marshalling and general use
+			} else {
+				entry[col] = val
+			}
+		}
+		tableData = append(tableData, entry)
 	}
 
-	if err := s.StoreMonthlyQueryResult(ctx, relayChain, chain, queryName, year, month, jsonData); err != nil {
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error for query '%s': %w", queryName, err)
+	}
+
+	return tableData, nil
+}
+
+func (s *SQLDatabase) ExecuteAndStoreNamedQuery(ctx context.Context, relayChain, chain, queryName string, year, month int) error {
+	results, err := s.ExecuteNamedQuery(ctx, relayChain, chain, queryName, year, month)
+	if err != nil {
+		return fmt.Errorf("failed to execute named query '%s': %w", queryName, err)
+	}
+
+	if err := s.StoreMonthlyQueryResult(ctx, relayChain, chain, queryName, year, month, results); err != nil {
 		return fmt.Errorf("failed to store results of query '%s': %w", queryName, err)
 	}
 
-	log.Printf("Successfully executed and stored results for query '%s' for %s/%s - %d/%d", queryName, relayChain, chain, year, month)
 	return nil
 }
 
-func (s *SQLDatabase) StoreMonthlyQueryResult(ctx context.Context, relayChain, chain, queryName string, year, month int, jsonData []byte) error {
+func (s *SQLDatabase) StoreMonthlyQueryResult(ctx context.Context, relayChain, chain, queryName string, year, month int, result SqlResult) error {
 	query := fmt.Sprintf(`
-        INSERT INTO %s (relay_chain, chain, query_name, year, month, results, last_updated)
-        VALUES ($1, $2, $3, $4, $5, $6, NOW())
-        ON CONFLICT (relay_chain, chain, query_name, year, month)
-        DO UPDATE SET results = EXCLUDED.results, last_updated = NOW();`,
+INSERT INTO
+  %s (relay_chain, chain, query_name, year, month, results, last_updated)
+VALUES
+  ($1, $2, $3, $4, $5, $6, NOW())
+ON CONFLICT
+  (relay_chain, chain, query_name, year, month)
+DO UPDATE SET results = EXCLUDED.results, last_updated = NOW();`,
 		monthlyQueryResultsTable,
 	)
 
-	_, err := s.db.ExecContext(ctx, query, relayChain, chain, queryName, year, month, jsonData)
+	jsonData, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("error marshaling query results for '%s': %w", queryName, err)
+	}
+
+	_, err = s.db.ExecContext(ctx, query, relayChain, chain, queryName, year, month, jsonData)
 	if err != nil {
 		return fmt.Errorf("error storing query results for '%s' into %s: %w", queryName, monthlyQueryResultsTable, err)
 	}
 	return nil
 }
 
+func (s *SQLDatabase) ReadTimeNamedQuery(ctx context.Context, relayChain, chain, queryName string, year, month int) (t time.Time, err error) {
+	query := fmt.Sprintf(`
+SELECT
+  last_updated
+FROM
+  %s
+WHERE
+  relay_chain = '%s'
+  AND chain = '%s'
+  AND query_name = '%s'
+  AND year = %d
+  AND month = %d
+ORDER BY last_updated DESC
+LIMIT 1
+`,
+		monthlyQueryResultsTable,
+		relayChain,
+		chain,
+		queryName,
+		year,
+		month,
+	)
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		// log.Printf("exec with q=%s", query)
+		return time.Time{}, fmt.Errorf("error reading query results for '%s' into %s: %w", queryName, monthlyQueryResultsTable, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		if err = rows.Scan(&t); err != nil {
+			log.Printf("Fist row")
+			return time.Time{}, fmt.Errorf("Cannot scan rows")
+		}
+		// log.Printf("Last updated time for %s: %v", queryName, t)
+		return t, nil
+	}
+	return time.Time{}, nil
+}
+
 func (s *SQLDatabase) CreateTableMonthlyQueryResults() error {
 	query := fmt.Sprintf(`
-    CREATE TABLE IF NOT EXISTS %s (
-        relay_chain TEXT NOT NULL,
-        chain TEXT NOT NULL,
-        query_name TEXT NOT NULL,
-        year INTEGER NOT NULL,
-        month INTEGER NOT NULL,
-        results JSONB,
-        last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (relay_chain, chain, query_name, year, month)
-    );`, monthlyQueryResultsTable)
+CREATE TABLE IF NOT EXISTS %s (
+    relay_chain TEXT NOT NULL,
+    chain TEXT NOT NULL,
+    query_name TEXT NOT NULL,
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    results JSONB,
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (relay_chain, chain, query_name, year, month)
+);`, monthlyQueryResultsTable)
 
 	_, err := s.db.Exec(query)
 	if err != nil {
@@ -773,9 +866,8 @@ func rowsToJSON(rows *sql.Rows) ([]byte, error) {
 	return jsonData, nil
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
+func GetListOfRegisteredQueries() (iter.Seq[NamedQuery], error) {
+	registryMutex.RLock()
+	defer registryMutex.RUnlock()
+	return maps.Values(queryRegistry), nil
 }

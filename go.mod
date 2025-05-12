@@ -4,6 +4,7 @@ go 1.24.1
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
+	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/itering/substrate-api-rpc v0.8.0
 	github.com/lib/pq v1.10.9
 	github.com/pelletier/go-toml/v2 v2.1.1
@@ -14,7 +15,6 @@ require (
 
 require (
 	github.com/ChainSafe/go-schnorrkel v1.1.0 // indirect
-	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/cosmos/go-bip39 v1.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/godbus/dbus/v5 v5.0.4 // indirect
