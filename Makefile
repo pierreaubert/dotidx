@@ -39,7 +39,7 @@ cli:
 bin: fe mgr cli live watcher cron batch
 
 clean:
-	./scripts/cleanup.sh
+	./scripts/git_cleanup.sh
 	go clean
 
 test:
@@ -62,7 +62,7 @@ app:
 	npm run build
 
 update_fe: fe app
-	./scripts/update_fe_dev.sh
+	./scripts/dev/update_fe.sh
 
 
 

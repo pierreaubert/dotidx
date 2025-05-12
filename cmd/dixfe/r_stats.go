@@ -19,19 +19,65 @@ type CompletionRateResponse struct {
 
 func (f *Frontend) getCompletionRate(relaychain, chain string) (float64, int, error) {
 
+	headUrl := fmt.Sprintf("/proxy/%s/%s/blocks/head/header", relaychain, chain)
+
+	req, err := http.NewRequest("GET", headUrl, nil)
+	if err != nil {
+		return 0.0, 0, fmt.Errorf("Failed to create request: %v", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0.0, 0, fmt.Errorf("Failed to execute request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var headHeader map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&headHeader); err != nil {
+		return 0.0, 0, fmt.Errorf("Failed to decode response: %v", err)
+	}
+
+	numberValue, ok := headHeader["number"]
+	if !ok {
+		// The key "number" wasn't even in the map
+		return 0.0, 0, fmt.Errorf("JSON response header missing 'number' field")
+	}
+
+	headID, ok := numberValue.(int)
+	if !ok {
+		// The value was present, but it wasn't a float64
+		// You might want to log the actual type here: log.Printf("Unexpected type for 'number': %T", numberValue)
+		return 0.0, 0, fmt.Errorf("JSON field 'number' is not a numeric type (expected int), got %T", numberValue)
+	}
+
+	if headID == 0 {
+		return 0.0, 0, fmt.Errorf("head ID is 0")
+	}
+
 	query := fmt.Sprintf(
-		`SELECT sum(total*100)/max(max_block_id), max(max_block_id) FROM %s;`,
-		dix.GetStatsPerMonthTableName(relaychain, chain))
+		`
+SELECT
+  sum((results -> 0 -> 'total_blocks')::int)
+FROM
+  chain.dotidx_monthly_query_results
+WHERE
+  relay_chain = '%s'
+AND
+  chain = '%s'
+AND
+  query_name = 'total_blocks_in_month'
+`,
+		relaychain, chain)
 
 	log.Printf("%s", query)
 
-	var percentCompletion float64
-	var headID int
-	err := f.db.QueryRow(query).Scan(&percentCompletion, &headID)
+	var count int
+	err = f.db.QueryRow(query).Scan(&count)
 	if err != nil {
 		return float64(0.0), 0, fmt.Errorf("database query failed: %w", err)
 	}
 
+	percentCompletion := 100.0 * float64(count) / float64(headID)
 	return percentCompletion, headID, nil
 }
 
@@ -63,6 +109,7 @@ func (f *Frontend) handleCompletionRate(w http.ResponseWriter, r *http.Request) 
 		percentCompletion, headID, err := f.getCompletionRate(infos[i].Relaychain, infos[i].Chain)
 		if err != nil {
 			log.Printf("Error getting completion rate: %v", err)
+			continue
 		}
 
 		// Prepare response
