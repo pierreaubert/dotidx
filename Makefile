@@ -17,6 +17,16 @@ mgr:
 	cd cmd/dixmgr && go fmt
 	go build -o bin/dixmgr cmd/dixmgr/dixmgr.go
 
+cron:
+	cd cmd/dixcron && go vet
+	cd cmd/dixcron && go fmt
+	go build -o bin/dixcron cmd/dixcron/dixcron.go
+
+batch:
+	cd cmd/dixbatch && go vet
+	cd cmd/dixbatch && go fmt
+	go build -o bin/dixbatch cmd/dixbatch/dixbatch.go
+
 watcher:
 	cd cmd/dixwatcher && go vet
 	cd cmd/dixwatcher && go fmt
@@ -26,9 +36,7 @@ cli:
 	go build -o bin/filter_cli cmd/filter_cli/filter_cli.go
 	go build -o bin/block_cli cmd/block_cli/block_cli.go
 
-bin: fe mgr cli live watcher
-	go build -o bin/dixbatch cmd/dixbatch/dixbatch.go
-	go build -o bin/dixcron cmd/dixcron/dixcron.go
+bin: fe mgr cli live watcher cron batch
 
 clean:
 	./scripts/cleanup.sh

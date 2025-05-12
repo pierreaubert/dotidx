@@ -2,6 +2,23 @@
 
 A utility for fetching block data from a Polkadot archive node via Sidecar and storing the data in a PostgreSQL database. It is relatively fast only limited by the speed of your disks. It also supports concurrent processing of multiple blocks.
 
+The main attributes are:
+- open source under a permissive LICENSE
+- fast
+- frontend create a vue of the data per feature and not per chain:
+  - most block explorer gives you a view per chain: go to one chain, look at your balance
+  - dix will show you your balances on all the chains by default
+- easy to manage
+  - that's in progress. So far we have
+    - a unique configuration file generates all the configuration you need.
+    - support 1 or N machines
+    - monitoring is included, alerting is built in
+    - systemd manages your services
+- easy to hack:
+  - on purpose, dix is not doing complicated things so you can hack it easily and add your parachain and your features quickly
+  - use very common tools that most sysadmin knows: nginx, systemd, Postgres
+  - a simple web app gives you a good idea on how to start
+
 Quality is currently *beta*. Contributions are very welcome!
 
 ## Features
@@ -9,13 +26,16 @@ Quality is currently *beta*. Contributions are very welcome!
 - Fetches block data from a Polkadot parachain via a sidecar API
 - Stores data into a PostgreSQL database and can use multiple disks sata and ssd.
 - Supports concurrent processing of multiple blocks
+- Extract balances, staking and similar data automatically
 - Demo website at [dotidx.xyz](https://dev.dotidx.xyz/index.html)
 
 ## Requirements
 
 - Go 1.20 or higher
 - PostgreSQL database version 16 or higher
-- Lots of disk space (>= 20TB to index a subset of the parachains)
+- Lots of disk space
+  - >= 20TB to index a subset (±10) of the parachains
+  - >= 100TB to index most parachains
 
 ## Design
 

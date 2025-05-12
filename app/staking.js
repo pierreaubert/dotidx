@@ -51,11 +51,11 @@ function createStakingGraph(graphData, graphDiv) {
 
     let cummulativeRewards = 0;
     const rewards = graphData.map((item) => {
-	let reward = 0.0;
-	if (item.rewards && !Number.isNaN(item.rewards)) {
-	    reward = item.rewards;
+        let reward = 0.0;
+        if (item.rewards && !Number.isNaN(item.rewards)) {
+            reward = item.rewards;
             cummulativeRewards += item.rewards;
-	}
+        }
         return {
             x: item.date,
             y: reward,

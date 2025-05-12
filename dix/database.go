@@ -30,7 +30,6 @@ type Database interface {
 	GetStats() *MetricsStats
 	DoUpgrade() error
 	Close() error
-	UpdateMaterializedTables(relayChain, chain string) error
 	GetDatabaseInfo() ([]DatabaseInfo, error)
 	ReadTimeNamedQuery(ctx context.Context, relayChain, chain, queryName string, year, month int) (time.Time, error)
 	ExecuteNamedQuery(ctx context.Context, relayChain, chain, queryName string, year, month int) (SqlResult, error)
@@ -57,8 +56,6 @@ type SQLDatabase struct {
 	db      *sql.DB
 	metrics *Metrics
 	poolCfg DBPoolConfig
-
-	materializedTicker *time.Ticker
 }
 
 type NamedQuery struct {
@@ -176,10 +173,9 @@ func NewSQLDatabaseWithPool(db *sql.DB, poolCfg DBPoolConfig) *SQLDatabase {
 	db.SetConnMaxIdleTime(poolCfg.ConnMaxIdleTime)
 
 	s := &SQLDatabase{
-		db:                 db,
-		materializedTicker: time.NewTicker(15 * time.Minute),
-		metrics:            NewMetrics("Postgres"),
-		poolCfg:            poolCfg,
+		db:      db,
+		metrics: NewMetrics("Postgres"),
+		poolCfg: poolCfg,
 	}
 
 	return s
@@ -364,30 +360,6 @@ GRANT ALL ON TABLE %[1]s_%1[2]d TO dotidx;
 	return nil
 }
 
-func (s *SQLDatabase) CreateMaterializedTableForStats(relayChain, chain string) error {
-	tableName := GetBlocksTableName(relayChain, chain)
-	statsPerMonthViewName := GetStatsPerMonthTableName(relayChain, chain)
-	query := fmt.Sprintf(`
-		CREATE MATERIALIZED VIEW IF NOT EXISTS %s AS
-                SELECT
-		        date_trunc('month',created_at)::date as date,
-			count(*) as total,
-			min(block_id) as min_block_id,
-			max(block_id) as max_block_id
-		FROM %s
-		GROUP BY date
-		ORDER BY date DESC
-                ;
-	`, statsPerMonthViewName, tableName)
-
-	_, err := s.db.Exec(query)
-	if err != nil {
-		log.Printf("sql %s", query)
-		return fmt.Errorf("error failed to create materialized table for statistics: %w", err)
-	}
-	return nil
-}
-
 func (s *SQLDatabase) CreateDotidxTable(relayChain, chain string) error {
 	query := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s.dotidx (
@@ -440,10 +412,6 @@ func (s *SQLDatabase) CreateTable(relayChain, chain, firstTimestamp, lastTimesta
 
 	if err := s.CreateTableAddress2BlocksPartitions(relayChain, chain); err != nil {
 		return fmt.Errorf("error creating table address2blocks partitions: %w", err)
-	}
-
-	if err := s.CreateMaterializedTableForStats(relayChain, chain); err != nil {
-		return fmt.Errorf("error creating materialized table for statistics: %w", err)
 	}
 
 	if err := s.CreateTableMonthlyQueryResults(); err != nil {
@@ -616,19 +584,6 @@ func (s *SQLDatabase) Ping() error {
 
 func (s *SQLDatabase) GetStats() *MetricsStats {
 	return s.metrics.GetStats()
-}
-
-func (s *SQLDatabase) UpdateMaterializedTables(relayChain, chain string) error {
-
-	template := fmt.Sprintf(`REFRESH MATERIALIZED VIEW %s;`,
-		GetStatsPerMonthTableName(relayChain, chain))
-
-	_, err := s.db.Exec(template)
-	if err != nil {
-		return fmt.Errorf("error creating blocks table: %s %w", template, err)
-	}
-
-	return nil
 }
 
 func (s *SQLDatabase) GetDatabaseInfo() ([]DatabaseInfo, error) {

@@ -46,7 +46,7 @@ func main() {
 	}()
 
 	cronTicker := time.NewTicker(1 * time.Hour)
-	startCron(context.Background(), cronTicker, database)
+	computeIndexedBlocks(context.Background(), cronTicker, database)
 }
 
 func addRegisteredQueries() (err error) {
@@ -167,12 +167,13 @@ func fillRegisteredQueries(ctx context.Context, ticker *time.Ticker, db dix.Data
 	}
 }
 
-func startCron(ctx context.Context, ticker *time.Ticker, db dix.Database) {
+func computeIndexedBlocks(ctx context.Context, ticker *time.Ticker, db dix.Database) {
 	for {
 		select {
 		case <-ctx.Done():
 			break
 		case <-ticker.C:
+			currentYear, currentMonth, _ := time.Now().Date()
 			infos, err := db.GetDatabaseInfo()
 			if err != nil {
 				log.Printf("%v", err)
@@ -180,17 +181,15 @@ func startCron(ctx context.Context, ticker *time.Ticker, db dix.Database) {
 			}
 			for i := range infos {
 				info := infos[i]
-				if err = db.UpdateMaterializedTables(
-					info.Relaychain,
-					info.Chain,
-				); err != nil {
-					log.Printf("Cannot update stats for %s:%s",
-						info.Relaychain,
-						info.Chain,
-					)
-					continue
+				if err := db.ExecuteAndStoreNamedQuery(
+					context.Background(),
+					info.Relaychain, info.Chain,
+					"total_blocks_in_month",
+					currentYear, int(currentMonth)); err != nil {
+					log.Printf("Error executing and storing query '%s' for %s/%s - %d/%d: %v",
+						"total_blocks_in_month", info.Relaychain, info.Chain, currentYear, int(currentMonth), err)
 				}
-				log.Printf("Updated stats for %s:%s", info.Relaychain, info.Chain)
+				log.Printf("Computed total_blocks_in_month for %s/%s - %d/%d", info.Relaychain, info.Chain, currentYear, int(currentMonth))
 			}
 		}
 	}
