@@ -21,11 +21,11 @@ ExecStart=/bin/sh -c '${NODE_BIN} \
     --rpc-cors all \
     --rpc-methods Auto \
     --rpc-external \
-    --prometheus-external \
     --allow-private-ip \
     --port ${NODE_PORT_WS} \
     --rpc-port ${NODE_PORT_RPC} \
     --prometheus-port ${NODE_PROM_PORT} \
+    --prometheus-external \
     --relay-chain-rpc-urls ${NODE_RELAY} \
     --base-path ${NODE_BASE_PATH}'
 Restart=on-failure

@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/pierreaubert/dotidx/dix"
@@ -19,7 +21,7 @@ type CompletionRateResponse struct {
 
 func (f *Frontend) getCompletionRate(relaychain, chain string) (float64, int, error) {
 
-	headUrl := fmt.Sprintf("/proxy/%s/%s/blocks/head/header", relaychain, chain)
+	headUrl := fmt.Sprintf("%s/blocks/head/header", f.sidecars[relaychain][chain])
 
 	req, err := http.NewRequest("GET", headUrl, nil)
 	if err != nil {
@@ -32,22 +34,36 @@ func (f *Frontend) getCompletionRate(relaychain, chain string) (float64, int, er
 	}
 	defer resp.Body.Close()
 
-	var headHeader map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&headHeader); err != nil {
-		return 0.0, 0, fmt.Errorf("Failed to decode response: %v", err)
+	// Check the status code
+	if resp.StatusCode != http.StatusOK {
+		return 0.0, 0, fmt.Errorf("sidecar API returned status code %d", resp.StatusCode)
+	}
+
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0.0, 0, fmt.Errorf("error reading response body for block range: %w", err)
+	}
+
+	var headHeader map[string]any
+	if err = json.Unmarshal(body, &headHeader); err != nil {
+		return 0.0, 0, fmt.Errorf("Failed to unmarshall response: %v", err)
 	}
 
 	numberValue, ok := headHeader["number"]
 	if !ok {
-		// The key "number" wasn't even in the map
 		return 0.0, 0, fmt.Errorf("JSON response header missing 'number' field")
 	}
 
-	headID, ok := numberValue.(int)
+	numberInt, ok := numberValue.(string)
 	if !ok {
-		// The value was present, but it wasn't a float64
-		// You might want to log the actual type here: log.Printf("Unexpected type for 'number': %T", numberValue)
-		return 0.0, 0, fmt.Errorf("JSON field 'number' is not a numeric type (expected int), got %T", numberValue)
+		return 0.0, 0, fmt.Errorf("JSON field 'number' is not (string), got %T", numberValue)
+	}
+
+	headID := 0
+	headID, err = strconv.Atoi(numberInt)
+	if err != nil {
+		return 0.0, 0, fmt.Errorf("Failed to parse number: %v", err)
 	}
 
 	if headID == 0 {
@@ -105,23 +121,15 @@ func (f *Frontend) handleCompletionRate(w http.ResponseWriter, r *http.Request) 
 	responses := make([]CompletionRateResponse, len(infos))
 
 	for i := range infos {
-
-		percentCompletion, headID, err := f.getCompletionRate(infos[i].Relaychain, infos[i].Chain)
-		if err != nil {
-			log.Printf("Error getting completion rate: %v", err)
-			continue
+		if percentCompletion, headID, err := f.getCompletionRate(infos[i].Relaychain, infos[i].Chain); err == nil {
+			response := CompletionRateResponse{
+				RelayChain:        infos[i].Relaychain,
+				Chain:             infos[i].Chain,
+				PercentCompletion: percentCompletion,
+				HeadID:            headID,
+			}
+			responses[i] = response
 		}
-
-		// Prepare response
-		response := CompletionRateResponse{
-			RelayChain:        infos[i].Relaychain,
-			Chain:             infos[i].Chain,
-			PercentCompletion: percentCompletion,
-			HeadID:            headID,
-		}
-
-		responses[i] = response
-
 	}
 
 	// Set content type and encode response as JSON

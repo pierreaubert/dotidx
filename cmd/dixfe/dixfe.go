@@ -84,14 +84,17 @@ type Frontend struct {
 	// it is for convenience and not having to spin a reverse proxy in dev mode
 	staticPath string
 	// a list of proxys one per chain
-	proxys map[string]map[string]*httputil.ReverseProxy
+	sidecars map[string]map[string]string
+	proxys   map[string]map[string]*httputil.ReverseProxy
 }
 
 // NewFrontend creates a new Frontend instance
 func NewFrontend(database *dix.SQLDatabase, db *sql.DB, config dix.MgrConfig) *Frontend {
 	listenAddr := fmt.Sprintf(`%s:%d`, config.DotidxFE.IP, config.DotidxFE.Port)
+	sidecars := make(map[string]map[string]string)
 	proxys := make(map[string]map[string]*httputil.ReverseProxy)
 	for relay := range config.Parachains {
+		sidecars[relay] = make(map[string]string)
 		proxys[relay] = make(map[string]*httputil.ReverseProxy)
 		for chain := range config.Parachains[relay] {
 			ip := config.Parachains[relay][chain].ChainreaderIP
@@ -99,6 +102,7 @@ func NewFrontend(database *dix.SQLDatabase, db *sql.DB, config dix.MgrConfig) *F
 			remote, _ := url.Parse(fmt.Sprintf("http://%s:%d", ip, port))
 			proxy := httputil.NewSingleHostReverseProxy(remote)
 			proxys[relay][chain] = proxy
+			sidecars[relay][chain] = remote.String()
 		}
 	}
 	return &Frontend{
@@ -108,6 +112,7 @@ func NewFrontend(database *dix.SQLDatabase, db *sql.DB, config dix.MgrConfig) *F
 		listenAddr:     listenAddr,
 		metricsHandler: dix.NewMetrics("Frontend"),
 		staticPath:     config.DotidxFE.StaticPath,
+		sidecars:       sidecars,
 		proxys:         proxys,
 	}
 }
@@ -135,6 +140,7 @@ func (f *Frontend) Start(cancelCtx <-chan struct{}) error {
 	mux.HandleFunc("GET /fe/{relay}/{chain}/blocks/{blockid}", f.handleBlock)
 	// proxy to sidecar
 	mux.HandleFunc("GET /proxy/{relay}/{chain}/accounts/{address}/balance-info", f.handleProxy)
+	mux.HandleFunc("GET /proxy/{relay}/{chain}/blocks/head/header", f.handleProxy)
 
 	server := &http.Server{
 		Addr:    f.listenAddr,

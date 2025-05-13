@@ -423,7 +423,7 @@ func generateScriptsFromTemplate(config dix.MgrConfig, sourceDir, destDir string
 
 func processFileAsTemplate(src, dst string, config *dix.MgrConfig) error {
 
-	if strings.HasSuffix(dst, "~") || strings.HasPrefix(dst, "#") || strings.HasPrefix(dst, ".#") {
+	if strings.HasSuffix(dst, "~") || strings.HasSuffix(dst, "#") || strings.HasPrefix(dst, ".#") {
 		fmt.Printf("Skipping backup file: %s\n", dst)
 		return nil
 	}
@@ -470,7 +470,7 @@ func processFileAsTemplate(src, dst string, config *dix.MgrConfig) error {
 
 func copyFile(src, dst string) error {
 
-	if strings.HasSuffix(dst, "~") || strings.HasPrefix(dst, "#") || strings.HasPrefix(dst, ".#") {
+	if strings.HasSuffix(dst, "~") || strings.HasSuffix(dst, "#") || strings.HasPrefix(dst, ".#") {
 		fmt.Printf("Skipping backup file: %s\n", dst)
 		return nil
 	}
