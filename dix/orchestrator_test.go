@@ -22,7 +22,7 @@ func TestNewServiceManager(t *testing.T) {
 			return newMockDbusConnection(), nil // Use the constructor for our mock
 		}
 
-		cfg := ManagerConfig{
+		cfg := OrchestratorConfig{
 			WatchInterval:  5 * time.Second,
 			MaxRestarts:    3,
 			RestartBackoff: 1 * time.Second,
@@ -54,7 +54,7 @@ func TestNewServiceManager(t *testing.T) {
 			return nil, expectedErr
 		}
 
-		_, err := NewServiceManager(nil, ManagerConfig{})
+		_, err := NewServiceManager(nil, OrchestratorConfig{})
 		if err == nil {
 			t.Fatalf("NewServiceManager() error = nil, wantErr %v", expectedErr)
 		}
@@ -152,7 +152,7 @@ func TestServiceManager_StartTree(t *testing.T) {
 	ctx, cancelMainTestCtx := context.WithTimeout(context.Background(), 5*time.Second) // Timeout for the whole test
 	defer cancelMainTestCtx()
 
-	cfg := ManagerConfig{
+	cfg := OrchestratorConfig{
 		WatchInterval:    100 * time.Millisecond, // Short interval for testing
 		MaxRestarts:      1,
 		RestartBackoff:   10 * time.Millisecond,

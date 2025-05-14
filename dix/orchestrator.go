@@ -47,31 +47,20 @@ type ServiceNode struct {
 	cancelWatcher context.CancelFunc // To stop the watcher goroutine for this service
 }
 
-// ManagerConfig holds configuration for the ServiceManager
-type ManagerConfig struct {
-	WatchInterval    time.Duration // How often to check service status
-	MaxRestarts      int           // Max consecutive restarts before giving up (can be reset on StatusOk)
-	RestartBackoff   time.Duration // Base duration for restart backoff
-	OperationTimeout time.Duration // Timeout for systemd operations like start/stop/restart
-}
-
-// ServiceManager orchestrates the tree of services
 type ServiceManager struct {
 	RootNodes []*ServiceNode
 	dbusConn  dbusConnInterface
-	config    ManagerConfig
+	config    OrchestratorConfig
 	wg        sync.WaitGroup // To wait for all watchers to complete on shutdown
 }
 
-// NewServiceManager creates a new manager
-// Note: rootNodes and config are now directly using types defined in this 'dix' package.
-func NewServiceManager(rootNodes []*ServiceNode, config ManagerConfig) (*ServiceManager, error) {
+func NewServiceManager(rootNodes []*ServiceNode, config OrchestratorConfig) (*ServiceManager, error) {
 	conn, err := newDbusConnectionFunc() // Returns dbusConnInterface
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to D-Bus: %w", err)
 	}
 	if config.OperationTimeout == 0 {
-		config.OperationTimeout = 30 * time.Second // Default timeout
+		config.OperationTimeout = 30
 	}
 	return &ServiceManager{
 		RootNodes: rootNodes,
@@ -166,7 +155,7 @@ func (sm *ServiceManager) watchService(ctx context.Context, serviceNode *Service
 	serviceNode.lastCheckTime = time.Now()
 	serviceNode.mu.Unlock()
 
-	ticker := time.NewTicker(sm.config.WatchInterval)
+	ticker := time.NewTicker(sm.config.WatchInterval * time.Second)
 	defer ticker.Stop()
 
 	for {
