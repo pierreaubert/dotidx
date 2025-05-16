@@ -1,6 +1,6 @@
 #!/bin/sh
 
-export PG=/polkadot/postgres_data/run
+export PG=/db/postgres_data
 export DUMPDIR=/dotidx/backup
 
 for year in 2019 2020 2021 2022 2023 2024 2025; do
@@ -8,23 +8,28 @@ for year in 2019 2020 2021 2022 2023 2024 2025; do
 	for chain in polkadot assethub people collectives; do
 	    for table in blocks address2blocks; do
 		tablename="chain.${table}_polkadot_${chain}_${year}_${month}"
-		dumpfile=${DUMPDIR}/${tablename}.dump
+		dumpfile=${DUMPDIR}/${tablename}.dump.gz
 		if test ! -f "${dumpfile}"; then
-		    echo "Dumping to $dumpfile"
-		    # no need for compression which is done by zfs
-		    /usr/bin/pg_dump -h ${PG}/run -p 5434 -n chain -t "${tablename}" dotidx > "${dumpfile}"
-      	        fi
+		    /usr/bin/pg_dump -h ${PG}/run -p 5434 -Z 7 -n chain -t "${tablename}" dotidx > "${dumpfile}" 2>&1 > /dev/null
+		    status=$?
+		    if [ $status -ne 0 ]; then
+			echo "Error with dumping $tablename"
+			rm -f "${dumpfile}"
+		    else
+			echo "Dumped to $dumpfile"
+      	            fi
+  	        fi
 	    done
 	done
 	# kusama
-	for chain in kusama assethub kusama; do
+	for chain in kusama assethub acurast; do
 	    for table in blocks address2blocks; do
 		tablename="chain.${table}_kusama_${chain}_${year}_${month}"
-		dumpfile=${DUMPDIR}/${tablename}.dump
+		dumpfile=${DUMPDIR}/${tablename}.dump.gz
 		if test ! -f "${dumpfile}"; then
 		    echo "Dumping to $dumpfile"
 		    # no need for compression which is done by zfs
-		    /usr/bin/pg_dump -h ${PG}/run -p 5434 -n chain -t "${tablename}" dotidx > "${dumpfile}"
+		    /usr/bin/pg_dump -h ${PG}/run -p 5434 -Z 7 -n chain -t "${tablename}" dotidx > "${dumpfile}"
       	        fi
 	    done
 	done

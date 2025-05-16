@@ -41,7 +41,6 @@ type DotidxDB struct {
 	WhitelistedIP []string `toml:"whitelisted_ip"`
 }
 
-
 type Duration time.Duration
 
 type DotidxBatch struct {
@@ -94,7 +93,7 @@ type MonitoringConfig struct {
 
 type OrchestratorConfig struct {
 	WatchInterval    time.Duration `toml:"watch_interval"`
-	MaxRestarts      int      `toml:"max_restarts"`
+	MaxRestarts      int           `toml:"max_restarts"`
 	RestartBackoff   time.Duration `toml:"restart_backoff"`
 	OperationTimeout time.Duration `toml:"operation_timeout"`
 }
