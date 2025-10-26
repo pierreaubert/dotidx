@@ -1,0 +1,123 @@
+## ------------------------------------------------------ -*- toml -*- --
+## This file generates all the other configuration files.
+## Usage:
+##     dixmgr -conf this.file.toml
+## ----------------------------------------------------------------------
+## Example of config with multiple machines
+## 192.168.1.32 run the polkadot nodes
+## 192.168.1.32 run the kusama nodes
+## 192.168.1.32 run the admin / monitoring stuff
+## 192.168.1.32 run the frontend / live indexer / batch indexer / cron
+##
+## to give an idea of how many nodes you need to run:
+#### 32: intel i9900k      8 cores  32GB RAM 2x20TB SATA
+## everything could run easily on the threadripper
+## ----------------------------------------------------------------------
+
+
+# where do you want to generate the config files
+target_dir = "/dotidx/etc"
+
+# name of your configuration
+name = "spin"
+dotidx_root = "/dotidx"
+dotidx_backup = "/dotbkp"
+dotidx_run = "/dotidx/run"
+dotidx_runtime = "/dotidx/runtim"
+dotidx_logs = "/dotidx/logs"
+dotidx_bin = "/dotidx/bin"
+dotidx_static = "/dotidx/static"
+
+[dotidx_db]
+type = "postgres"
+version = 16
+name = "dotidx"
+ip = "192.168.1.36"
+user = "dotidx"
+password = "funradio"
+port = 5434
+memory = "64GB"
+data_dir = "/dotidx/db/postgres_data/dotidx"
+run_dir = "/dotidx/db/postgres_data/run"
+whitelisted_ip = ["192.168.1.102", "192.168.1.36", "192.168.1.36", "192.168.1.32"]
+
+[dotidx_batch]
+start_range = 1
+end_range = -1
+batch_size = 10
+max_workers = 8
+batching = "batch"
+flush_timeout = "15s"
+
+[dotidx_fe]
+ip = "192.168.1.32"
+port = 8080
+static_path = "/dotidx/static"
+
+[parachains.polkadot.polkadot]
+name = "polkadot"  # name for the polkadot binary --chain parameter
+bin = "/dotidx/bin/polkadot"
+relay_ip = "192.168.1.32"
+port_ws = 9943
+port_rpc = 9944
+basepath = "/dotidx/polkadot-relay-archive"
+chainreader_ip = "192.168.1.32"
+chainreader_port = 10800
+sidecar_ip = "192.168.1.32"
+sidecar_port = 10800  # will use +1 +2 etc for each sidecar instance
+sidecar_count = 5
+prometheus_port = 9615
+sidecar_prometheus_port = 10850
+
+[parachains.polkadot.assethub]
+name = "asset-hub-polkadot"  # name for the polkadot binary --chain parameter
+bin = "/dotidx/bin/polkadot-parachain"
+node_ip = "192.168.1.32"
+port_ws = 9945
+port_rpc = 9946
+basepath = "/dotidx/polkadot-assethub-node-archive"
+chainreader_ip = "192.168.1.32"
+chainreader_port = 10900
+sidecar_ip = "192.168.1.32"
+sidecar_port = 10900  # will use +1 +2 etc for each sidecar instance
+sidecar_count = 5
+prometheus_port = 9616
+sidecar_prometheus_port = 10950
+
+[parachains.polkadot.people]
+name = "people-polkadot"  # name for the polkadot binary --chain parameter
+bin = "/dotidx/bin/polkadot-parachain"
+node_ip = "192.168.1.32"
+port_ws = 9947
+port_rpc = 9948
+basepath = "/dotidx/polkadot-people-node-archive"
+chainreader_ip = "192.168.1.32"
+chainreader_port = 11000
+sidecar_ip = "192.168.1.36"
+sidecar_port = 11000  # will use +1 +2 etc for each sidecar instance
+sidecar_count = 2
+prometheus_port = 9617
+sidecar_prometheus_port = 11050
+
+[parachains.polkadot.collectives]
+name = "collectives-polkadot"  # name for the polkadot binary --chain parameter
+bin = "/dotidx/bin/polkadot-parachain"
+node_ip = "192.168.1.32"
+port_ws = 9949
+port_rpc = 9950
+basepath = "/dotidx/polkadot-collectives-node-archive"
+chainreader_ip = "192.168.1.32"
+chainreader_port = 11100
+sidecar_ip = "192.168.1.36"
+sidecar_port = 11100  # will use +1 +2 etc for each sidecar instance
+sidecar_prometheus_port = 11150
+sidecar_count = 2
+prometheus_port = 9618
+
+[filesystem]
+zfs = true
+
+[monitoring]
+user = "prometheus"
+prometheus_ip = "192.168.1.32"
+prometheus_port = 9100
