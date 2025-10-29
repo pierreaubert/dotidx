@@ -245,12 +245,12 @@ func (s *SQLDatabase) CreateTableBlocksPartitions(relayChain, chain, firstTimest
 	blocksTable := GetBlocksTableName(relayChain, chain)
 
 	// kusame stated oct 2019
-	firstYear, firstMonth := 2019, 10
+	firstYear, firstMonth := 2019, 9
 	if relayChain == "polkadot" {
-		firstYear, firstMonth = 2020, 05
+		firstYear, firstMonth = 2020, 04
 	}
 	if firstTimestamp != "" {
-		firstTime, err := time.Parse("2000-01-01 00:00:00", firstTimestamp)
+		firstTime, err := time.Parse("2020-01-01 00:00:00", firstTimestamp)
 		if err == nil {
 			_, firstMonthAsMonth, _ := firstTime.Date()
 			firstMonth = int(firstMonthAsMonth) - 1
@@ -511,6 +511,7 @@ func (s *SQLDatabase) Save(items []BlockData, relayChain, chain string) error {
 			ts = fmt.Sprintf("2000-01-01 %02d:%02d:%02d.%04d", hour, min, sec, milli)
 		}
 
+		// log.Printf("Debug: %s %s %s", item.ID, ts, item.Hash)
 		_, err = tx.Exec(
 			blocksInsertQuery,
 			item.ID,
