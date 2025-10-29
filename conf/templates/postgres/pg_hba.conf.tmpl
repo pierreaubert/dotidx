@@ -115,24 +115,24 @@
 # maintenance (custom daily cronjobs, replication, and similar tasks).
 #
 # Database administrative login by Unix domain socket
-local   all             pierre                                  peer
+local   all             {{.UnixUser}}                                  peer
 
 # TYPE  DATABASE        USER            ADDRESS                 METHOD
 
 # "local" is for Unix domain socket connections only
 local   all             all                                     peer
 # IPv4 local connections:
-host    all             all             127.0.0.1/32            scram-sha-256
+host    all             all             *********/32            scram-sha-256
 # IPv6 local connections:
 host    all             all             ::1/128                 scram-sha-256
 # Allow replication connections from localhost, by a user with the
 # replication privilege.
 local   replication     all                                     peer
-host    replication     all             127.0.0.1/32            scram-sha-256
+host    replication     all             *********/32            scram-sha-256
 host    replication     all             ::1/128                 scram-sha-256
 #
-local   dotidx         dotidx                                   peer
-local   dotidx         prometheus                               peer
+local   {{.DotidxDB.Name}}         {{.UnixUser}}                                   peer
+local   {{.DotidxDB.Name}}         prometheus                               peer
 {{range .DotidxDB.WhitelistedIP}}
-host    {{$.DotidxDB.User}}	{{$.DotidxDB.Name}}	{{.}}/32	password
+host    {{$.DotidxDB.Name}}	{{$.UnixUser}}	{{.}}/32	password
 {{end}}

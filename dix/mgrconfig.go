@@ -3,15 +3,23 @@ package dix
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"runtime"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
 )
 
 type MgrConfig struct {
-	TargetDir     string                                `toml:"target_dir"`
-	Name          string                                `toml:"name"`
-	DotidxRoot    string                                `toml:"dotidx_root"`
+	TargetDir              string                                `toml:"target_dir"`
+	Name                   string                                `toml:"name"`
+	UnixUser               string                                // Runtime: set from environment
+	SystemMemoryGB         int                                   // Runtime: detected system memory in GB
+	MaintenanceWorkMemory  string                                // Runtime: calculated maintenance_work_mem
+	MaxWalSize             string                                // Runtime: calculated max_wal_size
+	DotidxRoot             string                                `toml:"dotidx_root"`
 	DotidxBackup  string                                `toml:"dotidx_backup"`
 	DotidxRun     string                                `toml:"dotidx_run"`
 	DotidxRuntime string                                `toml:"dotidx_runtime"`
@@ -140,4 +148,75 @@ func DBUrlSecure(config MgrConfig) string {
 		config.DotidxDB.Port,
 		config.DotidxDB.Name,
 	)
+}
+
+// GetSystemMemoryGB detects the system's total memory in GB
+func GetSystemMemoryGB() (int, error) {
+	var memBytes uint64
+
+	switch runtime.GOOS {
+	case "darwin": // macOS
+		cmd := exec.Command("/usr/sbin/sysctl", "-n", "hw.memsize")
+		output, err := cmd.Output()
+		if err != nil {
+			return 0, fmt.Errorf("failed to get memory on macOS: %w", err)
+		}
+		memBytes, err = strconv.ParseUint(strings.TrimSpace(string(output)), 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse memory value: %w", err)
+		}
+
+	case "linux":
+		cmd := exec.Command("grep", "MemTotal", "/proc/meminfo")
+		output, err := cmd.Output()
+		if err != nil {
+			return 0, fmt.Errorf("failed to get memory on Linux: %w", err)
+		}
+		// MemTotal:       16384000 kB
+		fields := strings.Fields(string(output))
+		if len(fields) < 2 {
+			return 0, fmt.Errorf("unexpected meminfo format")
+		}
+		memKB, err := strconv.ParseUint(fields[1], 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse memory value: %w", err)
+		}
+		memBytes = memKB * 1024
+
+	default:
+		return 16, nil // default fallback for unsupported platforms
+	}
+
+	// Convert bytes to GB (rounded)
+	memGB := int((memBytes + (1024*1024*1024)/2) / (1024 * 1024 * 1024))
+	return memGB, nil
+}
+
+// CalculateMemorySettings calculates PostgreSQL memory settings based on system memory
+// Reference values: 16GB RAM -> 4GB maintenance_work_mem, 1GB max_wal_size
+// Scales linearly with caps at 64GB and 4GB respectively
+func (c *MgrConfig) CalculateMemorySettings() {
+	if c.SystemMemoryGB <= 0 {
+		c.SystemMemoryGB = 16 // default fallback
+	}
+
+	// Calculate maintenance_work_mem: (systemMemory / 16) * 4GB, capped at 64GB
+	maintenanceGB := (c.SystemMemoryGB * 4) / 16
+	if maintenanceGB > 64 {
+		maintenanceGB = 64
+	}
+	if maintenanceGB < 1 {
+		maintenanceGB = 1
+	}
+	c.MaintenanceWorkMemory = fmt.Sprintf("%dGB", maintenanceGB)
+
+	// Calculate max_wal_size: (systemMemory / 16) * 1GB, capped at 4GB
+	walGB := c.SystemMemoryGB / 16
+	if walGB > 4 {
+		walGB = 4
+	}
+	if walGB < 1 {
+		walGB = 1
+	}
+	c.MaxWalSize = fmt.Sprintf("%dGB", walGB)
 }
