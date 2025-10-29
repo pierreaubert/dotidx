@@ -1,4 +1,4 @@
-const purgecss = require('@fullhuman/postcss-purgecss')
+const purgecss = require('@fullhuman/postcss-purgecss').default
 const cssnano = require('cssnano')
 const pruneVar = require('postcss-prune-var')
 const varCompress = require('postcss-variable-compress')
