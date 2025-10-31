@@ -1,43 +1,25 @@
-#!/bin/sh
+#!/usr/bin/env bash
+set -euo pipefail
 
-COMMAND=$1
+echo "dotidx reboot starting at $(date -Is)"
 
-systemctl --user $COMMAND relay-node-archive@polkadot.service
-systemctl --user $COMMAND relay-node-archive@kusama.service
+# Restart relay chain services
+{{- if .RelayServices }}
+echo "Restarting relay chain services..."
+{{- range .RelayServices }}
+echo "systemctl restart {{ . }}"
+systemctl restart {{ . }}
+{{- end }}
+{{- end }}
 
-systemctl --user $COMMAND chain-node-archive@polkadot-frequency.service
-systemctl --user $COMMAND chain-node-archive@polkadot-assethub.service
-systemctl --user $COMMAND chain-node-archive@polkadot-mythos.service
-systemctl --user $COMMAND chain-node-archive@polkadot-collectives.service
-systemctl --user $COMMAND chain-node-archive@polkadot-people.service
+# Restart parachain services
+{{- if .ParachainServices }}
+echo "Restarting parachain services..."
+{{- range .ParachainServices }}
+echo "systemctl restart {{ . }}"
+systemctl restart {{ . }}
+{{- end }}
+{{- end }}
 
-systemctl --user $COMMAND chain-node-archive@kusama-kusama.service
-systemctl --user $COMMAND chain-node-archive@kusama-acurast.service
-systemctl --user $COMMAND chain-node-archive@kusama-assethub.service
-
-
-for chain in polkadot assethub frequency mythos; do
-    for count in 1 2 3 4 5; do
-	systemctl --user $COMMAND sidecar@polkadot-$chain-$count.service
-    done
-done
-
-for chain in people collectives; do
-    for count in 1 2; do
-	systemctl --user $COMMAND sidecar@polkadot-$chain-$count.service
-    done
-done
-
-for chain in kusama assethub acurast; do
-    for count in 1 2 3 4 5; do
-	systemctl --user $COMMAND sidecar@kusama-$chain-$count.service
-    done
-done
-
-systemctl --user $COMMAND dix-nginx.service
-systemctl --user $COMMAND dixlive.service
-systemctl --user $COMMAND dixcron.service
-systemctl --user $COMMAND dixfe.service
-
-
+echo "dotidx reboot complete at $(date -Is)"
 

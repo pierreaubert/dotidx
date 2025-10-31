@@ -11,9 +11,9 @@ ExecStart=/bin/sh -c '${NODE_BIN} \
     --name ${NODE_NAME} \
     --state-pruning archive \
     --blocks-pruning archive \
-    --db-cache 16000 \
+    --db-cache {{.DbCache}} \
     --max-runtime-instances 32 \
-    --rpc-max-connections 60000 \
+    --rpc-max-connections {{.RpcMaxConnections}} \
     --rpc-rate-limit-whitelisted-ips 192.168.1.0/24 \
     --rpc-rate-limit-trust-proxy-headers \
     --rpc-message-buffer-capacity-per-connection 1024 \

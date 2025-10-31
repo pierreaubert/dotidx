@@ -1,0 +1,41 @@
+FROM ubuntu:latest
+
+# Avoid interactive prompts during build
+ENV DEBIAN_FRONTEND=noninteractive
+ENV USER=dotuser
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    curl \
+    git \
+    build-essential \
+    make \
+    postgresql-16 \
+    postgresql-contrib-16 \
+    nginx \
+    sudo \
+    ca-certificates \
+    gnupg \
+    lsb-release
+
+# Install Node.js 20.x (LTS)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs
+
+# Install Go 1.24 (or latest available)
+RUN wget https://go.dev/dl/go1.24.1.linux-amd64.tar.gz \
+    && tar -C /usr/local -xzf go1.24.1.linux-amd64.tar.gz \
+    && rm go1.24.1.linux-amd64.tar.gz
+
+# Add Go to PATH
+ENV PATH="/usr/local/go/bin:${PATH}"
+ENV GOPATH="/root/go"
+ENV PATH="${GOPATH}/bin:${PATH}"
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Create dotidx user and directories
+RUN useradd -m -s /bin/bash ${USER}
+

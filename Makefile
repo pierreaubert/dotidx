@@ -30,7 +30,7 @@ batch:
 watcher:
 	cd cmd/dixwatcher && go vet
 	cd cmd/dixwatcher && go fmt
-	go build -o bin/dixwatcher cmd/dixwatcher/dixwatcher.go
+	go build -o bin/dixwatcher ./cmd/dixwatcher
 
 cli:
 	go build -o bin/filter_cli cmd/filter_cli/filter_cli.go

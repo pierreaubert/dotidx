@@ -1,0 +1,67 @@
+## ------------------------------------------------------ -*- toml -*- --
+## Docker test configuration
+## Assumes relay chain and sidecar are running externally
+## ----------------------------------------------------------------------
+
+# where do you want to generate the config files
+target_dir = "/dotidx/etc"
+
+# name of your configuration
+name = "docker-test"
+dotidx_root = "/dotidx"
+dotidx_backup = "/dotidx/backup"
+dotidx_run = "/dotidx/run"
+dotidx_runtime = "/dotidx/runtime"
+dotidx_logs = "/dotidx/logs"
+dotidx_bin = "/dotidx/bin"
+dotidx_static = "/dotidx/static"
+
+[dotidx_db]
+type = "postgres"
+version = 16
+name = "dotidx"
+ip = "127.0.0.1"
+user = "dotidx"
+password = "testpassword"
+port = 5432
+memory = "2GB"
+data_dir = "/var/lib/postgresql/16/main"
+run_dir = "/var/run/postgresql"
+whitelisted_ip = []
+
+[dotidx_batch]
+start_range = 1
+end_range = 1000  # Only index first 1000 blocks for testing
+batch_size = 10
+max_workers = 2
+batching = "batch"
+flush_timeout = "15s"
+
+[dotidx_fe]
+ip = "0.0.0.0"
+port = 8080
+static_path = "/dotidx/static"
+
+# External sidecar configuration - update these with your actual values
+[parachains.polkadot.polkadot]
+name = "polkadot"
+bin = "/usr/local/bin/polkadot"  # Not used, external
+relay_ip = "host.docker.internal"  # or actual IP of external sidecar
+port_ws = 9943
+port_rpc = 9944
+basepath = "/data/polkadot"  # Not used, external
+chainreader_ip = "host.docker.internal"
+chainreader_port = 10800
+sidecar_ip = "host.docker.internal"
+sidecar_port = 10800
+sidecar_count = 1
+prometheus_port = 9615
+sidecar_prometheus_port = 10850
+
+[filesystem]
+zfs = false
+
+[monitoring]
+user = "postgres"
+prometheus_ip = "127.0.0.1"
+prometheus_port = 9100

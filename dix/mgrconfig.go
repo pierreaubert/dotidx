@@ -13,26 +13,28 @@ import (
 )
 
 type MgrConfig struct {
-	TargetDir              string                                `toml:"target_dir"`
-	Name                   string                                `toml:"name"`
-	UnixUser               string                                // Runtime: set from environment
-	SystemMemoryGB         int                                   // Runtime: detected system memory in GB
-	MaintenanceWorkMemory  string                                // Runtime: calculated maintenance_work_mem
-	MaxWalSize             string                                // Runtime: calculated max_wal_size
-	DotidxRoot             string                                `toml:"dotidx_root"`
-	DotidxBackup  string                                `toml:"dotidx_backup"`
-	DotidxRun     string                                `toml:"dotidx_run"`
-	DotidxRuntime string                                `toml:"dotidx_runtime"`
-	DotidxLogs    string                                `toml:"dotidx_logs"`
-	DotidxBin     string                                `toml:"dotidx_bin"`
-	DotidxStatic  string                                `toml:"dotidx_static"`
-	DotidxBatch   DotidxBatch                           `toml:"dotidx_batch"`
-	DotidxDB      DotidxDB                              `toml:"dotidx_db"`
-	DotidxFE      DotidxFE                              `toml:"dotidx_fe"`
-	Parachains    map[string]map[string]ParaChainConfig `toml:"parachains"`
-	Filesystem    FilesystemConfig                      `toml:"filesystem"`
-	Monitoring    MonitoringConfig                      `toml:"monitoring"`
-	Watcher       OrchestratorConfig                    `toml:"watcher"`
+	TargetDir             string                                `toml:"target_dir"`
+	Name                  string                                `toml:"name"`
+	UnixUser              string                                // Runtime: set from environment
+	SystemMemoryGB        int                                   // Runtime: detected system memory in GB
+	MaintenanceWorkMemory string                                // Runtime: calculated maintenance_work_mem
+	MaxWalSize            string                                // Runtime: calculated max_wal_size
+	DbCache               int                                   // Runtime: calculated db_cache
+	RpcMaxConnections     int                                   // Runtime: calculated rpc_max_connections
+	DotidxRoot            string                                `toml:"dotidx_root"`
+	DotidxBackup          string                                `toml:"dotidx_backup"`
+	DotidxRun             string                                `toml:"dotidx_run"`
+	DotidxRuntime         string                                `toml:"dotidx_runtime"`
+	DotidxLogs            string                                `toml:"dotidx_logs"`
+	DotidxBin             string                                `toml:"dotidx_bin"`
+	DotidxStatic          string                                `toml:"dotidx_static"`
+	DotidxBatch           DotidxBatch                           `toml:"dotidx_batch"`
+	DotidxDB              DotidxDB                              `toml:"dotidx_db"`
+	DotidxFE              DotidxFE                              `toml:"dotidx_fe"`
+	Parachains            map[string]map[string]ParaChainConfig `toml:"parachains"`
+	Filesystem            FilesystemConfig                      `toml:"filesystem"`
+	Monitoring            MonitoringConfig                      `toml:"monitoring"`
+	Watcher               OrchestratorConfig                    `toml:"watcher"`
 }
 
 type DotidxDB struct {
@@ -192,9 +194,7 @@ func GetSystemMemoryGB() (int, error) {
 	return memGB, nil
 }
 
-// CalculateMemorySettings calculates PostgreSQL memory settings based on system memory
-// Reference values: 16GB RAM -> 4GB maintenance_work_mem, 1GB max_wal_size
-// Scales linearly with caps at 64GB and 4GB respectively
+// CalculateMemorySettings calculates PostgreSQL and Node memory settings based on system memory
 func (c *MgrConfig) CalculateMemorySettings() {
 	if c.SystemMemoryGB <= 0 {
 		c.SystemMemoryGB = 16 // default fallback
@@ -219,4 +219,31 @@ func (c *MgrConfig) CalculateMemorySettings() {
 		walGB = 1
 	}
 	c.MaxWalSize = fmt.Sprintf("%dGB", walGB)
+
+	// Reference values for Node: 16GB RAM -> 1GB db-cache, 2k rpc-max-connections
+	// Scales linearly with caps.
+	const baseMemory = 16
+	const maxMemory = 128 // Memory size in GB where max settings are reached
+
+	if c.SystemMemoryGB <= baseMemory {
+		c.DbCache = 1024
+		c.RpcMaxConnections = 2000
+	} else {
+		// Linear scaling between baseMemory and maxMemory
+		scalingFactor := float64(c.SystemMemoryGB-baseMemory) / float64(maxMemory-baseMemory)
+
+		// DbCache (1GB to 16GB)
+		dbCache := 1024 + scalingFactor*(16384-1024)
+		if dbCache > 16384 {
+			dbCache = 16384
+		}
+		c.DbCache = int(dbCache)
+
+		// RpcMaxConnections (2k to 16k)
+		rpcMaxConnections := 2000 + scalingFactor*(16000-2000)
+		if rpcMaxConnections > 16000 {
+			rpcMaxConnections = 16000
+		}
+		c.RpcMaxConnections = int(rpcMaxConnections)
+	}
 }

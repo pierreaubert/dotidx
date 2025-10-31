@@ -1,0 +1,36 @@
+# Git
+.git
+.gitignore
+
+# Build outputs
+bin/
+app/dist/
+node_modules/
+app/node_modules/
+
+# Development files
+*.log
+*.swp
+*.swo
+*~
+.#*
+\#*#
+
+# Test files
+test.txt
+env.log
+
+# IDE
+.vscode/
+.idea/
+
+# Distribution
+dist-horn/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+tmp/
+temp/

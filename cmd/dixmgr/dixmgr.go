@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/template"
 
@@ -21,7 +22,6 @@ func main() {
 	configFile := flag.String("conf", "", "toml configuration file")
 	templatesDir := flag.String("templates", "./conf/templates", "templated configuration files")
 	scriptsDir := flag.String("scripts", "./conf/scripts", "templated script files")
-	appDir := flag.String("app", "./app", "templated script files")
 	flag.Parse()
 
 	if configFile == nil || *configFile == "" {
@@ -32,6 +32,23 @@ func main() {
 	if err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
+
+	// Set UnixUser from environment
+	config.UnixUser = os.Getenv("USER")
+	if config.UnixUser == "" {
+		log.Fatal("USER environment variable is not set")
+	}
+
+	// Detect system memory and calculate PostgreSQL settings
+	memGB, err := dix.GetSystemMemoryGB()
+	if err != nil {
+		log.Printf("Warning: failed to detect system memory: %v, using default 16GB", err)
+		memGB = 16
+	}
+	config.SystemMemoryGB = memGB
+	config.CalculateMemorySettings()
+	log.Printf("Detected system memory: %dGB, maintenance_work_mem=%s, max_wal_size=%s",
+		config.SystemMemoryGB, config.MaintenanceWorkMemory, config.MaxWalSize)
 
 	if errs := checkConfig(*config); len(errs) > 0 {
 		for i := range errs {
@@ -84,7 +101,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := copyStaticWebsite(*config, *appDir); err != nil {
+	if err := generateRebootScript(*config, config.DotidxBin, *scriptsDir); err != nil {
 		log.Fatal(err)
 	}
 
@@ -469,7 +486,6 @@ func processFileAsTemplate(src, dst string, config *dix.MgrConfig) error {
 }
 
 func copyFile(src, dst string) error {
-
 	if strings.HasSuffix(dst, "~") || strings.HasSuffix(dst, "#") || strings.HasPrefix(dst, ".#") {
 		fmt.Printf("Skipping backup file: %s\n", dst)
 		return nil
@@ -505,5 +521,93 @@ func copyFile(src, dst string) error {
 	}
 
 	fmt.Printf("Copied    %s\n", dst)
+	return nil
+}
+
+// UnitNameRelayNode generates the systemd service name for a relay chain node.
+func UnitNameRelayNode(relay string) string {
+	return fmt.Sprintf("relay-node-archive@%s.service", relay)
+}
+
+// UnitNameParachainNode generates the systemd service name for a parachain node.
+func UnitNameParachainNode(relay, chain string) string {
+	return fmt.Sprintf("chain-node-archive@%s-%s.service", relay, chain)
+}
+
+// UnitNameParachainSidecar generates the systemd service name for a parachain sidecar.
+func UnitNameParachainSidecar(relay, chain string, instance int) string {
+	return fmt.Sprintf("sidecar@%s-%s-%d.service", relay, chain, instance)
+}
+
+func generateRebootScript(config dix.MgrConfig, destDir string, scriptsDir string) error {
+	relayServices := make(map[string]struct{})
+	parachainServices := make(map[string]struct{})
+	sidecarServices := make(map[string]struct{})
+
+	for relay, chains := range config.Parachains {
+		relayServices[UnitNameRelayNode(relay)] = struct{}{}
+
+		for chain, paraConfig := range chains {
+			if relay != chain {
+				parachainServices[UnitNameParachainNode(relay, chain)] = struct{}{}
+			}
+			for i := 0; i < paraConfig.SidecarCount; i++ {
+				sidecarServices[UnitNameParachainSidecar(relay, chain, i+1)] = struct{}{}
+			}
+		}
+	}
+
+	for service := range sidecarServices {
+		parachainServices[service] = struct{}{}
+	}
+
+	relayServiceSlice := make([]string, 0, len(relayServices))
+	for service := range relayServices {
+		relayServiceSlice = append(relayServiceSlice, service)
+	}
+
+	parachainServiceSlice := make([]string, 0, len(parachainServices))
+	for service := range parachainServices {
+		parachainServiceSlice = append(parachainServiceSlice, service)
+	}
+
+	sort.Strings(relayServiceSlice)
+	sort.Strings(parachainServiceSlice)
+
+	data := struct {
+		RelayServices     []string
+		ParachainServices []string
+	}{
+		RelayServices:     relayServiceSlice,
+		ParachainServices: parachainServiceSlice,
+	}
+
+	tmplPath := filepath.Join(scriptsDir, "reboot.sh.tmpl")
+	tmplData, err := os.ReadFile(tmplPath)
+	if err != nil {
+		return fmt.Errorf("failed to read template file %s: %w", tmplPath, err)
+	}
+
+	tmpl, err := template.New(filepath.Base(tmplPath)).Parse(string(tmplData))
+	if err != nil {
+		return fmt.Errorf("failed to parse reboot.sh.tmpl: %w", err)
+	}
+
+	outPath := filepath.Join(destDir, "reboot.sh")
+	outFile, err := os.Create(outPath)
+	if err != nil {
+		return fmt.Errorf("failed to create reboot.sh: %w", err)
+	}
+	defer outFile.Close()
+
+	if err := tmpl.Execute(outFile, data); err != nil {
+		return fmt.Errorf("failed to execute template: %w", err)
+	}
+
+	if err := os.Chmod(outPath, 0755); err != nil {
+		return fmt.Errorf("failed to set permissions on reboot.sh: %w", err)
+	}
+
+	fmt.Printf("Generated %s\n", outPath)
 	return nil
 }

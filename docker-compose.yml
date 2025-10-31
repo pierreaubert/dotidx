@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  dotidx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dotidx:latest
+    container_name: dotidx-test
+    ports:
+      - "8080:8080"
+    volumes:
+      # Uncomment for persistent storage
+      # - dotidx-pgdata:/var/lib/postgresql/16/main
+      # - dotidx-logs:/dotidx/logs
+    environment:
+      - USER=dotidx
+    # Extra hosts for accessing host machine services (Linux)
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# Uncomment to use persistent volumes
+# volumes:
+#   dotidx-pgdata:
+#   dotidx-logs:

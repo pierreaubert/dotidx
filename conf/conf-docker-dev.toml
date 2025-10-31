@@ -1,0 +1,86 @@
+## ------------------------------------------------------ -*- toml -*- --
+## This file generates all the other configuration files.
+## Usage:
+##     dixmgr -conf this.file.toml
+## ----------------------------------------------------------------------
+## Example of a simple config with 1 machine
+## you need to have relay chain and assethub running somewhere.
+## this configuration is for testing
+## ----------------------------------------------------------------------
+
+# where do you want to generate the config files
+target_dir = "/dotidx/etc"
+
+# name of your configuration
+name = "docker"
+dotidx_root = "/dotidx"
+dotidx_backup = "/dotidx/backup"
+dotidx_run = "/dotidx/run"
+dotidx_runtime = "/dotidx/runtime"
+dotidx_logs = "/dotidx/logs"
+dotidx_bin = "/dotidx/bin"
+dotidx_static = "/dotidx/static"
+
+[dotidx_db]
+type = "postgres"
+version = 16
+name = "dotidx"
+ip = "127.0.0.1"
+user = "dotidx"
+password = "funradio"
+port = 5434
+memory = "16GB"
+data_dir = "/db"
+run_dir = "/db/run"
+whitelisted_ip = []
+
+[dotidx_batch]
+start_range = 1
+end_range = -1
+batch_size = 10
+max_workers = 8
+batching = "batch"
+flush_timeout = "15s"
+
+[dotidx_fe]
+ip = "127.0.0.1"
+port = 8080
+static_path = "/dotidx/static"
+
+[parachains.polkadot.polkadot]
+name = "polkadot"  # name for the polkadot binary --chain parameter
+bin = "/dotidx/bin/polkadot"
+relay_ip = "127.0.0.1"
+port_ws = 9943
+port_rpc = 9944
+basepath = "/polkadot/polkadot-relay-archive"
+chainreader_ip = "127.0.0.1"
+chainreader_port = 10800
+sidecar_ip = "127.0.0.1"
+sidecar_port = 10800  # will use +1 +2 etc for each sidecar instance
+sidecar_count = 5
+prometheus_port = 9615
+sidecar_prometheus_port = 10850
+
+[parachains.polkadot.assethub]
+name = "asset-hub-polkadot"  # name for the polkadot binary --chain parameter
+bin = "/dotidx/bin/polkadot-parachain"
+node_ip = "127.0.0.1"
+port_ws = 9945
+port_rpc = 9946
+basepath = "/dotidx/polkadot-assethub-node-archive"
+chainreader_ip = "127.0.0.1"
+chainreader_port = 10900
+sidecar_ip = "127.0.0.1"
+sidecar_port = 10900  # will use +1 +2 etc for each sidecar instance
+sidecar_count = 2
+prometheus_port = 9616
+sidecar_prometheus_port = 10950
+
+[filesystem]
+zfs = true
+
+[monitoring]
+user = "prometheus"
+prometheus_ip = "127.0.0.1"
+prometheus_port = 9100
