@@ -1,37 +1,42 @@
-#!/bin/sh
+#!/usr/bin/env bash
+set -euo pipefail
 
-export PG=/db/postgres_data
-export DUMPDIR=/dotidx/backup
+# Auto-generated backup script
+# Database: {{.DB.Name}} at {{.DB.Host}}:{{.DB.Port}}
+
+export PGHOST="{{.DB.Host}}"
+export PGPORT="{{.DB.Port}}"
+export PGDATABASE="{{.DB.Name}}"
+export PGUSER="{{.DB.User}}"
+export BACKUP_DIR="{{.BackupDir}}"
+
+mkdir -p "${BACKUP_DIR}"
+
+echo "Starting backup at $(date -Iseconds)"
 
 for year in 2019 2020 2021 2022 2023 2024 2025; do
     for month in 01 02 03 04 05 06 07 08 09 10 11 12; do
-	for chain in polkadot assethub people collectives; do
-	    for table in blocks address2blocks; do
-		tablename="chain.${table}_polkadot_${chain}_${year}_${month}"
-		dumpfile=${DUMPDIR}/${tablename}.dump.gz
-		if test ! -f "${dumpfile}"; then
-		    /usr/bin/pg_dump -h ${PG}/run -p 5434 -Z 7 -n chain -t "${tablename}" dotidx > "${dumpfile}" 2>&1 > /dev/null
-		    status=$?
-		    if [ $status -ne 0 ]; then
-			echo "Error with dumping $tablename"
-			rm -f "${dumpfile}"
-		    else
-			echo "Dumped to $dumpfile"
-      	            fi
-  	        fi
-	    done
+{{- range $relay := .Relays}}
+	# Relay: {{$relay.Name}}
+{{- range $chain := $relay.Parachains}}
+	for table in blocks address2blocks; do
+	    tablename="chain.${table}_{{$relay.Name}}_{{$chain}}_${year}_${month}"
+	    dumpfile="${BACKUP_DIR}/${tablename}.dump.gz"
+	    if test ! -f "${dumpfile}"; then
+		echo "Dumping ${tablename} to ${dumpfile}"
+		/usr/bin/pg_dump -h "${PGHOST}" -p "${PGPORT}" -Z 7 -n chain -t "${tablename}" "${PGDATABASE}" > "${dumpfile}" 2>&1
+		status=$?
+		if [ $status -ne 0 ]; then
+		    echo "Error with dumping ${tablename}"
+		    rm -f "${dumpfile}"
+		else
+		    echo "Successfully dumped ${tablename}"
+		fi
+	    fi
 	done
-	# kusama
-	for chain in kusama assethub acurast; do
-	    for table in blocks address2blocks; do
-		tablename="chain.${table}_kusama_${chain}_${year}_${month}"
-		dumpfile=${DUMPDIR}/${tablename}.dump.gz
-		if test ! -f "${dumpfile}"; then
-		    echo "Dumping to $dumpfile"
-		    # no need for compression which is done by zfs
-		    /usr/bin/pg_dump -h ${PG}/run -p 5434 -Z 7 -n chain -t "${tablename}" dotidx > "${dumpfile}"
-      	        fi
-	    done
-	done
+{{- end}}
+{{- end}}
     done
 done
+
+echo "Backup completed at $(date -Iseconds)"

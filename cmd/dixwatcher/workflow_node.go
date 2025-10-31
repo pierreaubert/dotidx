@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"time"
 
+	"go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -53,6 +55,9 @@ func NodeWorkflow(ctx workflow.Context, config NodeWorkflowConfig) error {
 				Message:   "Starting up",
 			})
 	}
+
+	// Track readiness state
+	readySignalSent := false
 
 	// Main monitoring loop
 	for {
@@ -148,7 +153,7 @@ func NodeWorkflow(ctx workflow.Context, config NodeWorkflowConfig) error {
 			}
 
 		} else {
-			// Service is healthy
+			// Service is healthy (systemd active)
 			if consecutiveFailures > 0 {
 				logger.Info("Service recovered",
 					"service", config.SystemdUnit,
@@ -169,6 +174,23 @@ func NodeWorkflow(ctx workflow.Context, config NodeWorkflowConfig) error {
 						Message:   "Healthy",
 					})
 			}
+
+			// Check blockchain sync status if required and not yet signaled ready
+			if config.CheckSync && !readySignalSent {
+				synced, err := checkNodeSync(ctx, config, logger)
+				if err != nil {
+					logger.Warn("Sync check failed", "service", config.Name, "error", err)
+				} else if synced {
+					logger.Info("Node is synced and ready", "service", config.Name)
+					readySignalSent = emitReadySignal(ctx, config, logger)
+				} else {
+					logger.Info("Node is syncing", "service", config.Name)
+				}
+			} else if !config.CheckSync && !readySignalSent {
+				// No sync check required, emit ready signal immediately
+				logger.Info("Service ready (no sync check required)", "service", config.Name)
+				readySignalSent = emitReadySignal(ctx, config, logger)
+			}
 		}
 
 		// Wait before next health check
@@ -178,4 +200,65 @@ func NodeWorkflow(ctx workflow.Context, config NodeWorkflowConfig) error {
 			return nil
 		}
 	}
+}
+
+// checkNodeSync checks if a blockchain node has completed syncing
+func checkNodeSync(ctx workflow.Context, config NodeWorkflowConfig, logger log.Logger) (bool, error) {
+	// Configure activity options for sync check with retries
+	syncActivityOptions := workflow.ActivityOptions{
+		StartToCloseTimeout: 15 * time.Second,
+		RetryPolicy: &temporal.RetryPolicy{
+			InitialInterval:    2 * time.Second,
+			BackoffCoefficient: 2.0,
+			MaximumInterval:    30 * time.Second,
+			MaximumAttempts:    3,
+		},
+	}
+	syncCtx := workflow.WithActivityOptions(ctx, syncActivityOptions)
+
+	var synced bool
+	err := workflow.ExecuteActivity(syncCtx, "CheckNodeSyncActivity", config.RPCEndpoint, config.RPCPort).Get(syncCtx, &synced)
+	if err != nil {
+		return false, fmt.Errorf("sync check activity failed: %w", err)
+	}
+
+	return synced, nil
+}
+
+// emitReadySignal sends the ready signal to the parent workflow
+// Returns true if signal was sent successfully
+func emitReadySignal(ctx workflow.Context, config NodeWorkflowConfig, logger log.Logger) bool {
+	if config.ReadySignal == "" || config.ParentWorkflowID == "" {
+		logger.Info("Ready signal not configured", "service", config.Name)
+		return true // Consider it sent if not configured
+	}
+
+	err := workflow.SignalExternalWorkflow(ctx, config.ParentWorkflowID, "", config.ReadySignal, true).Get(ctx, nil)
+	if err != nil {
+		logger.Error("Failed to send ready signal",
+			"service", config.Name,
+			"signal", config.ReadySignal,
+			"parent", config.ParentWorkflowID,
+			"error", err)
+		return false
+	}
+
+	logger.Info("Ready signal sent",
+		"service", config.Name,
+		"signal", config.ReadySignal,
+		"parent", config.ParentWorkflowID)
+	return true
+}
+
+// calculateBackoffWithJitter calculates exponential backoff with jitter
+func calculateBackoffWithJitter(attempt int, baseDelay, maxDelay time.Duration) time.Duration {
+	// Exponential backoff: baseDelay * 2^attempt
+	delay := baseDelay * time.Duration(1<<uint(attempt))
+	if delay > maxDelay {
+		delay = maxDelay
+	}
+
+	// Add 10-20% jitter
+	jitter := time.Duration(float64(delay) * (0.1 + rand.Float64()*0.1))
+	return delay + jitter
 }

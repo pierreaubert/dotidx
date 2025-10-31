@@ -20,17 +20,17 @@
 
 
 # where do you want to generate the config files
-target_dir = "/dotidx/etc"
+target_dir = "/Volumes/data/dotidx/etc"
 
 # name of your configuration
-name = "horn"
-dotidx_root = "/dotidx"
-dotidx_backup = "/dotidx/backup"
-dotidx_run = "/dotidx/run"
-dotidx_runtime = "/dotidx/runtim"
-dotidx_logs = "/dotidx/logs"
-dotidx_bin = "/dotidx/bin"
-dotidx_static = "/dotidx/static"
+name = "simple"
+dotidx_root = "/Volumes/data/dotidx"
+dotidx_backup = "/Volumes/data/dotidx/backup"
+dotidx_run = "/Volumes/data/dotidx/run"
+dotidx_runtime = "/Volumes/data/dotidx/runtim"
+dotidx_logs = "/Volumes/data/dotidx/logs"
+dotidx_bin = "/Volumes/data/dotidx/bin"
+dotidx_static = "/Volumes/data/dotidx/static"
 
 [dotidx_db]
 type = "postgres"
@@ -41,7 +41,7 @@ user = "dotidx"
 password = "funradio"
 port = 5434
 memory = "16GB"
-data_dir = "/polkadot/postgres_data/dotidx"
+data_dir = "/polkadot/postgres_data/Volumes/data/dotidx"
 run_dir = "/polkadot/postgres_data/run"
 whitelisted_ip = []
 
@@ -56,11 +56,11 @@ flush_timeout = "15s"
 [dotidx_fe]
 ip = "127.0.0.1"
 port = 8080
-static_path = "/dotidx/static"
+static_path = "/Volumes/data/dotidx/static"
 
 [parachains.polkadot.polkadot]
 name = "polkadot"  # name for the polkadot binary --chain parameter
-bin = "/dotidx/bin/polkadot"
+bin = "/Volumes/data/dotidx/bin/polkadot"
 relay_ip = "127.0.0.1"
 port_ws = 9943
 port_rpc = 9944
@@ -75,11 +75,11 @@ sidecar_prometheus_port = 10850
 
 [parachains.polkadot.assethub]
 name = "asset-hub-polkadot"  # name for the polkadot binary --chain parameter
-bin = "/dotidx/bin/polkadot-parachain"
+bin = "/Volumes/data/dotidx/bin/polkadot-parachain"
 node_ip = "127.0.0.1"
 port_ws = 9945
 port_rpc = 9946
-basepath = "/dotidx/polkadot-assethub-node-archive"
+basepath = "/Volumes/data/dotidx/polkadot-assethub-node-archive"
 chainreader_ip = "127.0.0.1"
 chainreader_port = 10900
 sidecar_ip = "127.0.0.1"

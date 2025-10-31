@@ -8,7 +8,7 @@ echo "dotidx reboot starting at $(date -Is)"
 echo "Restarting relay chain services..."
 {{- range .RelayServices }}
 echo "systemctl restart {{ . }}"
-systemctl restart {{ . }}
+systemctl --user restart {{ . }}
 {{- end }}
 {{- end }}
 
@@ -17,7 +17,7 @@ systemctl restart {{ . }}
 echo "Restarting parachain services..."
 {{- range .ParachainServices }}
 echo "systemctl restart {{ . }}"
-systemctl restart {{ . }}
+systemctl --user restart {{ . }}
 {{- end }}
 {{- end }}
 

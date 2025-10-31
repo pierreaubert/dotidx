@@ -101,7 +101,23 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if err := generateBatchScripts(*config, *configFile, config.DotidxBin, *scriptsDir); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := generateBackupScript(*config, config.DotidxBin, *scriptsDir); err != nil {
+		log.Fatal(err)
+	}
+
 	if err := generateRebootScript(*config, config.DotidxBin, *scriptsDir); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := generateStartScript(*config, config.DotidxBin, *scriptsDir); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := generateStopScript(*config, config.DotidxBin, *scriptsDir); err != nil {
 		log.Fatal(err)
 	}
 
@@ -426,6 +442,11 @@ func generateScriptsFromTemplate(config dix.MgrConfig, sourceDir, destDir string
 		}
 
 		if strings.HasSuffix(path, ".tmpl") {
+			// Skip specialized templates handled by their own generators
+			basename := filepath.Base(path)
+			if basename == "reboot.sh.tmpl" || basename == "run-batch.sh.tmpl" || basename == "backup-postgres.sh.tmpl" {
+				return nil
+			}
 			filename := filepath.Join(
 				destDir,
 				filepath.Base(strings.TrimSuffix(path, ".tmpl")),
@@ -539,6 +560,154 @@ func UnitNameParachainSidecar(relay, chain string, instance int) string {
 	return fmt.Sprintf("sidecar@%s-%s-%d.service", relay, chain, instance)
 }
 
+func generateBackupScript(config dix.MgrConfig, destDir string, scriptsDir string) error {
+	type RelayChains struct {
+		Name       string
+		Parachains []string
+	}
+
+	// Build relay chains with sorted parachains
+	relays := make([]RelayChains, 0, len(config.Parachains))
+	for relay, chains := range config.Parachains {
+		parachains := make([]string, 0, len(chains))
+		for chain := range chains {
+			parachains = append(parachains, chain)
+		}
+		sort.Strings(parachains)
+		relays = append(relays, RelayChains{
+			Name:       relay,
+			Parachains: parachains,
+		})
+	}
+
+	// Sort relays by name for deterministic output
+	sort.Slice(relays, func(i, j int) bool {
+		return relays[i].Name < relays[j].Name
+	})
+
+	data := struct {
+		DB struct {
+			Host string
+			Port int
+			Name string
+			User string
+		}
+		BackupDir string
+		Relays    []RelayChains
+	}{
+		DB: struct {
+			Host string
+			Port int
+			Name string
+			User string
+		}{
+			Host: config.DotidxDB.IP,
+			Port: config.DotidxDB.Port,
+			Name: config.DotidxDB.Name,
+			User: config.DotidxDB.User,
+		},
+		BackupDir: config.DotidxBackup,
+		Relays:    relays,
+	}
+
+	tmplPath := filepath.Join(scriptsDir, "backup-postgres.sh.tmpl")
+	tmplData, err := os.ReadFile(tmplPath)
+	if err != nil {
+		return fmt.Errorf("failed to read backup-postgres.sh.tmpl: %w", err)
+	}
+
+	tmpl, err := template.New("backup-postgres.sh.tmpl").Parse(string(tmplData))
+	if err != nil {
+		return fmt.Errorf("failed to parse backup-postgres.sh.tmpl: %w", err)
+	}
+
+	outPath := filepath.Join(destDir, "backup-postgres.sh")
+
+	// Change permissions to allow writing if file exists
+	if _, err := os.Stat(outPath); err == nil {
+		if err := os.Chmod(outPath, 0600); err != nil {
+			return fmt.Errorf("failed to change permissions on %s: %w", outPath, err)
+		}
+	}
+
+	outFile, err := os.Create(outPath)
+	if err != nil {
+		return fmt.Errorf("failed to create backup-postgres.sh: %w", err)
+	}
+	defer outFile.Close()
+
+	if err := tmpl.Execute(outFile, data); err != nil {
+		return fmt.Errorf("failed to execute backup-postgres.sh template: %w", err)
+	}
+
+	if err := os.Chmod(outPath, 0755); err != nil {
+		return fmt.Errorf("failed to set permissions on backup-postgres.sh: %w", err)
+	}
+
+	fmt.Printf("Generated %s\n", outPath)
+	return nil
+}
+
+func generateBatchScripts(config dix.MgrConfig, confPath string, destDir string, scriptsDir string) error {
+	// Build relay -> parachains mapping
+	relayMap := make(map[string][]string)
+	for relay, chains := range config.Parachains {
+		parachains := make([]string, 0, len(chains))
+		for chain := range chains {
+			parachains = append(parachains, chain)
+		}
+		sort.Strings(parachains)
+		relayMap[relay] = parachains
+	}
+
+	tmplPath := filepath.Join(scriptsDir, "run-batch.sh.tmpl")
+	tmplData, err := os.ReadFile(tmplPath)
+	if err != nil {
+		return fmt.Errorf("failed to read run-batch.sh.tmpl: %w", err)
+	}
+
+	tmpl, err := template.New("run-batch.sh.tmpl").Parse(string(tmplData))
+	if err != nil {
+		return fmt.Errorf("failed to parse run-batch.sh.tmpl: %w", err)
+	}
+
+	// Generate one script per relay
+	for relay, parachains := range relayMap {
+		data := struct {
+			BinPath    string
+			ConfPath   string
+			Relay      string
+			Parachains []string
+			Name       string
+		}{
+			BinPath:    config.DotidxBin,
+			ConfPath:   confPath,
+			Relay:      relay,
+			Parachains: parachains,
+			Name:       config.Name,
+		}
+
+		outPath := filepath.Join(destDir, fmt.Sprintf("run-batch-%s.sh", relay))
+		outFile, err := os.Create(outPath)
+		if err != nil {
+			return fmt.Errorf("generateBatchScripts: relay=%s: failed to create output file: %w", relay, err)
+		}
+		defer outFile.Close()
+
+		if err := tmpl.Execute(outFile, data); err != nil {
+			return fmt.Errorf("generateBatchScripts: relay=%s: failed to execute template: %w", relay, err)
+		}
+
+		if err := os.Chmod(outPath, 0755); err != nil {
+			return fmt.Errorf("generateBatchScripts: relay=%s: failed to set permissions: %w", relay, err)
+		}
+
+		fmt.Printf("Generated %s\n", outPath)
+	}
+
+	return nil
+}
+
 func generateRebootScript(config dix.MgrConfig, destDir string, scriptsDir string) error {
 	relayServices := make(map[string]struct{})
 	parachainServices := make(map[string]struct{})
@@ -606,6 +775,268 @@ func generateRebootScript(config dix.MgrConfig, destDir string, scriptsDir strin
 
 	if err := os.Chmod(outPath, 0755); err != nil {
 		return fmt.Errorf("failed to set permissions on reboot.sh: %w", err)
+	}
+
+	fmt.Printf("Generated %s\n", outPath)
+	return nil
+}
+
+func generateStartScript(config dix.MgrConfig, destDir string, scriptsDir string) error {
+	relayServices := make(map[string]struct{})
+	parachainServices := make(map[string]struct{})
+	sidecarServices := make(map[string]struct{})
+
+	for relay, chains := range config.Parachains {
+		relayServices[UnitNameRelayNode(relay)] = struct{}{}
+
+		for chain, paraConfig := range chains {
+			if relay != chain {
+				parachainServices[UnitNameParachainNode(relay, chain)] = struct{}{}
+			}
+			for i := 0; i < paraConfig.SidecarCount; i++ {
+				sidecarServices[UnitNameParachainSidecar(relay, chain, i+1)] = struct{}{}
+			}
+		}
+	}
+
+	relayServiceSlice := make([]string, 0, len(relayServices))
+	for service := range relayServices {
+		relayServiceSlice = append(relayServiceSlice, service)
+	}
+
+	parachainServiceSlice := make([]string, 0, len(parachainServices))
+	for service := range parachainServices {
+		parachainServiceSlice = append(parachainServiceSlice, service)
+	}
+
+	sidecarServiceSlice := make([]string, 0, len(sidecarServices))
+	for service := range sidecarServices {
+		sidecarServiceSlice = append(sidecarServiceSlice, service)
+	}
+
+	sort.Strings(relayServiceSlice)
+	sort.Strings(parachainServiceSlice)
+	sort.Strings(sidecarServiceSlice)
+
+	data := struct {
+		RelayServices     []string
+		ParachainServices []string
+		SidecarServices   []string
+	}{
+		RelayServices:     relayServiceSlice,
+		ParachainServices: parachainServiceSlice,
+		SidecarServices:   sidecarServiceSlice,
+	}
+
+	tmplPath := filepath.Join(scriptsDir, "reboot.sh.tmpl")
+	tmplData, err := os.ReadFile(tmplPath)
+	if err != nil {
+		return fmt.Errorf("failed to read template file %s: %w", tmplPath, err)
+	}
+
+	// Replace restart with start and update the script header
+	tmplStr := string(tmplData)
+	tmplStr = strings.ReplaceAll(tmplStr, "reboot", "start")
+	tmplStr = strings.ReplaceAll(tmplStr, "Restart", "Start")
+	tmplStr = strings.ReplaceAll(tmplStr, "restart", "start")
+
+	// Replace parachain section with proper ordering: relay -> parachain -> sidecar -> nginx -> other services
+	tmplStr = strings.Replace(tmplStr, `# Start parachain services
+{{- if .ParachainServices }}
+echo "Starting parachain services..."
+{{- range .ParachainServices }}
+echo "systemctl start {{ . }}"
+systemctl --user start {{ . }}
+{{- end }}
+{{- end }}`, `# Start parachain services
+{{- if .ParachainServices }}
+echo "Starting parachain services..."
+{{- range .ParachainServices }}
+echo "systemctl start {{ . }}"
+systemctl --user start {{ . }}
+{{- end }}
+{{- end }}
+
+# Start sidecar services
+{{- if .SidecarServices }}
+echo "Starting sidecar services..."
+{{- range .SidecarServices }}
+echo "systemctl start {{ . }}"
+systemctl --user start {{ . }}
+{{- end }}
+{{- end }}
+
+# Start dix-nginx service
+echo "Starting dix-nginx service..."
+echo "systemctl start dix-nginx.service"
+systemctl --user start dix-nginx.service
+
+# Start dixlive, dixfe, dixbatch, dixcron services
+echo "Starting dix services..."
+for service in dixlive dixfe dixbatch dixcron; do
+    echo "systemctl start ${service}.service"
+    systemctl --user start ${service}.service
+done`, 1)
+
+	tmpl, err := template.New("start.sh").Parse(tmplStr)
+	if err != nil {
+		return fmt.Errorf("failed to parse start.sh template: %w", err)
+	}
+
+	outPath := filepath.Join(destDir, "start.sh")
+	outFile, err := os.Create(outPath)
+	if err != nil {
+		return fmt.Errorf("failed to create start.sh: %w", err)
+	}
+	defer outFile.Close()
+
+	if err := tmpl.Execute(outFile, data); err != nil {
+		return fmt.Errorf("failed to execute template: %w", err)
+	}
+
+	if err := os.Chmod(outPath, 0755); err != nil {
+		return fmt.Errorf("failed to set permissions on start.sh: %w", err)
+	}
+
+	fmt.Printf("Generated %s\n", outPath)
+	return nil
+}
+
+func generateStopScript(config dix.MgrConfig, destDir string, scriptsDir string) error {
+	relayServices := make(map[string]struct{})
+	parachainServices := make(map[string]struct{})
+	sidecarServices := make(map[string]struct{})
+
+	for relay, chains := range config.Parachains {
+		relayServices[UnitNameRelayNode(relay)] = struct{}{}
+
+		for chain, paraConfig := range chains {
+			if relay != chain {
+				parachainServices[UnitNameParachainNode(relay, chain)] = struct{}{}
+			}
+			for i := 0; i < paraConfig.SidecarCount; i++ {
+				sidecarServices[UnitNameParachainSidecar(relay, chain, i+1)] = struct{}{}
+			}
+		}
+	}
+
+	relayServiceSlice := make([]string, 0, len(relayServices))
+	for service := range relayServices {
+		relayServiceSlice = append(relayServiceSlice, service)
+	}
+
+	parachainServiceSlice := make([]string, 0, len(parachainServices))
+	for service := range parachainServices {
+		parachainServiceSlice = append(parachainServiceSlice, service)
+	}
+
+	sidecarServiceSlice := make([]string, 0, len(sidecarServices))
+	for service := range sidecarServices {
+		sidecarServiceSlice = append(sidecarServiceSlice, service)
+	}
+
+	// Sort in reverse order for stop script
+	sort.Sort(sort.Reverse(sort.StringSlice(relayServiceSlice)))
+	sort.Sort(sort.Reverse(sort.StringSlice(parachainServiceSlice)))
+	sort.Sort(sort.Reverse(sort.StringSlice(sidecarServiceSlice)))
+
+	data := struct {
+		RelayServices     []string
+		ParachainServices []string
+		SidecarServices   []string
+	}{
+		RelayServices:     relayServiceSlice,
+		ParachainServices: parachainServiceSlice,
+		SidecarServices:   sidecarServiceSlice,
+	}
+
+	tmplPath := filepath.Join(scriptsDir, "reboot.sh.tmpl")
+	tmplData, err := os.ReadFile(tmplPath)
+	if err != nil {
+		return fmt.Errorf("failed to read template file %s: %w", tmplPath, err)
+	}
+
+	// Replace restart with stop and update the script header
+	tmplStr := string(tmplData)
+	tmplStr = strings.ReplaceAll(tmplStr, "reboot", "stop")
+	tmplStr = strings.ReplaceAll(tmplStr, "Restarting", "Stopping")
+	tmplStr = strings.ReplaceAll(tmplStr, "Restart", "Stop")
+	tmplStr = strings.ReplaceAll(tmplStr, "restart", "stop")
+
+	// Reverse order: other services -> nginx -> sidecar -> parachain -> relay
+	tmplStr = strings.Replace(tmplStr, `# Stop relay chain services
+{{- if .RelayServices }}
+echo "Stopping relay chain services..."
+{{- range .RelayServices }}
+echo "systemctl stop {{ . }}"
+systemctl --user stop {{ . }}
+{{- end }}
+{{- end }}
+
+# Stop parachain services
+{{- if .ParachainServices }}
+echo "Stopping parachain services..."
+{{- range .ParachainServices }}
+echo "systemctl stop {{ . }}"
+systemctl --user stop {{ . }}
+{{- end }}
+{{- end }}`, `# Stop dixlive, dixfe, dixbatch, dixcron services
+echo "Stopping dix services..."
+for service in dixcron dixbatch dixfe dixlive; do
+    echo "systemctl stop ${service}.service"
+    systemctl --user stop ${service}.service
+done
+
+# Stop dix-nginx service
+echo "Stopping dix-nginx service..."
+echo "systemctl stop dix-nginx.service"
+systemctl --user stop dix-nginx.service
+
+# Stop sidecar services
+{{- if .SidecarServices }}
+echo "Stopping sidecar services..."
+{{- range .SidecarServices }}
+echo "systemctl stop {{ . }}"
+systemctl --user stop {{ . }}
+{{- end }}
+{{- end }}
+
+# Stop parachain services
+{{- if .ParachainServices }}
+echo "Stopping parachain services..."
+{{- range .ParachainServices }}
+echo "systemctl stop {{ . }}"
+systemctl --user stop {{ . }}
+{{- end }}
+{{- end }}
+
+# Stop relay chain services
+{{- if .RelayServices }}
+echo "Stopping relay chain services..."
+{{- range .RelayServices }}
+echo "systemctl stop {{ . }}"
+systemctl --user stop {{ . }}
+{{- end }}
+{{- end }}`, 1)
+
+	tmpl, err := template.New("stop.sh").Parse(tmplStr)
+	if err != nil {
+		return fmt.Errorf("failed to parse stop.sh template: %w", err)
+	}
+
+	outPath := filepath.Join(destDir, "stop.sh")
+	outFile, err := os.Create(outPath)
+	if err != nil {
+		return fmt.Errorf("failed to create stop.sh: %w", err)
+	}
+	defer outFile.Close()
+
+	if err := tmpl.Execute(outFile, data); err != nil {
+		return fmt.Errorf("failed to execute template: %w", err)
+	}
+
+	if err := os.Chmod(outPath, 0755); err != nil {
+		return fmt.Errorf("failed to set permissions on stop.sh: %w", err)
 	}
 
 	fmt.Printf("Generated %s\n", outPath)

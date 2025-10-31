@@ -12,6 +12,13 @@ type NodeWorkflowConfig struct {
 	MaxRestarts      int           // Maximum restart attempts before giving up
 	RestartBackoff   time.Duration // Base backoff duration between restart attempts
 	ParentWorkflowID string        // ID of parent workflow for signaling
+
+	// Sync-aware fields
+	ServiceName string // Semantic service name for signal/workflow ID generation
+	RPCEndpoint string // RPC endpoint URL (if empty, uses http://localhost:RPCPort)
+	RPCPort     int    // RPC port for sync checking
+	CheckSync   bool   // Whether to check blockchain sync status before marking ready
+	ReadySignal string // Signal name to emit when ready (optional override)
 }
 
 // ClusterWorkflowConfig represents configuration for managing redundant services
@@ -47,7 +54,29 @@ type TemporalConfig struct {
 func GetDefaultTemporalConfig() TemporalConfig {
 	return TemporalConfig{
 		HostPort:  "localhost:7233",
-		Namespace: "default",
+		Namespace: "dotidx",
 		TaskQueue: "dotidx-watcher",
 	}
+}
+
+// ParaPlan represents configuration for a parachain and its sidecars
+type ParaPlan struct {
+	ChainID            string             // Chain ID (e.g., "assethub")
+	Node               NodeWorkflowConfig // Parachain node configuration
+	SidecarServiceName string             // Base name for sidecar services
+	SidecarCount       int                // Number of sidecar instances
+}
+
+// RelayPlan represents configuration for a relay chain and its parachains
+type RelayPlan struct {
+	RelayID    string             // Relay chain ID (e.g., "polkadot")
+	Node       NodeWorkflowConfig // Relay chain node configuration
+	Parachains []ParaPlan         // Parachains attached to this relay
+}
+
+// InfrastructureWorkflowInput represents the complete infrastructure orchestration plan
+type InfrastructureWorkflowInput struct {
+	RelayPlans         []RelayPlan // All relay chains and their parachains
+	NginxService       string      // Nginx service name
+	AfterNginxServices []string    // Services to start after nginx (dixlive, dixfe, etc.)
 }

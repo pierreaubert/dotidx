@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/pierreaubert/dotidx/dix"
 	"go.temporal.io/sdk/client"
@@ -21,14 +20,28 @@ func main() {
 
 	configFile := flag.String("conf", "", "toml configuration file")
 	temporalHost := flag.String("temporal-host", "localhost:7233", "Temporal server address")
-	temporalNamespace := flag.String("temporal-namespace", "default", "Temporal namespace")
+	temporalNamespace := flag.String("temporal-namespace", "dotidx", "Temporal namespace")
+	watchMode := flag.Bool("watch", false, "watch mode: monitor services and print what would be done (dry-run)")
+	execMode := flag.Bool("exec", false, "exec mode: monitor services and execute restart actions")
 	flag.Parse()
 
 	if *configFile == "" {
 		log.Fatal("Configuration file is required (use -conf flag)")
 	}
 
-	log.Printf("Starting Dix Watcher with configuration file: %s", *configFile)
+	// Validate mode flags
+	if *watchMode && *execMode {
+		log.Fatal("Cannot use both -watch and -exec flags. Choose one mode.")
+	}
+	if !*watchMode && !*execMode {
+		log.Fatal("Must specify either -watch (dry-run) or -exec (execute actions) mode")
+	}
+
+	mode := "watch (dry-run)"
+	if *execMode {
+		mode = "exec (execute actions)"
+	}
+	log.Printf("Starting Dix Watcher in %s mode with configuration file: %s", mode, *configFile)
 	log.Printf("Temporal server: %s, namespace: %s", *temporalHost, *temporalNamespace)
 
 	// Load configuration
@@ -49,8 +62,8 @@ func main() {
 
 	log.Println("Connected to Temporal server")
 
-	// Create activities instance
-	activities, err := NewActivities()
+	// Create activities instance with execution mode
+	activities, err := NewActivities(*execMode)
 	if err != nil {
 		log.Fatalf("Failed to create activities: %v", err)
 	}
@@ -62,12 +75,16 @@ func main() {
 
 	// Register workflows
 	w.RegisterWorkflow(NodeWorkflow)
+	w.RegisterWorkflow(ClusterWorkflowExample)
+	w.RegisterWorkflow(InfrastructureWorkflow)
+	w.RegisterWorkflow(DependentServiceWorkflow)
 
 	// Register activities
 	w.RegisterActivity(activities.CheckSystemdServiceActivity)
 	w.RegisterActivity(activities.StartSystemdServiceActivity)
 	w.RegisterActivity(activities.StopSystemdServiceActivity)
 	w.RegisterActivity(activities.RestartSystemdServiceActivity)
+	w.RegisterActivity(activities.CheckNodeSyncActivity)
 
 	log.Printf("Registered workflows and activities on task queue: %s", taskQueue)
 
@@ -80,10 +97,16 @@ func main() {
 
 	log.Println("Worker started successfully")
 
-	// Start workflows for each service in the config
-	err = startServiceWorkflows(temporalClient, *config, taskQueue)
+	// Build infrastructure workflow input from config
+	input, err := FromMgrConfigToInfraInput(config, int(config.Watcher.WatchInterval.Seconds()), config.Watcher.MaxRestarts, int(config.Watcher.RestartBackoff.Seconds()))
 	if err != nil {
-		log.Fatalf("Failed to start service workflows: %v", err)
+		log.Fatalf("Failed to build infrastructure input: %v", err)
+	}
+
+	// Start the single InfrastructureWorkflow
+	err = startInfrastructureWorkflow(temporalClient, input, taskQueue)
+	if err != nil {
+		log.Fatalf("Failed to start infrastructure workflow: %v", err)
 	}
 
 	// Wait for interrupt signal
@@ -97,175 +120,23 @@ func main() {
 	log.Println("Dix Watcher stopped gracefully. Exiting application.")
 }
 
-// startServiceWorkflows creates and starts Temporal workflows for all configured services
-func startServiceWorkflows(c client.Client, config dix.MgrConfig, taskQueue string) error {
+// startInfrastructureWorkflow starts the root infrastructure orchestration workflow
+func startInfrastructureWorkflow(c client.Client, input InfrastructureWorkflowInput, taskQueue string) error {
 	ctx := context.Background()
 
-	// Get default watch settings from config
-	watchInterval := config.Watcher.WatchInterval
-	if watchInterval == 0 {
-		watchInterval = 30 * time.Second
-	}
+	log.Printf("Starting InfrastructureWorkflow with %d relay chains", len(input.RelayPlans))
 
-	maxRestarts := config.Watcher.MaxRestarts
-	if maxRestarts == 0 {
-		maxRestarts = 5
-	}
-
-	restartBackoff := config.Watcher.RestartBackoff
-	if restartBackoff == 0 {
-		restartBackoff = 10 * time.Second
-	}
-
-	log.Printf("Default settings: watchInterval=%v, maxRestarts=%d, restartBackoff=%v",
-		watchInterval, maxRestarts, restartBackoff)
-
-	// Start PostgreSQL workflow
-	postgresConfig := NodeWorkflowConfig{
-		Name:           "PostgreSQL",
-		SystemdUnit:    "postgres@16-dotidx.service",
-		WatchInterval:  watchInterval,
-		MaxRestarts:    maxRestarts,
-		RestartBackoff: restartBackoff,
-	}
-
-	err := startNodeWorkflow(ctx, c, postgresConfig, taskQueue)
-	if err != nil {
-		return fmt.Errorf("failed to start PostgreSQL workflow: %w", err)
-	}
-
-	// Start relay chain and parachain workflows
-	for relayChain, chainConfigs := range config.Parachains {
-		// Start relay chain node
-		relayConfig := NodeWorkflowConfig{
-			Name:           fmt.Sprintf("RelayChain-%s", relayChain),
-			SystemdUnit:    fmt.Sprintf("relay-node-archive@%s.service", relayChain),
-			WatchInterval:  watchInterval,
-			MaxRestarts:    maxRestarts,
-			RestartBackoff: restartBackoff,
-		}
-
-		err := startNodeWorkflow(ctx, c, relayConfig, taskQueue)
-		if err != nil {
-			return fmt.Errorf("failed to start relay chain workflow for %s: %w", relayChain, err)
-		}
-
-		// Start parachain nodes and sidecars
-		for chain, parachainCfg := range chainConfigs {
-			if relayChain == chain {
-				continue // Skip if it's the relay chain itself
-			}
-
-			// Start parachain node
-			parachainConfig := NodeWorkflowConfig{
-				Name:           fmt.Sprintf("Chain-%s-%s", relayChain, chain),
-				SystemdUnit:    fmt.Sprintf("chain-node-archive@%s-%s.service", relayChain, chain),
-				WatchInterval:  watchInterval,
-				MaxRestarts:    maxRestarts,
-				RestartBackoff: restartBackoff,
-			}
-
-			err := startNodeWorkflow(ctx, c, parachainConfig, taskQueue)
-			if err != nil {
-				return fmt.Errorf("failed to start parachain workflow for %s-%s: %w", relayChain, chain, err)
-			}
-
-			// Start sidecar instances
-			for i := 0; i < parachainCfg.SidecarCount; i++ {
-				sidecarConfig := NodeWorkflowConfig{
-					Name:           fmt.Sprintf("Sidecar-%s-%s-%d", relayChain, chain, i),
-					SystemdUnit:    fmt.Sprintf("sidecar@%s-%s-%d.service", relayChain, chain, i),
-					WatchInterval:  watchInterval,
-					MaxRestarts:    maxRestarts,
-					RestartBackoff: restartBackoff,
-				}
-
-				err := startNodeWorkflow(ctx, c, sidecarConfig, taskQueue)
-				if err != nil {
-					return fmt.Errorf("failed to start sidecar workflow for %s-%s-%d: %w", relayChain, chain, i, err)
-				}
-			}
-		}
-	}
-
-	// Start nginx workflow
-	nginxConfig := NodeWorkflowConfig{
-		Name:           "Nginx",
-		SystemdUnit:    "dix-nginx.service",
-		WatchInterval:  watchInterval,
-		MaxRestarts:    maxRestarts,
-		RestartBackoff: restartBackoff,
-	}
-
-	err = startNodeWorkflow(ctx, c, nginxConfig, taskQueue)
-	if err != nil {
-		return fmt.Errorf("failed to start nginx workflow: %w", err)
-	}
-
-	// Start dixfe workflow
-	dixfeConfig := NodeWorkflowConfig{
-		Name:           "DixFE",
-		SystemdUnit:    "dixfe.service",
-		WatchInterval:  watchInterval,
-		MaxRestarts:    maxRestarts,
-		RestartBackoff: restartBackoff,
-	}
-
-	err = startNodeWorkflow(ctx, c, dixfeConfig, taskQueue)
-	if err != nil {
-		return fmt.Errorf("failed to start dixfe workflow: %w", err)
-	}
-
-	// Start dixlive workflow
-	dixliveConfig := NodeWorkflowConfig{
-		Name:           "DixLive",
-		SystemdUnit:    "dixlive.service",
-		WatchInterval:  watchInterval,
-		MaxRestarts:    maxRestarts,
-		RestartBackoff: restartBackoff,
-	}
-
-	err = startNodeWorkflow(ctx, c, dixliveConfig, taskQueue)
-	if err != nil {
-		return fmt.Errorf("failed to start dixlive workflow: %w", err)
-	}
-
-	// Start dixcron workflow
-	dixcronConfig := NodeWorkflowConfig{
-		Name:           "DixCron",
-		SystemdUnit:    "dixcron.service",
-		WatchInterval:  watchInterval,
-		MaxRestarts:    maxRestarts,
-		RestartBackoff: restartBackoff,
-	}
-
-	err = startNodeWorkflow(ctx, c, dixcronConfig, taskQueue)
-	if err != nil {
-		return fmt.Errorf("failed to start dixcron workflow: %w", err)
-	}
-
-	log.Println("All service workflows started successfully")
-	return nil
-}
-
-// startNodeWorkflow starts a single NodeWorkflow for a service
-func startNodeWorkflow(ctx context.Context, c client.Client, config NodeWorkflowConfig, taskQueue string) error {
-	workflowID := fmt.Sprintf("node-%s", config.Name)
-
+	workflowID := WorkflowIDInfra()
 	workflowOptions := client.StartWorkflowOptions{
 		ID:        workflowID,
 		TaskQueue: taskQueue,
-		// WorkflowExecutionTimeout: 0, // Infinite - runs until cancelled
-		// WorkflowRunTimeout: 0, // Infinite
 	}
 
-	log.Printf("Starting workflow for service: %s (workflowID: %s)", config.Name, workflowID)
-
-	we, err := c.ExecuteWorkflow(ctx, workflowOptions, NodeWorkflow, config)
+	we, err := c.ExecuteWorkflow(ctx, workflowOptions, InfrastructureWorkflow, input)
 	if err != nil {
-		return fmt.Errorf("failed to execute workflow for %s: %w", config.Name, err)
+		return fmt.Errorf("failed to execute InfrastructureWorkflow: %w", err)
 	}
 
-	log.Printf("Started workflow for %s: WorkflowID=%s, RunID=%s", config.Name, we.GetID(), we.GetRunID())
+	log.Printf("Started InfrastructureWorkflow: WorkflowID=%s, RunID=%s", we.GetID(), we.GetRunID())
 	return nil
 }

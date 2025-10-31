@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Auto-generated script for batch indexing {{.Relay}} chains
+# Generated from config: {{.ConfPath}}
+
+DOTIDX_BIN="{{.BinPath}}"
+CONF="{{.ConfPath}}"
+RELAY="{{.Relay}}"
+
+echo "Starting batch indexing for {{.Relay}} at $(date -Iseconds)"
+
+{{- range .Parachains}}
+echo "Indexing {{.}} on {{$.Relay}}..."
+"${DOTIDX_BIN}/dixbatch" -conf "${CONF}" -relayChain "${RELAY}" -chain {{.}}
+{{- end}}
+
+echo "Completed batch indexing for {{.Relay}} at $(date -Iseconds)"

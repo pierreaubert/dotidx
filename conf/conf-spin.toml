@@ -58,61 +58,61 @@ static_path = "/dotidx/static"
 name = "polkadot"  # name for the polkadot binary --chain parameter
 bin = "/dotidx/bin/polkadot"
 relay_ip = "192.168.1.32"
-port_ws = 9943
-port_rpc = 9944
+port_ws = 20943
+port_rpc = 20944
 basepath = "/dotidx/polkadot-relay-archive"
 chainreader_ip = "192.168.1.32"
-chainreader_port = 10800
+chainreader_port = 20800
 sidecar_ip = "192.168.1.32"
-sidecar_port = 10800  # will use +1 +2 etc for each sidecar instance
+sidecar_port = 20800  # will use +1 +2 etc for each sidecar instance
 sidecar_count = 5
-prometheus_port = 9615
-sidecar_prometheus_port = 10850
+prometheus_port = 29615
+sidecar_prometheus_port = 20850
 
 [parachains.polkadot.assethub]
 name = "asset-hub-polkadot"  # name for the polkadot binary --chain parameter
 bin = "/dotidx/bin/polkadot-parachain"
 node_ip = "192.168.1.32"
-port_ws = 9945
-port_rpc = 9946
+port_ws = 20945
+port_rpc = 20946
 basepath = "/dotidx/polkadot-assethub-node-archive"
 chainreader_ip = "192.168.1.32"
-chainreader_port = 10900
+chainreader_port = 20900
 sidecar_ip = "192.168.1.32"
-sidecar_port = 10900  # will use +1 +2 etc for each sidecar instance
+sidecar_port = 20900  # will use +1 +2 etc for each sidecar instance
 sidecar_count = 5
-prometheus_port = 9616
-sidecar_prometheus_port = 10950
+prometheus_port = 29616
+sidecar_prometheus_port = 210950
 
 [parachains.polkadot.people]
 name = "people-polkadot"  # name for the polkadot binary --chain parameter
 bin = "/dotidx/bin/polkadot-parachain"
 node_ip = "192.168.1.32"
-port_ws = 9947
-port_rpc = 9948
+port_ws = 20947
+port_rpc = 20948
 basepath = "/dotidx/polkadot-people-node-archive"
 chainreader_ip = "192.168.1.32"
-chainreader_port = 11000
+chainreader_port = 21000
 sidecar_ip = "192.168.1.32"
-sidecar_port = 11000  # will use +1 +2 etc for each sidecar instance
+sidecar_port = 21000  # will use +1 +2 etc for each sidecar instance
 sidecar_count = 2
-prometheus_port = 9617
-sidecar_prometheus_port = 11050
+prometheus_port = 29617
+sidecar_prometheus_port = 21050
 
 [parachains.polkadot.collectives]
 name = "collectives-polkadot"  # name for the polkadot binary --chain parameter
 bin = "/dotidx/bin/polkadot-parachain"
 node_ip = "192.168.1.32"
-port_ws = 9949
-port_rpc = 9950
+port_ws = 20949
+port_rpc = 20950
 basepath = "/dotidx/polkadot-collectives-node-archive"
 chainreader_ip = "192.168.1.32"
-chainreader_port = 11100
+chainreader_port = 21100
 sidecar_ip = "192.168.1.32"
-sidecar_port = 11100  # will use +1 +2 etc for each sidecar instance
-sidecar_prometheus_port = 11150
+sidecar_port = 21100  # will use +1 +2 etc for each sidecar instance
+sidecar_prometheus_port = 21150
 sidecar_count = 2
-prometheus_port = 9618
+prometheus_port = 29618
 
 [filesystem]
 zfs = true
@@ -121,3 +121,7 @@ zfs = true
 user = "prometheus"
 prometheus_ip = "192.168.1.32"
 prometheus_port = 9100
+
+[watch]
+temporal_ip = "192.168.1.32"
+temporal_port = 7233
