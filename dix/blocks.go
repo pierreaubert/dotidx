@@ -22,6 +22,9 @@ type BlockData struct {
 	OnFinalize     json.RawMessage `json:"onFinalize"`
 	Logs           json.RawMessage `json:"logs"`
 	Extrinsics     json.RawMessage `json:"extrinsics"`
+	// Elastic scaling fields (available when useRcBlock parameter is used)
+	RcBlockNumber  *string         `json:"rcBlockNumber,omitempty"`
+	RcBlockHash    *string         `json:"rcBlockHash,omitempty"`
 }
 
 func IsValidAddress(address string) bool {

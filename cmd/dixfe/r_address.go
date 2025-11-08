@@ -100,14 +100,20 @@ func (f *Frontend) getBlocksByAddressForChain(relay, chain, address string, coun
 		cond += fmt.Sprintf("AND b.created_at <= '%s'", to)
 	}
 
+	// With elastic scaling, multiple blocks may share the same block_id
+	// This query returns all blocks where the address appears, ordered by block_id
 	query := fmt.Sprintf(
-		`SELECT * FROM (SELECT b.*
-		FROM %s b
-		JOIN %s a ON b.block_id = a.block_id
-		WHERE a.address = '%s'
-		%s
-		ORDER BY b.block_id DESC
-		LIMIT %s) ORDER BY block_id ASC;`,
+		`SELECT b.block_id, b.created_at, b.hash, b.parent_hash, b.state_root, b.extrinsics_root,
+		        b.author_id, b.finalized, b.on_initialize, b.on_finalize, b.logs, b.extrinsics
+		 FROM (SELECT b.block_id, b.created_at, b.hash, b.parent_hash, b.state_root, b.extrinsics_root,
+		              b.author_id, b.finalized, b.on_initialize, b.on_finalize, b.logs, b.extrinsics
+		       FROM %s b
+		       JOIN %s a ON b.block_id = a.block_id
+		       WHERE a.address = '%s'
+		       %s
+		       ORDER BY b.block_id DESC, b.hash DESC
+		       LIMIT %s) AS subquery
+		 ORDER BY block_id ASC, hash ASC;`,
 		dix.GetBlocksTableName(relay, chain),
 		dix.GetAddressTableName(relay, chain),
 		address,
