@@ -17,9 +17,12 @@ type Activities struct {
 	alertManager   *AlertManager
 	alertEngine    *AlertRuleEngine
 	enableResourceMonitoring bool
+	circuitBreakers *CircuitBreakerManager
+	healthHistory   *HealthHistoryStore
+	dynamicConfig   *DynamicConfig
 }
 
-func NewActivities(executeMode bool, metrics *MetricsCollector, alertManager *AlertManager, enableResourceMonitoring bool) (*Activities, error) {
+func NewActivities(executeMode bool, metrics *MetricsCollector, alertManager *AlertManager, enableResourceMonitoring bool, cbManager *CircuitBreakerManager, healthHistory *HealthHistoryStore, dynamicConfig *DynamicConfig) (*Activities, error) {
 	conn, err := dbus.New()
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to D-Bus: %w", err)
@@ -37,6 +40,9 @@ func NewActivities(executeMode bool, metrics *MetricsCollector, alertManager *Al
 		metrics:        metrics,
 		alertManager:   alertManager,
 		enableResourceMonitoring: enableResourceMonitoring,
+		circuitBreakers: cbManager,
+		healthHistory:   healthHistory,
+		dynamicConfig:   dynamicConfig,
 	}
 
 	// Create alert engine if alerting is enabled
@@ -50,5 +56,8 @@ func NewActivities(executeMode bool, metrics *MetricsCollector, alertManager *Al
 func (a *Activities) Close() {
 	if a.dbusConn != nil {
 		a.dbusConn.Close()
+	}
+	if a.healthHistory != nil {
+		a.healthHistory.Close()
 	}
 }

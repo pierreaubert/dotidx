@@ -1,0 +1,285 @@
+{
+  "dashboard": {
+    "title": "DixWatcher - Service Monitoring",
+    "tags": ["dixwatcher", "monitoring", "blockchain"],
+    "timezone": "browser",
+    "editable": true,
+    "graphTooltip": 1,
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Service Health Overview",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 0, "w": 24, "h": 4},
+        "targets": [
+          {
+            "expr": "dixwatcher_service_health",
+            "legendFormat": "{{service}} ({{type}})"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "textMode": "value_and_name"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 1, "color": "green"}
+              ]
+            },
+            "mappings": [
+              {"type": "value", "value": "0", "text": "Unhealthy"},
+              {"type": "value", "value": "1", "text": "Healthy"}
+            ]
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Service Restart Rate (5m)",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(dixwatcher_service_restarts_total[5m])",
+            "legendFormat": "{{service}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Restarts/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Total Downtime",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "dixwatcher_service_downtime_seconds_total",
+            "legendFormat": "{{service}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Downtime"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 4,
+        "title": "CPU Usage",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 12, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "dixwatcher_service_cpu_percent",
+            "legendFormat": "{{service}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "CPU %", "max": 100},
+          {"format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [80], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "1m",
+          "handler": 1,
+          "name": "CPU Usage Alert",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 5,
+        "title": "Memory Usage",
+        "type": "graph",
+        "gridPos": {"x": 8, "y": 12, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "dixwatcher_service_memory_bytes / 1024 / 1024 / 1024",
+            "legendFormat": "{{service}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "decgbytes", "label": "Memory (GB)"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Disk I/O",
+        "type": "graph",
+        "gridPos": {"x": 16, "y": 12, "w": 8, "h": 8},
+        "targets": [
+          {
+            "expr": "dixwatcher_service_disk_io_bytes_per_second{direction=\"read\"}",
+            "legendFormat": "{{service}} read"
+          },
+          {
+            "expr": "dixwatcher_service_disk_io_bytes_per_second{direction=\"write\"}",
+            "legendFormat": "{{service}} write"
+          }
+        ],
+        "yaxes": [
+          {"format": "Bps", "label": "Bytes/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Node Sync Status",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 20, "w": 12, "h": 4},
+        "targets": [
+          {
+            "expr": "dixwatcher_node_sync_status",
+            "legendFormat": "{{node}} - {{chain}}"
+          }
+        ],
+        "options": {
+          "colorMode": "background"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "yellow"},
+                {"value": 1, "color": "green"}
+              ]
+            },
+            "mappings": [
+              {"type": "value", "value": "0", "text": "Syncing"},
+              {"type": "value", "value": "1", "text": "Synced"}
+            ]
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Peer Count",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 20, "w": 12, "h": 4},
+        "targets": [
+          {
+            "expr": "dixwatcher_node_peer_count",
+            "legendFormat": "{{node}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Peers"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Activity Execution Duration (p95)",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(dixwatcher_activity_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{activity}} p95"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Duration"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Activity Error Rate",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(dixwatcher_activity_errors_total[5m])",
+            "legendFormat": "{{activity}} - {{error_type}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Errors/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Active Alerts",
+        "type": "table",
+        "gridPos": {"x": 0, "y": 32, "w": 24, "h": 8},
+        "targets": [
+          {
+            "expr": "dixwatcher_alerts_active > 0",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true, "__name__": true},
+              "indexByName": {},
+              "renameByName": {
+                "alert_type": "Alert Type",
+                "severity": "Severity",
+                "Value": "Count"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Workflow Execution Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 40, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(dixwatcher_workflow_executions_total[5m])",
+            "legendFormat": "{{workflow}} - {{status}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Workflows/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 13,
+        "title": "Dependency Wait Time (p95)",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 40, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(dixwatcher_dependency_wait_time_seconds_bucket[5m]))",
+            "legendFormat": "{{service}} waiting for {{dependency}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Wait Time"},
+          {"format": "short"}
+        ]
+      }
+    ]
+  },
+  "overwrite": true
+}

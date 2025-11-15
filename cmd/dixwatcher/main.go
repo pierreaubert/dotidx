@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -33,6 +34,13 @@ func main() {
 	webhookURL := flag.String("webhook-url", "", "Generic webhook URL for alerts")
 	enableResourceMonitoring := flag.Bool("resource-monitoring", true, "Enable resource monitoring")
 
+	// Medium-priority feature flags
+	enableCircuitBreaker := flag.Bool("circuit-breaker", true, "Enable circuit breaker pattern")
+	enableHealthHistory := flag.Bool("health-history", false, "Enable persistent health history")
+	healthHistoryDB := flag.String("health-history-db", "/var/lib/dixwatcher/health.db", "Health history database path")
+	enableDynamicConfig := flag.Bool("dynamic-config", true, "Enable dynamic configuration")
+	configPort := flag.Int("config-port", 9091, "Configuration API port")
+
 	flag.Parse()
 
 	if *configFile == "" {
@@ -53,8 +61,10 @@ func main() {
 	}
 	log.Printf("Starting Dix Watcher in %s mode with configuration file: %s", mode, *configFile)
 	log.Printf("Temporal server: %s, namespace: %s", *temporalHost, *temporalNamespace)
-	log.Printf("Features: metrics=%v, alerts=%v, resource-monitoring=%v",
+	log.Printf("High-priority features: metrics=%v, alerts=%v, resource-monitoring=%v",
 		*metricsEnabled, *alertsEnabled, *enableResourceMonitoring)
+	log.Printf("Medium-priority features: circuit-breaker=%v, health-history=%v, dynamic-config=%v",
+		*enableCircuitBreaker, *enableHealthHistory, *enableDynamicConfig)
 
 	// Load configuration
 	config, err := dix.LoadMgrConfig(*configFile)
@@ -101,6 +111,63 @@ func main() {
 		log.Printf("Alert manager initialized")
 	}
 
+	// Initialize circuit breaker manager
+	var circuitBreakerManager *CircuitBreakerManager
+	if *enableCircuitBreaker {
+		cbConfig := CircuitBreakerConfig{
+			MaxFailures:      5,
+			Timeout:          60 * time.Second,
+			HalfOpenRequests: 3,
+		}
+		circuitBreakerManager = NewCircuitBreakerManager(cbConfig, metricsCollector)
+		log.Printf("Circuit breaker manager initialized")
+	}
+
+	// Initialize health history store
+	var healthHistory *HealthHistoryStore
+	if *enableHealthHistory {
+		healthHistory, err = NewHealthHistoryStore(*healthHistoryDB, true)
+		if err != nil {
+			log.Fatalf("Failed to initialize health history store: %v", err)
+		}
+		defer healthHistory.Close()
+		log.Printf("Health history store initialized: %s", *healthHistoryDB)
+
+		// Start background purge task (keep 30 days of data)
+		go func() {
+			ticker := time.NewTicker(24 * time.Hour)
+			defer ticker.Stop()
+			for range ticker.C {
+				if err := healthHistory.PurgeOldData(30 * 24 * time.Hour); err != nil {
+					log.Printf("Warning: failed to purge old health data: %v", err)
+				}
+			}
+		}()
+	}
+
+	// Initialize dynamic configuration
+	var dynamicConfig *DynamicConfig
+	if *enableDynamicConfig {
+		dynamicConfig = NewDynamicConfig()
+		dynamicConfig.MetricsEnabled = *metricsEnabled
+		dynamicConfig.AlertsEnabled = *alertsEnabled
+		dynamicConfig.ResourceMonitoringEnabled = *enableResourceMonitoring
+		dynamicConfig.HealthHistoryEnabled = *enableHealthHistory
+		dynamicConfig.MetricsPort = *metricsPort
+
+		// Start config HTTP server
+		configServer := NewConfigHTTPServer(dynamicConfig)
+		configServer.RegisterHandlers()
+		go func() {
+			addr := fmt.Sprintf(":%d", *configPort)
+			log.Printf("Starting configuration API server on %s", addr)
+			if err := http.ListenAndServe(addr, nil); err != nil {
+				log.Printf("Configuration server error: %v", err)
+			}
+		}()
+		log.Printf("Dynamic configuration enabled (API on port %d)", *configPort)
+	}
+
 	// Create Temporal client
 	temporalClient, err := client.Dial(client.Options{
 		HostPort:  *temporalHost,
@@ -113,8 +180,8 @@ func main() {
 
 	log.Println("Connected to Temporal server")
 
-	// Create activities instance with enhanced features
-	activities, err := NewActivities(*execMode, metricsCollector, alertManager, *enableResourceMonitoring)
+	// Create activities instance with all features
+	activities, err := NewActivities(*execMode, metricsCollector, alertManager, *enableResourceMonitoring, circuitBreakerManager, healthHistory, dynamicConfig)
 	if err != nil {
 		log.Fatalf("Failed to create activities: %v", err)
 	}
