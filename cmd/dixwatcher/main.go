@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/pierreaubert/dotidx/dix"
 	"go.temporal.io/sdk/client"
@@ -23,6 +24,15 @@ func main() {
 	temporalNamespace := flag.String("temporal-namespace", "dotidx", "Temporal namespace")
 	watchMode := flag.Bool("watch", false, "watch mode: monitor services and print what would be done (dry-run)")
 	execMode := flag.Bool("exec", false, "exec mode: monitor services and execute restart actions")
+
+	// New flags for enhanced features
+	metricsEnabled := flag.Bool("metrics", true, "Enable Prometheus metrics")
+	metricsPort := flag.Int("metrics-port", 9090, "Metrics server port")
+	alertsEnabled := flag.Bool("alerts", true, "Enable alerting")
+	slackWebhook := flag.String("slack-webhook", "", "Slack webhook URL for alerts")
+	webhookURL := flag.String("webhook-url", "", "Generic webhook URL for alerts")
+	enableResourceMonitoring := flag.Bool("resource-monitoring", true, "Enable resource monitoring")
+
 	flag.Parse()
 
 	if *configFile == "" {
@@ -43,11 +53,52 @@ func main() {
 	}
 	log.Printf("Starting Dix Watcher in %s mode with configuration file: %s", mode, *configFile)
 	log.Printf("Temporal server: %s, namespace: %s", *temporalHost, *temporalNamespace)
+	log.Printf("Features: metrics=%v, alerts=%v, resource-monitoring=%v",
+		*metricsEnabled, *alertsEnabled, *enableResourceMonitoring)
 
 	// Load configuration
 	config, err := dix.LoadMgrConfig(*configFile)
 	if err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
+	}
+
+	// Initialize metrics collector
+	var metricsCollector *MetricsCollector
+	if *metricsEnabled {
+		metricsCollector = NewMetricsCollector("dixwatcher")
+		log.Printf("Metrics collector initialized")
+
+		// Start metrics server in background
+		go func() {
+			addr := fmt.Sprintf(":%d", *metricsPort)
+			log.Printf("Starting metrics server on %s", addr)
+			if err := metricsCollector.StartMetricsServer(addr); err != nil {
+				log.Printf("Metrics server error: %v", err)
+			}
+		}()
+	}
+
+	// Initialize alert manager
+	var alertManager *AlertManager
+	if *alertsEnabled {
+		alertManager = NewAlertManager(metricsCollector, 5*time.Minute)
+
+		// Register log channel (always enabled)
+		alertManager.RegisterChannel(NewLogChannel())
+
+		// Register Slack channel if webhook provided
+		if *slackWebhook != "" {
+			alertManager.RegisterChannel(NewSlackChannel(*slackWebhook))
+			log.Printf("Registered Slack alert channel")
+		}
+
+		// Register generic webhook if provided
+		if *webhookURL != "" {
+			alertManager.RegisterChannel(NewWebhookChannel(*webhookURL, nil))
+			log.Printf("Registered webhook alert channel: %s", *webhookURL)
+		}
+
+		log.Printf("Alert manager initialized")
 	}
 
 	// Create Temporal client
@@ -62,8 +113,8 @@ func main() {
 
 	log.Println("Connected to Temporal server")
 
-	// Create activities instance with execution mode
-	activities, err := NewActivities(*execMode)
+	// Create activities instance with enhanced features
+	activities, err := NewActivities(*execMode, metricsCollector, alertManager, *enableResourceMonitoring)
 	if err != nil {
 		log.Fatalf("Failed to create activities: %v", err)
 	}
@@ -85,6 +136,9 @@ func main() {
 	w.RegisterActivity(activities.StopSystemdServiceActivity)
 	w.RegisterActivity(activities.RestartSystemdServiceActivity)
 	w.RegisterActivity(activities.CheckNodeSyncActivity)
+	w.RegisterActivity(activities.CheckResourceUsageActivity)
+	w.RegisterActivity(activities.CheckHTTPEndpointActivity)
+	w.RegisterActivity(activities.CheckHTTPEndpointSimpleActivity)
 
 	log.Printf("Registered workflows and activities on task queue: %s", taskQueue)
 

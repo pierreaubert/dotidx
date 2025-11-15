@@ -80,3 +80,33 @@ type InfrastructureWorkflowInput struct {
 	NginxService       string      // Nginx service name
 	AfterNginxServices []string    // Services to start after nginx (dixlive, dixfe, etc.)
 }
+
+// MetricsConfig holds metrics configuration
+type MetricsConfig struct {
+	Enabled   bool   // Enable metrics collection
+	Port      int    // Metrics server port (default: 9090)
+	Namespace string // Prometheus namespace (default: "dixwatcher")
+}
+
+// AlertChannelConfig represents configuration for an alert channel
+type AlertChannelConfig struct {
+	Type    string            // Type: "log", "webhook", "slack", "email"
+	Enabled bool              // Enable this channel
+	Config  map[string]string // Channel-specific configuration
+}
+
+// AlertConfig holds alerting configuration
+type AlertConfig struct {
+	Enabled        bool                 // Enable alerting
+	Channels       []AlertChannelConfig // Alert channels
+	DedupeWindow   time.Duration        // Deduplication window (default: 5m)
+	EnabledRules   []string             // List of enabled rule names (empty = all)
+	DisabledRules  []string             // List of disabled rule names
+}
+
+// WatcherConfig represents the complete watcher configuration
+type WatcherConfig struct {
+	Metrics MetricsConfig // Metrics configuration
+	Alerts  AlertConfig   // Alert configuration
+	EnableResourceMonitoring bool // Enable resource monitoring for all services
+}
