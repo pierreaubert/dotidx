@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -14,9 +15,14 @@ import (
 )
 
 type ChainState struct {
-	reader  *dix.Sidecar
-	current int
-	head    int
+	mu         sync.RWMutex
+	reader     *dix.Sidecar
+	current    int
+	head       int
+	connected  bool
+	relayChain string
+	chain      string
+	url        string
 }
 
 func main() {
@@ -70,9 +76,13 @@ func main() {
 			}
 			log.Printf("Sidecar is up for %s:%s head is at %d", relayChain, chain, headBlockID)
 			readers[relayChain][chain] = &ChainState{
-				reader:  reader,
-				current: headBlockID,
-				head:    headBlockID,
+				reader:     reader,
+				current:    headBlockID,
+				head:       headBlockID,
+				connected:  true,
+				relayChain: relayChain,
+				chain:      chain,
+				url:        url,
 			}
 		}
 	}
@@ -116,11 +126,61 @@ func main() {
 	// ----------------------------------------------------------------------
 	// Monitoring
 	// ----------------------------------------------------------------------
+	log.Println("Starting reconnection loop...")
+	startReconnectionLoop(ctx, readers)
+
 	log.Println("Starting monitoring for new blocks...")
 	if err := monitorNewBlocks(ctx, *config, database, readers); err != nil {
 		log.Fatalf("Error monitoring blocks: %v", err)
 	}
 
+}
+
+// markDisconnected marks a chain reader as disconnected
+func (cs *ChainState) markDisconnected() {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	if cs.connected {
+		cs.connected = false
+		log.Printf("Marked %s:%s as disconnected", cs.relayChain, cs.chain)
+	}
+}
+
+// isConnected safely checks if the reader is connected
+func (cs *ChainState) isConnected() bool {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	return cs.connected
+}
+
+// attemptReconnect tries to reconnect to the chainreader
+func (cs *ChainState) attemptReconnect() bool {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+
+	// Create a new reader
+	newReader := dix.NewSidecar(cs.relayChain, cs.chain, cs.url)
+
+	// Test connection
+	if err := newReader.Ping(); err != nil {
+		log.Printf("Reconnect ping failed for %s:%s: %v", cs.relayChain, cs.chain, err)
+		return false
+	}
+
+	// Verify we can get the head block
+	headBlockID, err := newReader.GetChainHeadID()
+	if err != nil {
+		log.Printf("Reconnect head block fetch failed for %s:%s: %v", cs.relayChain, cs.chain, err)
+		return false
+	}
+
+	// Success! Update the reader and mark as connected
+	cs.reader = newReader
+	cs.head = headBlockID
+	cs.current = headBlockID
+	cs.connected = true
+	log.Printf("Successfully reconnected to %s:%s, head block: %d", cs.relayChain, cs.chain, headBlockID)
+	return true
 }
 
 func processLastBlocks(
@@ -129,9 +189,15 @@ func processLastBlocks(
 	db dix.Database,
 	state *ChainState,
 ) error {
+	// Skip if not connected
+	if !state.isConnected() {
+		return fmt.Errorf("reader not connected")
+	}
+
 	head, err := state.reader.GetChainHeadID()
 	if err != nil {
-		log.Printf("Error fetching head block: %v", err)
+		log.Printf("Error fetching head block for %s:%s: %v", relayChain, chain, err)
+		state.markDisconnected()
 		return err
 	}
 
@@ -142,7 +208,8 @@ func processLastBlocks(
 	for next <= head {
 		block, err := state.reader.FetchBlock(ctx, next)
 		if err != nil {
-			log.Printf("Error fetching block %d: %v", next, err)
+			log.Printf("Error fetching block %d for %s:%s: %v", next, relayChain, chain, err)
+			state.markDisconnected()
 			break
 		}
 		err = db.Save([]dix.BlockData{block}, relayChain, chain)
@@ -154,6 +221,34 @@ func processLastBlocks(
 	}
 	state.current = head
 	return nil
+}
+
+// startReconnectionLoop starts a background goroutine that attempts to reconnect
+// disconnected chain readers every minute
+func startReconnectionLoop(
+	ctx context.Context,
+	readers map[string]map[string]*ChainState,
+) {
+	ticker := time.NewTicker(1 * time.Minute)
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				for relayChain := range readers {
+					for chain := range readers[relayChain] {
+						state := readers[relayChain][chain]
+						if !state.isConnected() {
+							log.Printf("Attempting to reconnect %s:%s", relayChain, chain)
+							state.attemptReconnect()
+						}
+					}
+				}
+			}
+		}
+	}()
 }
 
 // MonitorNewBlocks continuously monitors for new blocks and adds them to the database
