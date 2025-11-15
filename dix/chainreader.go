@@ -231,3 +231,30 @@ func (s *Sidecar) Ping() error {
 func (s *Sidecar) GetStats() *MetricsStats {
 	return s.metrics.GetStats()
 }
+
+// NewChainReader creates a ChainReader with fallback support
+// It uses SubstrateRPC as primary and HTTP Sidecar as fallback
+func NewChainReader(relay, chain, wsUrl, httpUrl string) ChainReader {
+	return NewFallbackChainReader(relay, chain, wsUrl, httpUrl)
+}
+
+// NewChainReaderFromConfig creates a ChainReader from ParaChainConfig
+// It automatically constructs the WebSocket and HTTP URLs from config
+func NewChainReaderFromConfig(relay, chain string, config ParaChainConfig) ChainReader {
+	// Determine the node IP
+	nodeIP := config.NodeIP
+	if nodeIP == "" {
+		nodeIP = config.RelayIP
+	}
+	if nodeIP == "" {
+		nodeIP = "127.0.0.1"
+	}
+
+	// Construct WebSocket URL for SubstrateRPC
+	wsUrl := fmt.Sprintf("ws://%s:%d", nodeIP, config.PortWS)
+
+	// Construct HTTP URL for Sidecar fallback
+	httpUrl := fmt.Sprintf("http://%s:%d", config.ChainreaderIP, config.ChainreaderPort)
+
+	return NewChainReader(relay, chain, wsUrl, httpUrl)
+}
