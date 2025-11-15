@@ -1,6 +1,7 @@
 import { formatTimestamp } from './misc.js';
 import { default_balance, getAccountAt } from './accounts.js';
 import { initAddresses, getAddress } from './assets.js';
+import { forEachMultiChain, MultiChainErrorCollector, summarizeMultiChain } from './multichain.js';
 
 // Function to build balance graph data
 function buildBalanceGraphData(balances) {
@@ -263,61 +264,71 @@ function renderBalancesTable(balancesByMonth) {
     return html;
 }
 
-function extractBalancesFromBlocks(results, address, balanceAt) {
+function extractBalancesFromBlocks(results, address, balanceAt, errorCollector = null) {
     const balances = [];
 
-    // Go through all blocks and collect extrinsics
-    for (const [relay, chains] of Object.entries(results)) {
-        for (const [chain, blocks] of Object.entries(chains)) {
-            if (blocks == undefined) {
-                continue;
+    // Use multi-chain utilities for consistent iteration and error handling
+    forEachMultiChain(
+        results,
+        (relay, chain, block) => {
+            if (!block.extrinsics || typeof block.extrinsics !== 'object') {
+                return;
             }
-            blocks.forEach((block) => {
-                if (!block.extrinsics || typeof block.extrinsics !== 'object') {
-                    return;
-                }
 
-                const timestamp = block.timestamp || 'N/A';
-                const blockId = block.number || 'N/A';
+            const timestamp = block.timestamp || 'N/A';
+            const blockId = block.number || 'N/A';
 
-                block.extrinsics.forEach((extrinsic) => {
-                    extrinsic.events.forEach((event) => {
-                        if (event?.method.pallet === 'balances') {
-                            let amount = 0.0;
-                            switch (event.method.method) {
-                                case 'Transfer':
-                                    amount = parseFloat(event.data[2]);
-                                    if (address === event.data[0]) {
-                                        amount = -amount;
-                                    }
-                                    break;
-                                case 'Deposit':
-                                    amount = parseFloat(event.data[1]);
-                                    break;
-                                case 'Withdraw':
-                                    amount = -parseFloat(event.data[1]);
-                                    break;
-                                default:
-                                    console.log('TODO: ' + event.method.pallet + ' ' + event.method.method);
-                            }
-                            amount = amount / 10 / 1000 / 1000 / 1000;
-                            balances.push({
-                                relay: relay,
-                                chain: chain,
-                                address: address,
-                                timestamp: timestamp,
-                                blockId: blockId,
-                                pallet: event.method.pallet,
-                                method: event.method.method,
-                                amount: amount,
-                                totalAmount: amount + balanceAt.get(relay).get(chain),
-                            });
+            block.extrinsics.forEach((extrinsic) => {
+                extrinsic.events.forEach((event) => {
+                    if (event?.method.pallet === 'balances') {
+                        let amount = 0.0;
+                        switch (event.method.method) {
+                            case 'Transfer':
+                                amount = parseFloat(event.data[2]);
+                                if (address === event.data[0]) {
+                                    amount = -amount;
+                                }
+                                break;
+                            case 'Deposit':
+                                amount = parseFloat(event.data[1]);
+                                break;
+                            case 'Withdraw':
+                                amount = -parseFloat(event.data[1]);
+                                break;
+                            default:
+                                console.log('TODO: ' + event.method.pallet + ' ' + event.method.method);
                         }
-                    });
+                        amount = amount / 10 / 1000 / 1000 / 1000;
+                        balances.push({
+                            relay: relay,
+                            chain: chain,
+                            address: address,
+                            timestamp: timestamp,
+                            blockId: blockId,
+                            pallet: event.method.pallet,
+                            method: event.method.method,
+                            amount: amount,
+                            totalAmount: amount + balanceAt.get(relay).get(chain),
+                        });
+                    }
                 });
             });
+        },
+        {
+            onError: (relay, chain, error) => {
+                console.error(`Error processing balances for ${relay}/${chain}:`, error);
+                if (errorCollector) {
+                    errorCollector.recordError(relay, chain, error);
+                }
+            },
+            onChainStart: (relay, chain, count) => {
+                if (errorCollector && count > 0) {
+                    errorCollector.recordSuccess(relay, chain, count);
+                }
+            },
         }
-    }
+    );
+
     return balances;
 }
 
@@ -351,43 +362,58 @@ async function balancesSummary(address, results) {
   <tbody>
 `;
     let balanceAt = new Map();
-    for (const [relay, chains] of Object.entries(results)) {
-        let totalFree = 0.0;
-        balanceAt.set(relay, new Map());
-        for (const [chain, result] of Object.entries(chains)) {
-            let firstBalance = default_balance;
-            let lastBalance = default_balance;
-            if (result && Array.isArray(result) && result.length > 0) {
-                const firstResult = result[0];
-                const lastResult = result[result.length - 1];
-                firstBalance = await getAccountAt(relay, chain, address, firstResult.number);
-                lastBalance = await getAccountAt(relay, chain, address, lastResult.number);
-            }
-            const nowBalance = await getAccountAt(relay, chain, address, '');
-            totalFree += nowBalance.free;
-            balanceAt.get(relay).set(chain, nowBalance.free);
-            // FREE
-            if (firstBalance.free + lastBalance.free + nowBalance.free > 0) {
-                summaryHtml += `
+    const relayTotals = new Map();
+
+    // Process each chain using multi-chain utilities
+    await forEachMultiChain(
+        results,
+        async (relay, chain, _blocks) => {
+            // This callback is called once per chain
+        },
+        {
+            onChainStart: async (relay, chain, count) => {
+                if (!balanceAt.has(relay)) {
+                    balanceAt.set(relay, new Map());
+                    relayTotals.set(relay, 0.0);
+                }
+
+                let firstBalance = default_balance;
+                let lastBalance = default_balance;
+                const chainBlocks = results[relay][chain];
+
+                if (chainBlocks && Array.isArray(chainBlocks) && chainBlocks.length > 0) {
+                    const firstResult = chainBlocks[0];
+                    const lastResult = chainBlocks[chainBlocks.length - 1];
+                    firstBalance = await getAccountAt(relay, chain, address, firstResult.number);
+                    lastBalance = await getAccountAt(relay, chain, address, lastResult.number);
+                }
+
+                const nowBalance = await getAccountAt(relay, chain, address, '');
+                relayTotals.set(relay, relayTotals.get(relay) + nowBalance.free);
+                balanceAt.get(relay).set(chain, nowBalance.free);
+
+                // FREE
+                if (firstBalance.free + lastBalance.free + nowBalance.free > 0) {
+                    summaryHtml += `
 <tr>
   <th>${relay}/${chain}</th>
   <th>${nowBalance.symbol}</th>
   <th>Free</th>
   <td class="has-text-right">${nowBalance.free}</td>
 </tr>`;
-            }
-            // RESERVED
-            if (firstBalance.reserved + lastBalance.reserved + nowBalance.reserved > 0) {
-                summaryHtml += `
+                }
+                // RESERVED
+                if (firstBalance.reserved + lastBalance.reserved + nowBalance.reserved > 0) {
+                    summaryHtml += `
 <tr>
   <th></th>
   <th>${nowBalance.symbol}</th>
   <th>Reserved</th>
   <td class="has-text-right">${nowBalance.reserved}</td>
 </tr>`;
-            }
-            if (firstBalance.frozen + lastBalance.frozen + nowBalance.frozen > 0) {
-                summaryHtml += `
+                }
+                if (firstBalance.frozen + lastBalance.frozen + nowBalance.frozen > 0) {
+                    summaryHtml += `
 <tr>
   <th></th>
   <th>${nowBalance.symbol}</th>
@@ -395,8 +421,13 @@ async function balancesSummary(address, results) {
   <td class="has-text-right">${nowBalance.frozen}</td>
 </tr>
     `;
-            }
+                }
+            },
         }
+    );
+
+    // Add relay totals
+    for (const [relay, totalFree] of relayTotals) {
         if (totalFree > 0) {
             summaryHtml += `
 <tr>
@@ -407,6 +438,7 @@ async function balancesSummary(address, results) {
 </tr>`;
         }
     }
+
     summaryHtml += `
   </tbody>
 </table>
@@ -439,9 +471,30 @@ async function fetchBalances(_balanceUrl) {
 
     resultDiv.classList.remove('is-hidden');
 
+    // Log multi-chain data summary
+    console.log(summarizeMultiChain(result));
+
+    // Create error collector for tracking partial failures
+    const errorCollector = new MultiChainErrorCollector();
+
     const [summaryHtml, balanceAt] = await balancesSummary(address, result);
-    summaryDiv.innerHTML = summaryHtml;
-    const balances = extractBalancesFromBlocks(result, address, balanceAt);
+
+    // Display any errors from summary generation
+    let errorHtml = errorCollector.getErrorsHTML();
+    if (errorHtml) {
+        summaryDiv.innerHTML = errorHtml + summaryHtml;
+    } else {
+        summaryDiv.innerHTML = summaryHtml;
+    }
+
+    const balances = extractBalancesFromBlocks(result, address, balanceAt, errorCollector);
+
+    // Display any additional errors from balance extraction
+    errorHtml = errorCollector.getErrorsHTML();
+    if (errorHtml && summaryDiv.innerHTML.indexOf(errorHtml) === -1) {
+        summaryDiv.innerHTML = errorHtml + summaryDiv.innerHTML;
+    }
+
     // Format timestamps for display
     balances.forEach((extrinsic) => {
         if (extrinsic.timestamp !== 'N/A') {

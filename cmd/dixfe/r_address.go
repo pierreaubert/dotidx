@@ -166,23 +166,39 @@ func (f *Frontend) getBlocksByAddress(address string, count, from, to string) (
 ) {
 	blocks := make(map[string]map[string][]dix.BlockData)
 	var wg sync.WaitGroup
-	var err error
+	var mu sync.Mutex // Protect shared map writes
+	errorCount := 0
+	successCount := 0
 
 	// not too many chains atm but a thread pool would be a good idea at some point
 	for relay := range f.config.Parachains {
 		blocks[relay] = make(map[string][]dix.BlockData)
 		for chain := range f.config.Parachains[relay] {
 			wg.Add(1)
+			// Capture loop variables for goroutine
+			relay := relay
+			chain := chain
 			go func() {
 				defer wg.Done()
-				blocks[relay][chain], err = f.getBlocksByAddressForChain(relay, chain, address, count, from, to)
+				chainBlocks, err := f.getBlocksByAddressForChain(relay, chain, address, count, from, to)
+
+				// Safely update shared map
+				mu.Lock()
 				if err != nil {
-					log.Printf("Error getting blocks for address %s: %v", address, err)
+					log.Printf("Error getting blocks for %s/%s address %s: %v", relay, chain, address, err)
+					blocks[relay][chain] = []dix.BlockData{} // Empty array for failed chain
+					errorCount++
+				} else {
+					blocks[relay][chain] = chainBlocks
+					log.Printf("Found %d blocks in %s/%s for address %s", len(chainBlocks), relay, chain, address)
+					successCount++
 				}
-				log.Printf("Found %d blocks in chain %s", len(blocks[relay][chain]), chain)
+				mu.Unlock()
 			}()
 		}
 	}
 	wg.Wait()
+
+	log.Printf("Multi-chain query complete: %d chains succeeded, %d failed", successCount, errorCount)
 	return blocks, nil
 }
