@@ -225,8 +225,9 @@ CREATE TABLE IF NOT EXISTS %[1]s
   on_finalize     jsonb,
   logs            jsonb,
   extrinsics      jsonb,
-  CONSTRAINT      %[2]s_pk PRIMARY KEY (block_id, created_at)
+  CONSTRAINT      %[2]s_pk PRIMARY KEY (hash, created_at)
 ) PARTITION BY RANGE (created_at);
+CREATE INDEX IF NOT EXISTS %[2]s_block_id_idx ON %[1]s (block_id);
 ALTER TABLE IF EXISTS %[1]s OWNER to dotidx;
 REVOKE ALL ON TABLE %[1]s FROM PUBLIC;
 GRANT SELECT ON TABLE %[1]s TO PUBLIC;
@@ -468,9 +469,8 @@ func (s *SQLDatabase) Save(items []BlockData, relayChain, chain string) error {
 			"block_id, created_at, hash, parent_hash, state_root, extrinsics_root, "+
 			"author_id, finalized, on_initialize, on_finalize, logs, extrinsics"+
 			") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) "+
-			"ON CONFLICT (block_id, created_at) DO UPDATE SET "+
-			"created_at = EXCLUDED.created_at, "+
-			"hash = EXCLUDED.hash, "+
+			"ON CONFLICT (hash, created_at) DO UPDATE SET "+
+			"block_id = EXCLUDED.block_id, "+
 			"parent_hash = EXCLUDED.parent_hash, "+
 			"state_root = EXCLUDED.state_root, "+
 			"extrinsics_root = EXCLUDED.extrinsics_root, "+

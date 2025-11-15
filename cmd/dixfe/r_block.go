@@ -34,7 +34,15 @@ func (f *Frontend) handleBlock(w http.ResponseWriter, r *http.Request) {
 }
 
 func (f *Frontend) getBlock(relay, chain, id string) (dix.BlockData, error) {
-	query := fmt.Sprintf(`SELECT * FROM %s WHERE block_id = %s;`,
+	// With elastic scaling, multiple blocks may have the same block_id
+	// Order by finalized DESC to prefer finalized blocks, then by created_at DESC for consistency
+	query := fmt.Sprintf(`
+		SELECT block_id, created_at, hash, parent_hash, state_root, extrinsics_root,
+		       author_id, finalized, on_initialize, on_finalize, logs, extrinsics
+		FROM %s
+		WHERE block_id = %s
+		ORDER BY finalized DESC, created_at DESC
+		LIMIT 1;`,
 		dix.GetBlocksTableName(relay, chain),
 		id,
 	)

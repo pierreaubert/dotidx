@@ -25,7 +25,7 @@
     "@polkadot/extension-dapp": "^0.62.3",
     "@polkadot/util": "^13.5.7",
     "@polkadot/util-crypto": "^13.5.7",
-    "@substrate/api-sidecar": "^20.10.2",
+    "@substrate/api-sidecar": "^20.11.0",
     "@types/plotly.js": "^3.0.8",
     "n": "^10.2.0",
     "plotly.js-dist-min": "^3.1.2",

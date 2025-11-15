@@ -19,6 +19,10 @@ type ChainReader interface {
 	GetStats() *MetricsStats
 }
 
+// Sidecar implements the ChainReader interface using Substrate API Sidecar
+// Supports both regular blocks and elastic scaling enabled parachains
+// Note: Elastic scaling support (v20.9.0+) allows multiple blocks per block height
+// The database schema uses (hash, created_at) as primary key to handle this
 type Sidecar struct {
 	relay   string
 	chain   string
@@ -156,6 +160,8 @@ func (s *Sidecar) FetchBlockRange(ctx context.Context, blockIDs []int) ([]BlockD
 }
 
 // fetchBlock makes a call to the sidecar API to fetch a single block
+// Note: With elastic scaling, multiple blocks may exist at the same height
+// This function returns the canonical block. For multi-block queries, use useRcBlock parameter
 func (s *Sidecar) FetchBlock(ctx context.Context, id int) (BlockData, error) {
 	start := time.Now()
 	defer func(start time.Time) {
