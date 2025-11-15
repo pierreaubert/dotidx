@@ -1,0 +1,55 @@
+## ------------------------------------------------------ -*- toml -*- --
+## E2E Test Configuration for dotidx
+## This configuration uses SQLite and tests indexing of Polkadot and AssetHub
+## blocks from the last 10 days only.
+##
+## Usage:
+##     dixe2e -conf conf/conf-e2e-test.toml
+## ----------------------------------------------------------------------
+
+# where do you want to generate the config files
+target_dir = "./e2e-test"
+
+# name of your configuration
+name = "e2e-test"
+dotidx_root = "./e2e-test"
+dotidx_backup = "./e2e-test/backup"
+dotidx_run = "./e2e-test/run"
+dotidx_runtime = "./e2e-test/runtime"
+dotidx_logs = "./e2e-test/logs"
+dotidx_bin = "./e2e-test/bin"
+dotidx_static = "./e2e-test/static"
+
+[dotidx_db]
+type = "sqlite"
+name = "e2e-test"
+# SQLite database file path
+data_dir = "./e2e-test/db"
+
+[dotidx_batch]
+start_range = 1
+end_range = -1  # Will be calculated based on last 10 days
+batch_size = 10
+max_workers = 4  # Lower for testing
+batching = "batch"
+flush_timeout = "15s"
+
+[dotidx_fe]
+ip = "127.0.0.1"
+port = 8080
+static_path = "./e2e-test/static"
+
+# Polkadot relay chain configuration
+# Note: These should point to actual Substrate API Sidecar endpoints
+[parachains.polkadot.polkadot]
+name = "polkadot"
+sidecar_ip = "127.0.0.1"
+sidecar_port = 10800
+sidecar_count = 1
+
+# AssetHub parachain configuration
+[parachains.polkadot.assethub]
+name = "asset-hub-polkadot"
+sidecar_ip = "127.0.0.1"
+sidecar_port = 10900
+sidecar_count = 1
