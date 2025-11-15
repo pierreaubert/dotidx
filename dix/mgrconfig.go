@@ -119,7 +119,39 @@ func LoadMgrConfig(file string) (*MgrConfig, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	// On Linux, try to read database password from systemd credentials
+	if runtime.GOOS == "linux" {
+		if dbPassword, err := readSystemdCredential("db_password"); err == nil && dbPassword != "" {
+			config.DotidxDB.Password = dbPassword
+		}
+	}
+
 	return &config, nil
+}
+
+// readSystemdCredential reads a credential from systemd credential store
+// Credentials are typically stored in /run/credentials/<service-name>/<credential-name>
+// systemd sets the CREDENTIALS_DIRECTORY environment variable to the credentials directory
+func readSystemdCredential(credentialName string) (string, error) {
+	var credPath string
+
+	// First, try using the CREDENTIALS_DIRECTORY environment variable set by systemd
+	if credDir := os.Getenv("CREDENTIALS_DIRECTORY"); credDir != "" {
+		credPath = fmt.Sprintf("%s/%s", credDir, credentialName)
+	} else {
+		// Fallback to the standard path for dotidx.service
+		credPath = fmt.Sprintf("/run/credentials/dotidx.service/%s", credentialName)
+	}
+
+	data, err := os.ReadFile(credPath)
+	if err != nil {
+		// Not an error if the file doesn't exist - credentials might not be configured
+		return "", err
+	}
+
+	// Trim whitespace and newlines from the credential
+	credential := strings.TrimSpace(string(data))
+	return credential, nil
 }
 
 func (d *Duration) UnmarshalText(b []byte) error {
