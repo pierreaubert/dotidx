@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/coreos/go-systemd/v22/dbus"
@@ -11,7 +10,8 @@ import (
 // They handle actual interactions with systemd and other services
 
 type Activities struct {
-	dbusConn       *dbus.Conn
+	dbusConn       *dbus.Conn // Kept for backward compatibility
+	processManager ProcessManager
 	executeMode    bool // true = execute actions, false = dry-run (watch only)
 	metrics        *MetricsCollector
 	alertManager   *AlertManager
@@ -22,20 +22,22 @@ type Activities struct {
 	dynamicConfig   *DynamicConfig
 }
 
-func NewActivities(executeMode bool, metrics *MetricsCollector, alertManager *AlertManager, enableResourceMonitoring bool, cbManager *CircuitBreakerManager, healthHistory *HealthHistoryStore, dynamicConfig *DynamicConfig) (*Activities, error) {
+func NewActivities(executeMode bool, metrics *MetricsCollector, alertManager *AlertManager, enableResourceMonitoring bool, cbManager *CircuitBreakerManager, healthHistory *HealthHistoryStore, dynamicConfig *DynamicConfig, processManager ProcessManager) (*Activities, error) {
+	// Keep D-Bus connection for backward compatibility (can be removed later)
 	conn, err := dbus.New()
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to D-Bus: %w", err)
+		log.Printf("Warning: failed to connect to D-Bus (continuing with process manager): %v", err)
 	}
 
 	mode := "watch (dry-run)"
 	if executeMode {
 		mode = "exec (execute actions)"
 	}
-	log.Printf("Activities initialized in %s mode", mode)
+	log.Printf("Activities initialized in %s mode (process manager: %s)", mode, processManager.Name())
 
 	activities := &Activities{
 		dbusConn:       conn,
+		processManager: processManager,
 		executeMode:    executeMode,
 		metrics:        metrics,
 		alertManager:   alertManager,
@@ -56,6 +58,9 @@ func NewActivities(executeMode bool, metrics *MetricsCollector, alertManager *Al
 func (a *Activities) Close() {
 	if a.dbusConn != nil {
 		a.dbusConn.Close()
+	}
+	if a.processManager != nil {
+		a.processManager.Close()
 	}
 	if a.healthHistory != nil {
 		a.healthHistory.Close()

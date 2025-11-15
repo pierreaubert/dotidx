@@ -41,6 +41,12 @@ func main() {
 	enableDynamicConfig := flag.Bool("dynamic-config", true, "Enable dynamic configuration")
 	configPort := flag.Int("config-port", 9091, "Configuration API port")
 
+	// Process manager flags
+	processManagerType := flag.String("process-manager", "systemd", "Process manager type: systemd or direct")
+	processLogDir := flag.String("process-log-dir", "/var/log/dixwatcher", "Directory for process logs (direct mode)")
+	processPIDDir := flag.String("process-pid-dir", "/var/run/dixwatcher", "Directory for PID files (direct mode)")
+	processMaxRestarts := flag.Int("process-max-restarts", 5, "Maximum restart attempts per process")
+
 	flag.Parse()
 
 	if *configFile == "" {
@@ -65,6 +71,8 @@ func main() {
 		*metricsEnabled, *alertsEnabled, *enableResourceMonitoring)
 	log.Printf("Medium-priority features: circuit-breaker=%v, health-history=%v, dynamic-config=%v",
 		*enableCircuitBreaker, *enableHealthHistory, *enableDynamicConfig)
+	log.Printf("Process manager: type=%s, log-dir=%s, pid-dir=%s, max-restarts=%d",
+		*processManagerType, *processLogDir, *processPIDDir, *processMaxRestarts)
 
 	// Load configuration
 	config, err := dix.LoadMgrConfig(*configFile)
@@ -168,6 +176,23 @@ func main() {
 		log.Printf("Dynamic configuration enabled (API on port %d)", *configPort)
 	}
 
+	// Initialize process manager
+	var processManager ProcessManager
+	pmConfig := ProcessManagerConfig{
+		Type:         ProcessManagerType(*processManagerType),
+		LogDir:       *processLogDir,
+		PIDDir:       *processPIDDir,
+		MaxRestarts:  *processMaxRestarts,
+		UseCgroups:   false, // Can be made configurable if needed
+	}
+
+	processManager, err = NewProcessManager(pmConfig, metricsCollector)
+	if err != nil {
+		log.Fatalf("Failed to create process manager: %v", err)
+	}
+	defer processManager.Close()
+	log.Printf("Process manager initialized: type=%s", processManager.Name())
+
 	// Create Temporal client
 	temporalClient, err := client.Dial(client.Options{
 		HostPort:  *temporalHost,
@@ -181,7 +206,7 @@ func main() {
 	log.Println("Connected to Temporal server")
 
 	// Create activities instance with all features
-	activities, err := NewActivities(*execMode, metricsCollector, alertManager, *enableResourceMonitoring, circuitBreakerManager, healthHistory, dynamicConfig)
+	activities, err := NewActivities(*execMode, metricsCollector, alertManager, *enableResourceMonitoring, circuitBreakerManager, healthHistory, dynamicConfig, processManager)
 	if err != nil {
 		log.Fatalf("Failed to create activities: %v", err)
 	}
@@ -206,6 +231,15 @@ func main() {
 	w.RegisterActivity(activities.CheckResourceUsageActivity)
 	w.RegisterActivity(activities.CheckHTTPEndpointActivity)
 	w.RegisterActivity(activities.CheckHTTPEndpointSimpleActivity)
+
+	// Register process management activities
+	w.RegisterActivity(activities.StartProcessActivity)
+	w.RegisterActivity(activities.StopProcessActivity)
+	w.RegisterActivity(activities.RestartProcessActivity)
+	w.RegisterActivity(activities.CheckProcessActivity)
+	w.RegisterActivity(activities.GetProcessOutputActivity)
+	w.RegisterActivity(activities.KillProcessActivity)
+	w.RegisterActivity(activities.ListProcessesActivity)
 
 	log.Printf("Registered workflows and activities on task queue: %s", taskQueue)
 
