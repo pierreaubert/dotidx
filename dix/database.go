@@ -13,6 +13,8 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3" // SQLite driver
 )
 
 type DatabaseInfo struct {
@@ -52,8 +54,17 @@ const slowTablespaceNumber = 6
 const SQLDatabaseSchemaVersion = 2
 const monthlyQueryResultsTable = "chain.dotidx_monthly_query_results"
 
+// DBDialect represents the type of database
+type DBDialect string
+
+const (
+	DialectPostgres DBDialect = "postgres"
+	DialectSQLite   DBDialect = "sqlite"
+)
+
 type SQLDatabase struct {
 	db      *sql.DB
+	dialect DBDialect
 	metrics *Metrics
 	poolCfg DBPoolConfig
 }
@@ -95,6 +106,15 @@ func RegisterQuery(name, sqlTemplate, description string) error {
 	}
 	log.Printf("Registered query: %s - %s", name, description)
 	return nil
+}
+
+// getTableName returns the table name with schema prefix for PostgreSQL, or without for SQLite
+func (s *SQLDatabase) getTableName(tableName string) string {
+	if s.dialect == DialectSQLite {
+		// SQLite doesn't support schemas, so we include schema in table name
+		return strings.ReplaceAll(tableName, ".", "_")
+	}
+	return tableName
 }
 
 func GetBlocksTableName(relayChain, chain string) string {
@@ -145,36 +165,65 @@ func DefaultDBPoolConfig() DBPoolConfig {
 }
 
 func NewSQLDatabaseWithDB(db *sql.DB) *SQLDatabase {
-	return NewSQLDatabaseWithPool(
+	return NewSQLDatabaseWithPoolAndDialect(
 		db,
-		DefaultDBPoolConfig())
+		DefaultDBPoolConfig(),
+		DialectPostgres) // Default to Postgres for backward compatibility
 }
 
 // NewSQLDatabase creates a new Database instance
 func NewSQLDatabase(config MgrConfig) *SQLDatabase {
 	databaseURL := DBUrl(config)
+	var dialect DBDialect
+	var driverName string
+
 	if strings.Contains(databaseURL, "postgres") {
-		db, err := sql.Open("postgres", databaseURL)
-		if err != nil {
-			log.Fatalf("Error opening database: %v", err)
-		}
-		return NewSQLDatabaseWithPool(db, DefaultDBPoolConfig())
+		dialect = DialectPostgres
+		driverName = "postgres"
+	} else if strings.Contains(databaseURL, "sqlite") {
+		dialect = DialectSQLite
+		driverName = "sqlite3"
+	} else {
+		log.Fatalf("unsupported database: %s", databaseURL)
+		return nil
 	}
 
-	log.Fatalf("unsupported database: %s", databaseURL)
-	return nil
+	db, err := sql.Open(driverName, databaseURL)
+	if err != nil {
+		log.Fatalf("Error opening database: %v", err)
+	}
+	return NewSQLDatabaseWithPoolAndDialect(db, DefaultDBPoolConfig(), dialect)
 }
 
 // NewSQLDatabaseWithPool creates a new Database instance with custom connection pool settings
+// Defaults to Postgres dialect for backward compatibility
 func NewSQLDatabaseWithPool(db *sql.DB, poolCfg DBPoolConfig) *SQLDatabase {
-	db.SetMaxOpenConns(poolCfg.MaxOpenConns)
-	db.SetMaxIdleConns(poolCfg.MaxIdleConns)
+	return NewSQLDatabaseWithPoolAndDialect(db, poolCfg, DialectPostgres)
+}
+
+// NewSQLDatabaseWithPoolAndDialect creates a new Database instance with custom connection pool settings and dialect
+func NewSQLDatabaseWithPoolAndDialect(db *sql.DB, poolCfg DBPoolConfig, dialect DBDialect) *SQLDatabase {
+	// SQLite has different connection pool requirements
+	if dialect == DialectSQLite {
+		// SQLite works best with limited connections
+		db.SetMaxOpenConns(1)
+		db.SetMaxIdleConns(1)
+	} else {
+		db.SetMaxOpenConns(poolCfg.MaxOpenConns)
+		db.SetMaxIdleConns(poolCfg.MaxIdleConns)
+	}
 	db.SetConnMaxLifetime(poolCfg.ConnMaxLifetime)
 	db.SetConnMaxIdleTime(poolCfg.ConnMaxIdleTime)
 
+	metricsName := "Postgres"
+	if dialect == DialectSQLite {
+		metricsName = "SQLite"
+	}
+
 	s := &SQLDatabase{
 		db:      db,
-		metrics: NewMetrics("Postgres"),
+		dialect: dialect,
+		metrics: NewMetrics(metricsName),
 		poolCfg: poolCfg,
 	}
 
@@ -186,15 +235,25 @@ func (s *SQLDatabase) Close() error {
 }
 
 func (s *SQLDatabase) DoUpgrade() error {
-
 	// create dotidx version table to track migrations
-	_, err := s.db.Exec(`
+	var createVersionTableSQL string
+	if s.dialect == DialectSQLite {
+		createVersionTableSQL = `
+CREATE TABLE IF NOT EXISTS dotidx_version (
+    version_id INTEGER NOT NULL,
+    timestamp TEXT,
+    PRIMARY KEY (version_id)
+)`
+	} else {
+		createVersionTableSQL = `
 CREATE TABLE IF NOT EXISTS dotidx_version (
     version_id INTEGER NOT NULL,
     timestamp TIMESTAMP(4) WITHOUT TIME ZONE,
     CONSTRAINT dotidx_version_pkey PRIMARY KEY (version_id)
-)
-        `)
+)`
+	}
+
+	_, err := s.db.Exec(createVersionTableSQL)
 	if err != nil {
 		return fmt.Errorf("error creating table: %w", err)
 	}
@@ -207,10 +266,31 @@ CREATE TABLE IF NOT EXISTS dotidx_version (
 }
 
 func (s *SQLDatabase) CreateTableBlocks(relayChain, chain string) error {
-	blocksTable := GetBlocksTableName(relayChain, chain)
+	blocksTable := s.getTableName(GetBlocksTableName(relayChain, chain))
 	blocksPK := GetBlocksPrimaryKeyName(relayChain, chain)
 
-	template := fmt.Sprintf(`
+	var template string
+	if s.dialect == DialectSQLite {
+		template = fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %[1]s
+(
+  block_id        INTEGER NOT NULL,
+  created_at      TEXT NOT NULL,
+  hash            TEXT NOT NULL,
+  parent_hash     TEXT NOT NULL,
+  state_root      TEXT NOT NULL,
+  extrinsics_root TEXT NOT NULL,
+  author_id       TEXT NOT NULL,
+  finalized       INTEGER NOT NULL,
+  on_initialize   TEXT,
+  on_finalize     TEXT,
+  logs            TEXT,
+  extrinsics      TEXT,
+  PRIMARY KEY (block_id, created_at)
+);
+	`, blocksTable)
+	} else {
+		template = fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %[1]s
 (
   block_id        integer NOT NULL,
@@ -232,6 +312,7 @@ REVOKE ALL ON TABLE %[1]s FROM PUBLIC;
 GRANT SELECT ON TABLE %[1]s TO PUBLIC;
 GRANT ALL ON TABLE %[1]s TO dotidx;
 	`, blocksTable, blocksPK)
+	}
 
 	_, err := s.db.Exec(template)
 	if err != nil {
@@ -242,6 +323,11 @@ GRANT ALL ON TABLE %[1]s TO dotidx;
 }
 
 func (s *SQLDatabase) CreateTableBlocksPartitions(relayChain, chain, firstTimestamp, lastTimestamp string) error {
+	// SQLite doesn't support partitioning
+	if s.dialect == DialectSQLite {
+		return nil
+	}
+
 	blocksTable := GetBlocksTableName(relayChain, chain)
 
 	// kusame stated oct 2019
@@ -309,9 +395,19 @@ GRANT ALL ON TABLE %[1]s_%04[2]d_%02[3]d TO dotidx;
 }
 
 func (s *SQLDatabase) CreateTableAddress2Blocks(relayChain, chain string) error {
-	address2blocksTable := GetAddressTableName(relayChain, chain)
+	address2blocksTable := s.getTableName(GetAddressTableName(relayChain, chain))
 
-	template := fmt.Sprintf(`
+	var template string
+	if s.dialect == DialectSQLite {
+		template = fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %s (
+     address TEXT,
+     block_id INTEGER,
+     PRIMARY KEY (address, block_id)
+);
+	`, address2blocksTable)
+	} else {
+		template = fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %s (
      address TEXT,
      block_id INTEGER,
@@ -322,6 +418,7 @@ REVOKE ALL ON TABLE %[1]s FROM PUBLIC;
 GRANT SELECT ON TABLE %[1]s TO PUBLIC;
 GRANT ALL ON TABLE %[1]s TO dotidx;
 	`, address2blocksTable)
+	}
 
 	_, err := s.db.Exec(template)
 	if err != nil {
@@ -333,6 +430,11 @@ GRANT ALL ON TABLE %[1]s TO dotidx;
 }
 
 func (s *SQLDatabase) CreateTableAddress2BlocksPartitions(relayChain, chain string) error {
+	// SQLite doesn't support partitioning
+	if s.dialect == DialectSQLite {
+		return nil
+	}
+
 	address2blocksTable := GetAddressTableName(relayChain, chain)
 
 	// spread across fast disks to improve access time
@@ -361,25 +463,38 @@ GRANT ALL ON TABLE %[1]s_%1[2]d TO dotidx;
 }
 
 func (s *SQLDatabase) CreateDotidxTable(relayChain, chain string) error {
-	query := fmt.Sprintf(`
-		CREATE TABLE IF NOT EXISTS %s.dotidx (
+	dotidxTable := s.getTableName(fmt.Sprintf("%s.dotidx", schemaName))
+
+	var createQuery string
+	if s.dialect == DialectSQLite {
+		createQuery = fmt.Sprintf(`
+		CREATE TABLE IF NOT EXISTS %s (
+                    relay_chain TEXT NOT NULL,
+                    chain       TEXT NOT NULL,
+                    PRIMARY KEY (relay_chain, chain)
+                );
+	`, dotidxTable)
+	} else {
+		createQuery = fmt.Sprintf(`
+		CREATE TABLE IF NOT EXISTS %s (
                     relay_chain TEXT NOT NULL,
                     chain       TEXT NOT NULL,
                     CONSTRAINT dotidx_pk PRIMARY KEY (relay_chain, chain)
                 );
-	`, schemaName)
+	`, dotidxTable)
+	}
 
-	if _, err := s.db.Exec(query); err != nil {
-		log.Printf("sql %s", query)
+	if _, err := s.db.Exec(createQuery); err != nil {
+		log.Printf("sql %s", createQuery)
 		return fmt.Errorf("%w", err)
 	}
 
 	inserts := fmt.Sprintf(`
-INSERT INTO %s.dotidx (relay_chain, chain)
+INSERT INTO %s (relay_chain, chain)
 VALUES ('%s', '%s')
 ON CONFLICT (relay_chain, chain) DO NOTHING;
 `,
-		schemaName,
+		dotidxTable,
 		strings.ToLower(relayChain),
 		sanitizeChainName(relayChain, chain),
 	)
@@ -426,6 +541,14 @@ func (s *SQLDatabase) CreateTable(relayChain, chain, firstTimestamp, lastTimesta
 // this index is very large and costly, currently on hold
 // it is significanlty faster to grep in the FE
 func (s *SQLDatabase) CreateIndex(relayChain, chain string) error {
+	// SQLite doesn't support GIN indexes or JSONB
+	if s.dialect == DialectSQLite {
+		// For SQLite, we could create a simple index on the text column
+		// but it won't be as effective as PostgreSQL's GIN index on JSONB
+		log.Printf("Skipping JSONB index creation for SQLite (not supported)")
+		return nil
+	}
+
 	blocksTable := GetBlocksTableName(relayChain, chain)
 
 	template := fmt.Sprintf(`
@@ -455,15 +578,15 @@ func (s *SQLDatabase) Save(items []BlockData, relayChain, chain string) error {
 	}(start)
 
 	// Get table names
-	blocksTable := GetBlocksTableName(relayChain, chain)
-	address2blocksTable := GetAddressTableName(relayChain, chain)
+	blocksTable := s.getTableName(GetBlocksTableName(relayChain, chain))
+	address2blocksTable := s.getTableName(GetAddressTableName(relayChain, chain))
 
 	// log.Printf("Saving batch of %d items to database", len(items))
 	// log.Printf("Blocks table: %s", blocksTable)
 	// log.Printf("Address2blocks table: %s", address2blocksTable)
 
 	// Create insert query templates without using prepared statements
-	blocksInsertQuery := fmt.Sprintf(
+	blocksInsertQuery := s.prepareQuery(fmt.Sprintf(
 		"INSERT INTO %s ("+
 			"block_id, created_at, hash, parent_hash, state_root, extrinsics_root, "+
 			"author_id, finalized, on_initialize, on_finalize, logs, extrinsics"+
@@ -480,12 +603,12 @@ func (s *SQLDatabase) Save(items []BlockData, relayChain, chain string) error {
 			"on_finalize = EXCLUDED.on_finalize, "+
 			"logs = EXCLUDED.logs, "+
 			"extrinsics = EXCLUDED.extrinsics",
-		blocksTable)
+		blocksTable))
 
-	addressInsertQuery := fmt.Sprintf(
+	addressInsertQuery := s.prepareQuery(fmt.Sprintf(
 		"INSERT INTO %s (address, block_id) VALUES ($1, $2) "+
 			"ON CONFLICT (address, block_id) DO NOTHING",
-		address2blocksTable)
+		address2blocksTable))
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -553,9 +676,9 @@ func (s *SQLDatabase) Save(items []BlockData, relayChain, chain string) error {
 }
 
 func (s *SQLDatabase) GetExistingBlocks(relayChain, chain string, startRange, endRange int) (map[int]bool, error) {
-	blocksTable := GetBlocksTableName(relayChain, chain)
+	blocksTable := s.getTableName(GetBlocksTableName(relayChain, chain))
 
-	query := fmt.Sprintf("SELECT block_id FROM %s WHERE block_id BETWEEN $1 AND $2", blocksTable)
+	query := s.prepareQuery(fmt.Sprintf("SELECT block_id FROM %s WHERE block_id BETWEEN $1 AND $2", blocksTable))
 
 	rows, err := s.db.Query(query, startRange, endRange)
 	if err != nil {
@@ -589,10 +712,12 @@ func (s *SQLDatabase) GetStats() *MetricsStats {
 
 func (s *SQLDatabase) GetDatabaseInfo() ([]DatabaseInfo, error) {
 	infos := make([]DatabaseInfo, 0)
+	dotidxTable := s.getTableName(fmt.Sprintf("%s.dotidx", schemaName))
+
 	rows, err := s.db.Query(
 		fmt.Sprintf(
-			`SELECT relay_chain as relaychain, chain from %s.dotidx;`,
-			schemaName))
+			`SELECT relay_chain as relaychain, chain from %s;`,
+			dotidxTable))
 	if err != nil {
 		return nil, fmt.Errorf("Cannot get dotidx information from database: %v", err)
 	}
@@ -689,16 +814,23 @@ func (s *SQLDatabase) ExecuteAndStoreNamedQuery(ctx context.Context, relayChain,
 }
 
 func (s *SQLDatabase) StoreMonthlyQueryResult(ctx context.Context, relayChain, chain, queryName string, year, month int, result SqlResult) error {
-	query := fmt.Sprintf(`
+	nowFunc := "NOW()"
+	if s.dialect == DialectSQLite {
+		nowFunc = "datetime('now')"
+	}
+
+	query := s.prepareQuery(fmt.Sprintf(`
 INSERT INTO
   %s (relay_chain, chain, query_name, year, month, results, last_updated)
 VALUES
-  ($1, $2, $3, $4, $5, $6, NOW())
+  ($1, $2, $3, $4, $5, $6, %s)
 ON CONFLICT
   (relay_chain, chain, query_name, year, month)
-DO UPDATE SET results = EXCLUDED.results, last_updated = NOW();`,
+DO UPDATE SET results = EXCLUDED.results, last_updated = %s;`,
 		monthlyQueryResultsTable,
-	)
+		nowFunc,
+		nowFunc,
+	))
 
 	jsonData, err := json.Marshal(result)
 	if err != nil {
@@ -754,7 +886,23 @@ LIMIT 1
 }
 
 func (s *SQLDatabase) CreateTableMonthlyQueryResults() error {
-	query := fmt.Sprintf(`
+	tableName := s.getTableName(monthlyQueryResultsTable)
+
+	var query string
+	if s.dialect == DialectSQLite {
+		query = fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %s (
+    relay_chain TEXT NOT NULL,
+    chain TEXT NOT NULL,
+    query_name TEXT NOT NULL,
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    results TEXT,
+    last_updated TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (relay_chain, chain, query_name, year, month)
+);`, tableName)
+	} else {
+		query = fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %s (
     relay_chain TEXT NOT NULL,
     chain TEXT NOT NULL,
@@ -764,13 +912,14 @@ CREATE TABLE IF NOT EXISTS %s (
     results JSONB,
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (relay_chain, chain, query_name, year, month)
-);`, monthlyQueryResultsTable)
+);`, tableName)
+	}
 
 	_, err := s.db.Exec(query)
 	if err != nil {
-		return fmt.Errorf("error creating %s table: %w", monthlyQueryResultsTable, err)
+		return fmt.Errorf("error creating %s table: %w", tableName, err)
 	}
-	log.Printf("Ensured table %s exists", monthlyQueryResultsTable)
+	log.Printf("Ensured table %s exists", tableName)
 	return nil
 }
 
@@ -826,4 +975,40 @@ func GetListOfRegisteredQueries() (iter.Seq[NamedQuery], error) {
 	registryMutex.RLock()
 	defer registryMutex.RUnlock()
 	return maps.Values(queryRegistry), nil
+}
+
+// convertPlaceholders converts PostgreSQL-style $1, $2, $3 placeholders to SQLite-style ? placeholders
+func convertPlaceholders(query string) string {
+	// This is a simple implementation that replaces $1, $2, etc. with ?
+	// It handles up to $999 placeholders
+	result := query
+	for i := 999; i >= 1; i-- {
+		placeholder := fmt.Sprintf("$%d", i)
+		result = strings.Replace(result, placeholder, "?", 1)
+	}
+	return result
+}
+
+// prepareQuery prepares a query for the current dialect
+func (s *SQLDatabase) prepareQuery(query string) string {
+	if s.dialect == DialectSQLite {
+		query = convertPlaceholders(query)
+		query = s.convertSQLFunctions(query)
+	}
+	return query
+}
+
+// convertSQLFunctions converts PostgreSQL-specific SQL functions to SQLite equivalents
+func (s *SQLDatabase) convertSQLFunctions(query string) string {
+	// Convert EXTRACT(YEAR FROM col) to strftime('%Y', col)
+	query = strings.ReplaceAll(query, "EXTRACT(YEAR FROM created_at)", "CAST(strftime('%Y', created_at) AS INTEGER)")
+	query = strings.ReplaceAll(query, "EXTRACT(MONTH FROM created_at)", "CAST(strftime('%m', created_at) AS INTEGER)")
+	query = strings.ReplaceAll(query, "EXTRACT(DAY FROM created_at)", "CAST(strftime('%d', created_at) AS INTEGER)")
+
+	// Convert schema.table to schema_table for SQLite
+	query = strings.ReplaceAll(query, "chain.blocks_", "chain_blocks_")
+	query = strings.ReplaceAll(query, "chain.address2blocks_", "chain_address2blocks_")
+	query = strings.ReplaceAll(query, "chain.dotidx", "chain_dotidx")
+
+	return query
 }

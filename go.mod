@@ -7,6 +7,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/itering/substrate-api-rpc v0.8.2
 	github.com/lib/pq v1.10.9
+	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/pelletier/go-toml/v2 v2.1.1
 	github.com/stretchr/testify v1.10.0
 	github.com/tidwall/gjson v1.18.0
