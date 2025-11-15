@@ -36,7 +36,12 @@ cli:
 	go build -o bin/filter_cli cmd/filter_cli/filter_cli.go
 	go build -o bin/block_cli cmd/block_cli/block_cli.go
 
-bin: fe mgr cli live watcher cron batch
+e2e:
+	cd cmd/dixe2e && go vet
+	cd cmd/dixe2e && go fmt
+	go build -o bin/dixe2e cmd/dixe2e/dixe2e.go
+
+bin: fe mgr cli live watcher cron batch e2e
 
 clean:
 	./scripts/git_cleanup.sh
@@ -45,6 +50,9 @@ clean:
 test:
 	go test -v
 	npm run test
+
+test-e2e: e2e
+	./bin/dixe2e -conf conf/conf-e2e-test.toml
 
 vet:
 	go vet ./...
