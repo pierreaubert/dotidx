@@ -18,3 +18,8 @@ app/dix-large.*
 tests
 package-lock.json
 node_modules
+
+# Compiled binaries
+dixfe
+dixd
+dix

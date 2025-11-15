@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Chain Utilities Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        .test {
+            margin: 10px 0;
+            padding: 10px;
+            border-left: 3px solid #4CAF50;
+            background: #2d2d2d;
+        }
+        .test.pass {
+            border-left-color: #4CAF50;
+        }
+        .test.fail {
+            border-left-color: #f44336;
+        }
+        pre {
+            background: #1e1e1e;
+            padding: 10px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Multi-Chain Utilities Test Suite</h1>
+    <div id="results"></div>
+
+    <script type="module">
+        import {
+            forEachMultiChain,
+            flattenMultiChain,
+            filterMultiChain,
+            countMultiChain,
+            groupMultiChain,
+            reduceMultiChain,
+            mapMultiChain,
+            hasData,
+            getChainsWithData,
+            mergeMultiChain,
+            sortMultiChain,
+            summarizeMultiChain,
+            MultiChainErrorCollector
+        } from './multichain.js';
+
+        const resultsDiv = document.getElementById('results');
+
+        // Mock data for testing
+        const mockData = {
+            polkadot: {
+                assethub: [
+                    { block_id: '1000', timestamp: '2024-01-15T10:00:00Z', value: 100 },
+                    { block_id: '1001', timestamp: '2024-01-15T10:05:00Z', value: 200 }
+                ],
+                statemint: [
+                    { block_id: '2000', timestamp: '2024-01-15T11:00:00Z', value: 150 }
+                ]
+            },
+            kusama: {
+                assethub: [
+                    { block_id: '3000', timestamp: '2024-01-16T09:00:00Z', value: 75 }
+                ]
+            }
+        };
+
+        function test(name, fn) {
+            try {
+                fn();
+                resultsDiv.innerHTML += `<div class="test pass">✓ ${name}</div>`;
+            } catch (error) {
+                resultsDiv.innerHTML += `<div class="test fail">✗ ${name}<br><pre>${error.message}</pre></div>`;
+            }
+        }
+
+        function assert(condition, message) {
+            if (!condition) {
+                throw new Error(message || 'Assertion failed');
+            }
+        }
+
+        // Run tests
+        test('forEachMultiChain - basic iteration', () => {
+            let count = 0;
+            forEachMultiChain(mockData, () => count++);
+            assert(count === 4, `Expected 4 items, got ${count}`);
+        });
+
+        test('forEachMultiChain - with filter', () => {
+            let count = 0;
+            forEachMultiChain(
+                mockData,
+                () => count++,
+                { filter: (relay) => relay === 'polkadot' }
+            );
+            assert(count === 3, `Expected 3 polkadot items, got ${count}`);
+        });
+
+        test('flattenMultiChain - basic', () => {
+            const flat = flattenMultiChain(mockData);
+            assert(flat.length === 4, `Expected 4 items, got ${flat.length}`);
+            assert(flat[0].relay === 'polkadot', 'First item should be from polkadot');
+            assert(flat[0].chain === 'assethub', 'First item should be from assethub');
+        });
+
+        test('flattenMultiChain - with transform', () => {
+            const flat = flattenMultiChain(mockData, (relay, chain, item) => ({
+                id: `${relay}/${chain}/${item.block_id}`,
+                value: item.value
+            }));
+            assert(flat[0].id === 'polkadot/assethub/1000', 'Transform should work');
+        });
+
+        test('filterMultiChain - by relay', () => {
+            const filtered = filterMultiChain(mockData, { relay: 'kusama' });
+            assert(filtered.kusama !== undefined, 'Should have kusama');
+            assert(filtered.polkadot === undefined, 'Should not have polkadot');
+        });
+
+        test('filterMultiChain - by chain', () => {
+            const filtered = filterMultiChain(mockData, { chain: 'assethub' });
+            assert(filtered.polkadot.assethub !== undefined, 'Should have polkadot/assethub');
+            assert(filtered.polkadot.statemint === undefined, 'Should not have polkadot/statemint');
+        });
+
+        test('countMultiChain - statistics', () => {
+            const stats = countMultiChain(mockData);
+            assert(stats.totalItems === 4, `Expected 4 total items, got ${stats.totalItems}`);
+            assert(stats.chains === 3, `Expected 3 chains, got ${stats.chains}`);
+            assert(stats.byRelay.polkadot === 3, `Expected 3 polkadot items, got ${stats.byRelay.polkadot}`);
+        });
+
+        test('groupMultiChain - by custom key', () => {
+            const grouped = groupMultiChain(mockData, (relay, chain, item) => {
+                return item.value > 100 ? 'high' : 'low';
+            });
+            assert(grouped.high.length === 2, `Expected 2 high items, got ${grouped.high.length}`);
+            assert(grouped.low.length === 2, `Expected 2 low items, got ${grouped.low.length}`);
+        });
+
+        test('reduceMultiChain - sum values', () => {
+            const total = reduceMultiChain(
+                mockData,
+                (sum, relay, chain, item) => sum + item.value,
+                0
+            );
+            assert(total === 525, `Expected sum 525, got ${total}`);
+        });
+
+        test('mapMultiChain - transform structure', () => {
+            const mapped = mapMultiChain(mockData, (relay, chain, item) => ({
+                ...item,
+                doubled: item.value * 2
+            }));
+            assert(mapped.polkadot.assethub[0].doubled === 200, 'Should double the value');
+        });
+
+        test('hasData - detects data', () => {
+            assert(hasData(mockData) === true, 'Should detect data');
+            assert(hasData({}) === false, 'Should detect no data');
+            assert(hasData({ polkadot: {} }) === false, 'Should detect no data in empty chains');
+        });
+
+        test('getChainsWithData - lists chains', () => {
+            const chains = getChainsWithData(mockData);
+            assert(chains.length === 3, `Expected 3 chains, got ${chains.length}`);
+            assert(chains[0].relay === 'polkadot', 'First chain should be polkadot');
+            assert(chains[0].count === 2, 'First chain should have 2 items');
+        });
+
+        test('mergeMultiChain - combines results', () => {
+            const data1 = { polkadot: { assethub: [{ id: 1 }] } };
+            const data2 = { polkadot: { assethub: [{ id: 2 }] } };
+            const merged = mergeMultiChain(data1, data2);
+            assert(merged.polkadot.assethub.length === 2, 'Should merge arrays');
+        });
+
+        test('sortMultiChain - sorts within chains', () => {
+            const sorted = sortMultiChain(mockData, (a, b) => b.value - a.value);
+            assert(sorted.polkadot.assethub[0].value === 200, 'Should sort descending');
+            assert(sorted.polkadot.assethub[1].value === 100, 'Should sort descending');
+        });
+
+        test('summarizeMultiChain - creates summary', () => {
+            const summary = summarizeMultiChain(mockData);
+            assert(summary.includes('4 items'), 'Should mention item count');
+            assert(summary.includes('3 chains'), 'Should mention chain count');
+        });
+
+        test('MultiChainErrorCollector - tracks errors', () => {
+            const collector = new MultiChainErrorCollector();
+            collector.recordError('polkadot', 'assethub', new Error('test error'));
+            collector.recordSuccess('kusama', 'assethub', 10);
+
+            assert(collector.hasErrors() === true, 'Should detect errors');
+            assert(collector.getErrors().length === 1, 'Should have 1 error');
+            assert(collector.getSuccesses().length === 1, 'Should have 1 success');
+
+            const summary = collector.getSummary();
+            assert(summary.includes('1/2'), 'Summary should show 1/2 chains');
+        });
+
+        test('MultiChainErrorCollector - HTML output', () => {
+            const collector = new MultiChainErrorCollector();
+            collector.recordError('polkadot', 'broken', new Error('Failed'));
+
+            const html = collector.getErrorsHTML();
+            assert(html.includes('polkadot/broken'), 'HTML should include chain name');
+            assert(html.includes('Failed'), 'HTML should include error message');
+        });
+
+        test('Error handling in forEachMultiChain', () => {
+            const errorCollector = new MultiChainErrorCollector();
+            let processed = 0;
+
+            forEachMultiChain(
+                mockData,
+                (relay, chain, item) => {
+                    processed++;
+                    if (item.block_id === '1001') {
+                        throw new Error('Test error');
+                    }
+                },
+                {
+                    onError: (relay, chain, error) => {
+                        errorCollector.recordError(relay, chain, error);
+                    }
+                }
+            );
+
+            // Should process all items despite error
+            assert(processed === 4, `Should process all 4 items, got ${processed}`);
+            assert(errorCollector.hasErrors() === true, 'Should have recorded error');
+        });
+
+        resultsDiv.innerHTML += '<div style="margin-top: 20px; padding: 20px; background: #2d2d2d; border-left: 3px solid #2196F3;">All tests completed!</div>';
+    </script>
+</body>
+</html>
