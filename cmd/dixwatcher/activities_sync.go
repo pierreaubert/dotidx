@@ -25,6 +25,8 @@ type SystemHealthResponse struct {
 // CheckNodeSyncActivity checks if a blockchain node has completed syncing
 // Returns true when node is synced (isSyncing=false), false when still syncing
 func (a *Activities) CheckNodeSyncActivity(ctx context.Context, rpcEndpoint string, port int) (bool, error) {
+	start := time.Now()
+
 	// Build URL
 	url := rpcEndpoint
 	if url == "" {
@@ -43,6 +45,10 @@ func (a *Activities) CheckNodeSyncActivity(ctx context.Context, rpcEndpoint stri
 
 	reqJSON, err := json.Marshal(reqBody)
 	if err != nil {
+		if a.metrics != nil {
+			a.metrics.RecordActivityExecution("CheckNodeSync", "error")
+			a.metrics.RecordActivityError("CheckNodeSync", "marshal_error")
+		}
 		return false, fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
 	}
 
@@ -54,6 +60,10 @@ func (a *Activities) CheckNodeSyncActivity(ctx context.Context, rpcEndpoint stri
 	// Create HTTP request
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqJSON))
 	if err != nil {
+		if a.metrics != nil {
+			a.metrics.RecordActivityExecution("CheckNodeSync", "error")
+			a.metrics.RecordActivityError("CheckNodeSync", "request_error")
+		}
 		return false, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -61,6 +71,10 @@ func (a *Activities) CheckNodeSyncActivity(ctx context.Context, rpcEndpoint stri
 	// Execute request
 	resp, err := client.Do(req)
 	if err != nil {
+		if a.metrics != nil {
+			a.metrics.RecordActivityExecution("CheckNodeSync", "error")
+			a.metrics.RecordActivityError("CheckNodeSync", "http_error")
+		}
 		return false, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -68,18 +82,37 @@ func (a *Activities) CheckNodeSyncActivity(ctx context.Context, rpcEndpoint stri
 	// Check status code
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		if a.metrics != nil {
+			a.metrics.RecordActivityExecution("CheckNodeSync", "error")
+			a.metrics.RecordActivityError("CheckNodeSync", "http_status_error")
+		}
 		return false, fmt.Errorf("unexpected HTTP status %d: %s", resp.StatusCode, string(body))
 	}
 
 	// Parse response
 	var healthResp SystemHealthResponse
 	if err := json.NewDecoder(resp.Body).Decode(&healthResp); err != nil {
+		if a.metrics != nil {
+			a.metrics.RecordActivityExecution("CheckNodeSync", "error")
+			a.metrics.RecordActivityError("CheckNodeSync", "parse_error")
+		}
 		return false, fmt.Errorf("failed to decode JSON response: %w", err)
 	}
 
 	isSynced := !healthResp.Result.IsSyncing
 	log.Printf("[Activity] Node %s sync status: isSyncing=%v, peers=%d (synced=%v)",
 		url, healthResp.Result.IsSyncing, healthResp.Result.Peers, isSynced)
+
+	// Record metrics
+	if a.metrics != nil {
+		a.metrics.RecordActivityExecution("CheckNodeSync", "success")
+		a.metrics.RecordActivityDuration("CheckNodeSync", time.Since(start))
+
+		// Determine node/chain from URL (simple heuristic)
+		nodeName := url
+		chainName := "unknown"
+		a.metrics.RecordNodeSyncStatus(nodeName, chainName, isSynced, healthResp.Result.Peers)
+	}
 
 	return isSynced, nil
 }
