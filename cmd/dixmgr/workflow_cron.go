@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -29,7 +30,7 @@ func CronWorkflow(ctx workflow.Context, config CronWorkflowConfig) error {
 	// Determine if this is an hourly or daily execution
 	// This is determined by the cron schedule used to trigger the workflow
 	cronSchedule := workflow.GetInfo(ctx).CronSchedule
-	isHourly := cronSchedule != nil && *cronSchedule == config.HourlyCronSchedule
+	isHourly := cronSchedule == config.HourlyCronSchedule
 
 	logger.Info("Determining execution type",
 		"cronSchedule", cronSchedule,
@@ -69,7 +70,7 @@ func CronWorkflow(ctx workflow.Context, config CronWorkflowConfig) error {
 
 // executeCurrentMonthQueries executes block count query for current month (hourly)
 func executeCurrentMonthQueries(ctx workflow.Context, chains []ChainInfo,
-	year, month int, logger workflow.Logger) error {
+	year, month int, logger log.Logger) error {
 
 	logger.Info("Executing current month queries", "year", year, "month", month)
 
@@ -101,7 +102,7 @@ func executeCurrentMonthQueries(ctx workflow.Context, chains []ChainInfo,
 
 // executeHistoricalQueries executes all registered queries for all past months (daily)
 func executeHistoricalQueries(ctx workflow.Context, config CronWorkflowConfig,
-	chains []ChainInfo, currentYear, currentMonth int, logger workflow.Logger) error {
+	chains []ChainInfo, currentYear, currentMonth int, logger log.Logger) error {
 
 	logger.Info("Executing historical queries",
 		"queries", len(config.RegisteredQueries),

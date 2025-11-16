@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -166,7 +167,7 @@ func groupIntoContinuousBatches(blockIDs []int, batchSize int) [][]int {
 
 // processBatchesConcurrently processes batches with controlled concurrency
 func processBatchesConcurrently(ctx workflow.Context, config BatchWorkflowConfig,
-	batches [][]int, logger workflow.Logger) error {
+	batches [][]int, logger log.Logger) error {
 
 	// Use Temporal's parallel execution
 	// Split work between batch and single block processing
@@ -178,18 +179,15 @@ func processBatchesConcurrently(ctx workflow.Context, config BatchWorkflowConfig
 		for activeFutures >= config.MaxWorkers {
 			// Wait for any future to complete
 			workflow.Await(ctx, func() bool {
-				completed := 0
+				// Check if any futures have completed
 				for _, f := range futures {
-					if f != nil {
-						select {
-						case <-f.GetChannel():
-							completed++
-						default:
-						}
+					if f != nil && f.IsReady() {
+						return true
 					}
 				}
-				return completed > 0
+				return false
 			})
+			// At least one future has completed
 			activeFutures--
 		}
 
