@@ -1,8 +1,8 @@
-# DixWatcher Improvements
+# DixMgr Improvements
 
 ## Overview
 
-DixWatcher has been significantly enhanced with enterprise-grade monitoring, metrics, alerting, and resource tracking capabilities. These improvements transform dixwatcher from a basic service monitor into a sophisticated, production-ready orchestration and observability platform.
+DixMgr has been significantly enhanced with enterprise-grade monitoring, metrics, alerting, and resource tracking capabilities. These improvements transform dixmgr from a basic service monitor into a sophisticated, production-ready orchestration and observability platform.
 
 ## High-Priority Improvements Implemented
 
@@ -16,38 +16,38 @@ DixWatcher has been significantly enhanced with enterprise-grade monitoring, met
 
 **Key Features:**
 - **Service Metrics:**
-  - `dixwatcher_service_health` - Current health status (1=healthy, 0=unhealthy)
-  - `dixwatcher_service_restarts_total` - Total restart count per service
-  - `dixwatcher_service_downtime_seconds_total` - Cumulative downtime
+  - `dixmgr_service_health` - Current health status (1=healthy, 0=unhealthy)
+  - `dixmgr_service_restarts_total` - Total restart count per service
+  - `dixmgr_service_downtime_seconds_total` - Cumulative downtime
 
 - **Resource Metrics:**
-  - `dixwatcher_service_cpu_percent` - CPU usage percentage
-  - `dixwatcher_service_memory_bytes` - Memory usage in bytes
-  - `dixwatcher_service_disk_io_bytes_per_second` - Disk I/O rates (read/write)
+  - `dixmgr_service_cpu_percent` - CPU usage percentage
+  - `dixmgr_service_memory_bytes` - Memory usage in bytes
+  - `dixmgr_service_disk_io_bytes_per_second` - Disk I/O rates (read/write)
 
 - **Workflow Metrics:**
-  - `dixwatcher_workflow_executions_total` - Workflow execution counts by status
-  - `dixwatcher_workflow_duration_seconds` - Workflow execution duration histogram
-  - `dixwatcher_activity_executions_total` - Activity execution counts
-  - `dixwatcher_activity_duration_seconds` - Activity duration histogram
-  - `dixwatcher_activity_errors_total` - Activity error counts by type
+  - `dixmgr_workflow_executions_total` - Workflow execution counts by status
+  - `dixmgr_workflow_duration_seconds` - Workflow execution duration histogram
+  - `dixmgr_activity_executions_total` - Activity execution counts
+  - `dixmgr_activity_duration_seconds` - Activity duration histogram
+  - `dixmgr_activity_errors_total` - Activity error counts by type
 
 - **Blockchain Metrics:**
-  - `dixwatcher_node_sync_status` - Node sync status (1=synced, 0=syncing)
-  - `dixwatcher_node_peer_count` - Number of connected peers
+  - `dixmgr_node_sync_status` - Node sync status (1=synced, 0=syncing)
+  - `dixmgr_node_peer_count` - Number of connected peers
 
 - **Dependency Metrics:**
-  - `dixwatcher_dependency_wait_time_seconds` - Time waiting for dependencies
-  - `dixwatcher_dependency_timeouts_total` - Dependency timeout counts
+  - `dixmgr_dependency_wait_time_seconds` - Time waiting for dependencies
+  - `dixmgr_dependency_timeouts_total` - Dependency timeout counts
 
 - **Alert Metrics:**
-  - `dixwatcher_alerts_fired_total` - Total alerts fired by type/severity
-  - `dixwatcher_alerts_active` - Currently active alerts
+  - `dixmgr_alerts_fired_total` - Total alerts fired by type/severity
+  - `dixmgr_alerts_active` - Currently active alerts
 
 **Usage:**
 ```bash
 # Enable metrics (enabled by default)
-./bin/dixwatcher -metrics=true -metrics-port=9090 -conf config.toml -exec
+./bin/dixmgr -metrics=true -metrics-port=9090 -conf config.toml -exec
 
 # Access metrics
 curl http://localhost:9090/metrics
@@ -55,13 +55,13 @@ curl http://localhost:9090/metrics
 # Integrate with Prometheus
 # Add to prometheus.yml:
 # scrape_configs:
-#   - job_name: 'dixwatcher'
+#   - job_name: 'dixmgr'
 #     static_configs:
 #       - targets: ['localhost:9090']
 ```
 
 **Implementation Files:**
-- `cmd/dixwatcher/metrics.go` - Core metrics collector (378 lines)
+- `cmd/dixmgr/metrics.go` - Core metrics collector (378 lines)
 
 ---
 
@@ -98,14 +98,14 @@ curl http://localhost:9090/metrics
 **Usage:**
 ```bash
 # Enable resource monitoring (enabled by default)
-./bin/dixwatcher -resource-monitoring=true -conf config.toml -exec
+./bin/dixmgr -resource-monitoring=true -conf config.toml -exec
 
 # Disable if not needed
-./bin/dixwatcher -resource-monitoring=false -conf config.toml -exec
+./bin/dixmgr -resource-monitoring=false -conf config.toml -exec
 ```
 
 **Implementation Files:**
-- `cmd/dixwatcher/activities_resources.go` - Resource monitoring implementation (235 lines)
+- `cmd/dixmgr/activities_resources.go` - Resource monitoring implementation (235 lines)
 
 **Alert Thresholds:**
 - CPU > 80% = Warning
@@ -170,7 +170,7 @@ healthy, err := workflow.ExecuteActivity(ctx, "CheckHTTPEndpointSimpleActivity",
 ```
 
 **Implementation Files:**
-- `cmd/dixwatcher/activities_healthcheck.go` - HTTP health check implementation (200 lines)
+- `cmd/dixmgr/activities_healthcheck.go` - HTTP health check implementation (200 lines)
 
 ---
 
@@ -223,22 +223,22 @@ healthy, err := workflow.ExecuteActivity(ctx, "CheckHTTPEndpointSimpleActivity",
 **Usage:**
 ```bash
 # Enable alerting with Slack
-./bin/dixwatcher -alerts=true \
+./bin/dixmgr -alerts=true \
     -slack-webhook="https://hooks.slack.com/services/YOUR/WEBHOOK/URL" \
     -conf config.toml -exec
 
 # Add generic webhook
-./bin/dixwatcher -alerts=true \
+./bin/dixmgr -alerts=true \
     -webhook-url="https://your-server.com/alerts" \
     -conf config.toml -exec
 
 # Disable alerting
-./bin/dixwatcher -alerts=false -conf config.toml -exec
+./bin/dixmgr -alerts=false -conf config.toml -exec
 ```
 
 **Implementation Files:**
-- `cmd/dixwatcher/alerting.go` - Alert manager and channels (379 lines)
-- `cmd/dixwatcher/alert_rules.go` - Alert rule engine and default rules (240 lines)
+- `cmd/dixmgr/alerting.go` - Alert manager and channels (379 lines)
+- `cmd/dixmgr/alert_rules.go` - Alert rule engine and default rules (240 lines)
 
 **Alert Configuration:**
 ```go
@@ -269,7 +269,7 @@ Alert{
 type MetricsConfig struct {
     Enabled   bool   // Enable metrics collection
     Port      int    // Metrics server port (default: 9090)
-    Namespace string // Prometheus namespace (default: "dixwatcher")
+    Namespace string // Prometheus namespace (default: "dixmgr")
 }
 
 // AlertChannelConfig represents configuration for an alert channel
@@ -381,54 +381,54 @@ Fire Alerts through all channels
 ## Files Added/Modified
 
 ### New Files
-1. `cmd/dixwatcher/metrics.go` (378 lines)
+1. `cmd/dixmgr/metrics.go` (378 lines)
    - Prometheus metrics collector
    - Metrics HTTP server
    - Service state tracking
 
-2. `cmd/dixwatcher/activities_resources.go` (235 lines)
+2. `cmd/dixmgr/activities_resources.go` (235 lines)
    - CPU, memory, disk I/O monitoring
    - /proc filesystem parsing
    - Resource usage activities
 
-3. `cmd/dixwatcher/alerting.go` (379 lines)
+3. `cmd/dixmgr/alerting.go` (379 lines)
    - Alert manager
    - Alert channels (Log, Webhook, Slack, Email)
    - Alert deduplication
 
-4. `cmd/dixwatcher/alert_rules.go` (240 lines)
+4. `cmd/dixmgr/alert_rules.go` (240 lines)
    - Alert rule engine
    - Default alert rules
    - Rule evaluation logic
 
 ### Modified Files
-1. `cmd/dixwatcher/main.go`
+1. `cmd/dixmgr/main.go`
    - Added metrics initialization
    - Added alert manager setup
    - Added new command-line flags
    - Updated activity initialization
 
-2. `cmd/dixwatcher/activities.go`
+2. `cmd/dixmgr/activities.go`
    - Added metrics collector reference
    - Added alert manager reference
    - Added alert engine initialization
 
-3. `cmd/dixwatcher/activities_systemd.go`
+3. `cmd/dixmgr/activities_systemd.go`
    - Integrated metrics recording
    - Added alert rule evaluation
    - Added async resource monitoring
 
-4. `cmd/dixwatcher/activities_sync.go`
+4. `cmd/dixmgr/activities_sync.go`
    - Added metrics recording
    - Added error tracking
    - Added node sync metrics
 
-5. `cmd/dixwatcher/activities_healthcheck.go`
+5. `cmd/dixmgr/activities_healthcheck.go`
    - Complete implementation (was stub)
    - Added HTTP health checks
    - Added JSON path evaluation
 
-6. `cmd/dixwatcher/config.go`
+6. `cmd/dixmgr/config.go`
    - Added MetricsConfig
    - Added AlertConfig
    - Added WatcherConfig
@@ -440,33 +440,33 @@ Fire Alerts through all channels
 ### Recommended Panels
 
 1. **Service Health Overview**
-   - Query: `dixwatcher_service_health`
+   - Query: `dixmgr_service_health`
    - Visualization: Status map
    - Shows all services and their current health
 
 2. **Service Restart Rate**
-   - Query: `rate(dixwatcher_service_restarts_total[5m])`
+   - Query: `rate(dixmgr_service_restarts_total[5m])`
    - Visualization: Graph
    - Shows restart frequency per service
 
 3. **Resource Usage**
-   - CPU: `dixwatcher_service_cpu_percent`
-   - Memory: `dixwatcher_service_memory_bytes / 1024 / 1024 / 1024` (GB)
-   - Disk I/O: `dixwatcher_service_disk_io_bytes_per_second`
+   - CPU: `dixmgr_service_cpu_percent`
+   - Memory: `dixmgr_service_memory_bytes / 1024 / 1024 / 1024` (GB)
+   - Disk I/O: `dixmgr_service_disk_io_bytes_per_second`
    - Visualization: Multi-series graph
 
 4. **Sync Status**
-   - Query: `dixwatcher_node_sync_status`
+   - Query: `dixmgr_node_sync_status`
    - Visualization: Status map
    - Shows blockchain node sync status
 
 5. **Active Alerts**
-   - Query: `dixwatcher_alerts_active`
+   - Query: `dixmgr_alerts_active`
    - Visualization: Table
    - Shows currently firing alerts
 
 6. **Activity Performance**
-   - Query: `dixwatcher_activity_duration_seconds`
+   - Query: `dixmgr_activity_duration_seconds`
    - Visualization: Heatmap
    - Shows activity execution times
 
@@ -511,7 +511,7 @@ Fire Alerts through all channels
 
 ### Unit Tests
 Resource monitoring includes comprehensive unit tests:
-- `cmd/dixwatcher/activities_sync_test.go` - Sync check tests
+- `cmd/dixmgr/activities_sync_test.go` - Sync check tests
 
 ### Manual Testing
 ```bash
@@ -519,7 +519,7 @@ Resource monitoring includes comprehensive unit tests:
 make watcher
 
 # Test dry-run mode with all features
-./bin/dixwatcher \
+./bin/dixmgr \
     -watch \
     -conf conf/conf-e2e-test.toml \
     -metrics=true \
@@ -528,7 +528,7 @@ make watcher
     -resource-monitoring=true
 
 # Test in another terminal
-curl http://localhost:9090/metrics | grep dixwatcher
+curl http://localhost:9090/metrics | grep dixmgr
 ```
 
 ---
@@ -540,14 +540,14 @@ curl http://localhost:9090/metrics | grep dixwatcher
 1. **Update Binary:**
    ```bash
    make watcher
-   sudo systemctl stop dixwatcher
-   sudo cp bin/dixwatcher /usr/local/bin/
+   sudo systemctl stop dixmgr
+   sudo cp bin/dixmgr /usr/local/bin/
    ```
 
 2. **Update Systemd Service:**
    ```ini
    [Service]
-   ExecStart=/usr/local/bin/dixwatcher \
+   ExecStart=/usr/local/bin/dixmgr \
        -exec \
        -conf /etc/dotidx/config.toml \
        -metrics=true \
@@ -559,7 +559,7 @@ curl http://localhost:9090/metrics | grep dixwatcher
 3. **Configure Prometheus:**
    ```yaml
    scrape_configs:
-     - job_name: 'dixwatcher'
+     - job_name: 'dixmgr'
        scrape_interval: 15s
        static_configs:
          - targets: ['localhost:9090']
@@ -568,19 +568,19 @@ curl http://localhost:9090/metrics | grep dixwatcher
 4. **Restart Service:**
    ```bash
    sudo systemctl daemon-reload
-   sudo systemctl start dixwatcher
-   sudo systemctl status dixwatcher
+   sudo systemctl start dixmgr
+   sudo systemctl status dixmgr
    ```
 
 ---
 
 ## Conclusion
 
-These improvements transform dixwatcher from a basic service monitor into a sophisticated, production-ready orchestration platform with:
+These improvements transform dixmgr from a basic service monitor into a sophisticated, production-ready orchestration platform with:
 
 ✅ **Comprehensive Metrics** - Full Prometheus integration with 20+ metric types
 ✅ **Resource Monitoring** - Real-time CPU, memory, and disk I/O tracking
 ✅ **HTTP Health Checks** - Flexible validation with JSON path support
 ✅ **Intelligent Alerting** - Multi-channel alerts with deduplication
 
-The enhanced dixwatcher provides enterprise-grade observability, enabling proactive monitoring, rapid incident response, and detailed performance analysis for the entire dotidx infrastructure.
+The enhanced dixmgr provides enterprise-grade observability, enabling proactive monitoring, rapid incident response, and detailed performance analysis for the entire dotidx infrastructure.

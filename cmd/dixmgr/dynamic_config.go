@@ -70,9 +70,9 @@ func NewDynamicConfig() *DynamicConfig {
 		AlertDedupeWindow: 5 * time.Minute,
 
 		MetricsPort:      9090,
-		MetricsNamespace: "dixwatcher",
+		MetricsNamespace: "dixmgr",
 
-		HealthHistoryDBPath:        "/var/lib/dixwatcher/health.db",
+		HealthHistoryDBPath:        "/var/lib/dixmgr/health.db",
 		HealthHistoryRetentionDays: 30,
 
 		onChange: make([]func(old, new *DynamicConfig), 0),

@@ -1,6 +1,6 @@
-# DixWatcher - Medium Priority Features
+# DixMgr - Medium Priority Features
 
-This document describes the medium-priority features added to dixwatcher to enhance reliability, visibility, and operational flexibility.
+This document describes the medium-priority features added to dixmgr to enhance reliability, visibility, and operational flexibility.
 
 ## Table of Contents
 1. [Circuit Breaker Pattern](#circuit-breaker-pattern)
@@ -43,10 +43,10 @@ CircuitBreakerConfig{
 #### Command-Line
 ```bash
 # Enable circuit breaker (enabled by default)
-./bin/dixwatcher -circuit-breaker=true -conf config.toml -exec
+./bin/dixmgr -circuit-breaker=true -conf config.toml -exec
 
 # Disable if not needed
-./bin/dixwatcher -circuit-breaker=false -conf config.toml -exec
+./bin/dixmgr -circuit-breaker=false -conf config.toml -exec
 ```
 
 #### Programmatic
@@ -130,13 +130,13 @@ SQLite-based storage for long-term health data tracking, enabling trend analysis
 #### Enabling Health History
 ```bash
 # Enable with default database path
-./bin/dixwatcher \
+./bin/dixmgr \
     -health-history=true \
     -conf config.toml \
     -exec
 
 # Custom database path
-./bin/dixwatcher \
+./bin/dixmgr \
     -health-history=true \
     -health-history-db=/custom/path/health.db \
     -conf config.toml \
@@ -220,33 +220,33 @@ fmt.Printf("Incidents: %d, Total downtime: %d seconds\n",
 ## Grafana Dashboard Integration
 
 ### Overview
-Pre-built Grafana dashboard with 13 panels covering all aspects of dixwatcher monitoring.
+Pre-built Grafana dashboard with 13 panels covering all aspects of dixmgr monitoring.
 
 ### Dashboard Panels
 
 #### 1. Service Health Overview
 - **Type**: Stat
-- **Metric**: `dixwatcher_service_health`
+- **Metric**: `dixmgr_service_health`
 - **Display**: Color-coded service status
 
 #### 2. Service Restart Rate
 - **Type**: Graph
-- **Metric**: `rate(dixwatcher_service_restarts_total[5m])`
+- **Metric**: `rate(dixmgr_service_restarts_total[5m])`
 - **Y-Axis**: Restarts/second
 
 #### 3. Total Downtime
 - **Type**: Graph
-- **Metric**: `dixwatcher_service_downtime_seconds_total`
+- **Metric**: `dixmgr_service_downtime_seconds_total`
 - **Y-Axis**: Seconds
 
 #### 4. CPU Usage
 - **Type**: Graph with Alert
-- **Metric**: `dixwatcher_service_cpu_percent`
+- **Metric**: `dixmgr_service_cpu_percent`
 - **Alert**: CPU > 80% for 5 minutes
 
 #### 5. Memory Usage
 - **Type**: Graph
-- **Metric**: `dixwatcher_service_memory_bytes / 1024^3`
+- **Metric**: `dixmgr_service_memory_bytes / 1024^3`
 - **Y-Axis**: Gigabytes
 
 #### 6. Disk I/O
@@ -256,12 +256,12 @@ Pre-built Grafana dashboard with 13 panels covering all aspects of dixwatcher mo
 
 #### 7. Node Sync Status
 - **Type**: Stat
-- **Metric**: `dixwatcher_node_sync_status`
+- **Metric**: `dixmgr_node_sync_status`
 - **Display**: Syncing/Synced
 
 #### 8. Peer Count
 - **Type**: Graph
-- **Metric**: `dixwatcher_node_peer_count`
+- **Metric**: `dixmgr_node_peer_count`
 
 #### 9. Activity Duration (p95)
 - **Type**: Graph
@@ -270,16 +270,16 @@ Pre-built Grafana dashboard with 13 panels covering all aspects of dixwatcher mo
 
 #### 10. Activity Error Rate
 - **Type**: Graph
-- **Metric**: `rate(dixwatcher_activity_errors_total[5m])`
+- **Metric**: `rate(dixmgr_activity_errors_total[5m])`
 
 #### 11. Active Alerts
 - **Type**: Table
-- **Metric**: `dixwatcher_alerts_active > 0`
+- **Metric**: `dixmgr_alerts_active > 0`
 - **Display**: Current alerts
 
 #### 12. Workflow Execution Rate
 - **Type**: Graph
-- **Metric**: `rate(dixwatcher_workflow_executions_total[5m])`
+- **Metric**: `rate(dixmgr_workflow_executions_total[5m])`
 
 #### 13. Dependency Wait Time
 - **Type**: Graph
@@ -293,11 +293,11 @@ Pre-built Grafana dashboard with 13 panels covering all aspects of dixwatcher mo
 curl -X POST http://localhost:3000/api/dashboards/db \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer YOUR_API_KEY" \
-    -d @cmd/dixwatcher/grafana-dashboard.json
+    -d @cmd/dixmgr/grafana-dashboard.json
 
 # Or via Grafana UI:
 # 1. Go to Dashboards → Import
-# 2. Upload cmd/dixwatcher/grafana-dashboard.json
+# 2. Upload cmd/dixmgr/grafana-dashboard.json
 # 3. Select Prometheus data source
 ```
 
@@ -305,7 +305,7 @@ curl -X POST http://localhost:3000/api/dashboards/db \
 ```yaml
 # prometheus.yml
 scrape_configs:
-  - job_name: 'dixwatcher'
+  - job_name: 'dixmgr'
     scrape_interval: 15s
     static_configs:
       - targets: ['localhost:9090']
@@ -362,7 +362,7 @@ Runtime configuration updates without service restart, enabling operational flex
 
 #### Metrics Settings
 - `metrics_port` (default: 9090)
-- `metrics_namespace` (default: "dixwatcher")
+- `metrics_namespace` (default: "dixmgr")
 
 #### Health History Settings
 - `health_history_db_path`
@@ -372,7 +372,7 @@ Runtime configuration updates without service restart, enabling operational flex
 
 #### Enable Dynamic Config
 ```bash
-./bin/dixwatcher \
+./bin/dixmgr \
     -dynamic-config=true \
     -config-port=9091 \
     -conf config.toml \
@@ -416,7 +416,7 @@ Response:
 
 ##### 3. Reload from File
 ```bash
-curl -X POST http://localhost:9091/config/reload?path=/etc/dixwatcher/runtime.toml
+curl -X POST http://localhost:9091/config/reload?path=/etc/dixmgr/runtime.toml
 ```
 
 ### Programmatic Usage
@@ -452,7 +452,7 @@ dynamicConfig.OnChange(func(old, new *DynamicConfig) {
 #### Saving to File
 ```go
 // Save current configuration
-dynamicConfig.SaveToFile("/etc/dixwatcher/runtime.toml")
+dynamicConfig.SaveToFile("/etc/dixmgr/runtime.toml")
 ```
 
 ### Benefits
@@ -601,11 +601,11 @@ cb.Reset()
 **Problem**: Database growing too large
 ```bash
 # Check database size
-ls -lh /var/lib/dixwatcher/health.db
+ls -lh /var/lib/dixmgr/health.db
 
 # Manual purge
-sqlite3 /var/lib/dixwatcher/health.db "DELETE FROM health_events WHERE timestamp < datetime('now', '-30 days')"
-sqlite3 /var/lib/dixwatcher/health.db "VACUUM"
+sqlite3 /var/lib/dixmgr/health.db "DELETE FROM health_events WHERE timestamp < datetime('now', '-30 days')"
+sqlite3 /var/lib/dixmgr/health.db "VACUUM"
 ```
 
 **Problem**: Slow queries
@@ -622,7 +622,7 @@ CREATE INDEX idx_custom ON health_events(service, timestamp, is_healthy);
 **Problem**: No data in dashboard
 ```bash
 # Check Prometheus is scraping
-curl http://localhost:9090/metrics | grep dixwatcher
+curl http://localhost:9090/metrics | grep dixmgr
 
 # Check Grafana data source
 curl http://localhost:3000/api/datasources
@@ -641,7 +641,7 @@ curl http://localhost:3000/api/datasources
 netstat -tulpn | grep 9091
 
 # Check logs for errors
-journalctl -u dixwatcher -f | grep -i config
+journalctl -u dixmgr -f | grep -i config
 ```
 
 **Problem**: Updates not applying
@@ -662,23 +662,23 @@ curl http://localhost:9091/config | jq .metrics_enabled
 
 1. **Update Binary**:
    ```bash
-   go build -o bin/dixwatcher ./cmd/dixwatcher
+   go build -o bin/dixmgr ./cmd/dixmgr
    ```
 
 2. **Enable New Features Gradually**:
    ```bash
    # Start with circuit breaker only
-   ./bin/dixwatcher \
+   ./bin/dixmgr \
        -circuit-breaker=true \
        -health-history=false \
        -dynamic-config=false \
        -conf config.toml -exec
 
    # After validation, enable all
-   ./bin/dixwatcher \
+   ./bin/dixmgr \
        -circuit-breaker=true \
        -health-history=true \
-       -health-history-db=/var/lib/dixwatcher/health.db \
+       -health-history-db=/var/lib/dixmgr/health.db \
        -dynamic-config=true \
        -config-port=9091 \
        -conf config.toml -exec
@@ -687,7 +687,7 @@ curl http://localhost:9091/config | jq .metrics_enabled
 3. **Import Grafana Dashboard**:
    ```bash
    # Upload dashboard JSON
-   cp cmd/dixwatcher/grafana-dashboard.json /etc/grafana/provisioning/dashboards/
+   cp cmd/dixmgr/grafana-dashboard.json /etc/grafana/provisioning/dashboards/
    systemctl reload grafana-server
    ```
 
@@ -706,7 +706,7 @@ curl http://localhost:9091/config | jq .metrics_enabled
 
 ## Conclusion
 
-These medium-priority features significantly enhance dixwatcher's:
+These medium-priority features significantly enhance dixmgr's:
 - **Reliability**: Circuit breakers prevent cascading failures
 - **Visibility**: Health history and Grafana dashboards provide deep insights
 - **Flexibility**: Dynamic configuration enables zero-downtime updates

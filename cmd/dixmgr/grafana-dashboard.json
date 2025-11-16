@@ -1,7 +1,7 @@
 {
   "dashboard": {
-    "title": "DixWatcher - Service Monitoring",
-    "tags": ["dixwatcher", "monitoring", "blockchain"],
+    "title": "DixMgr - Service Monitoring",
+    "tags": ["dixmgr", "monitoring", "blockchain"],
     "timezone": "browser",
     "editable": true,
     "graphTooltip": 1,
@@ -17,7 +17,7 @@
         "gridPos": {"x": 0, "y": 0, "w": 24, "h": 4},
         "targets": [
           {
-            "expr": "dixwatcher_service_health",
+            "expr": "dixmgr_service_health",
             "legendFormat": "{{service}} ({{type}})"
           }
         ],
@@ -49,7 +49,7 @@
         "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
         "targets": [
           {
-            "expr": "rate(dixwatcher_service_restarts_total[5m])",
+            "expr": "rate(dixmgr_service_restarts_total[5m])",
             "legendFormat": "{{service}}"
           }
         ],
@@ -65,7 +65,7 @@
         "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
         "targets": [
           {
-            "expr": "dixwatcher_service_downtime_seconds_total",
+            "expr": "dixmgr_service_downtime_seconds_total",
             "legendFormat": "{{service}}"
           }
         ],
@@ -81,7 +81,7 @@
         "gridPos": {"x": 0, "y": 12, "w": 8, "h": 8},
         "targets": [
           {
-            "expr": "dixwatcher_service_cpu_percent",
+            "expr": "dixmgr_service_cpu_percent",
             "legendFormat": "{{service}}"
           }
         ],
@@ -114,7 +114,7 @@
         "gridPos": {"x": 8, "y": 12, "w": 8, "h": 8},
         "targets": [
           {
-            "expr": "dixwatcher_service_memory_bytes / 1024 / 1024 / 1024",
+            "expr": "dixmgr_service_memory_bytes / 1024 / 1024 / 1024",
             "legendFormat": "{{service}}"
           }
         ],
@@ -130,11 +130,11 @@
         "gridPos": {"x": 16, "y": 12, "w": 8, "h": 8},
         "targets": [
           {
-            "expr": "dixwatcher_service_disk_io_bytes_per_second{direction=\"read\"}",
+            "expr": "dixmgr_service_disk_io_bytes_per_second{direction=\"read\"}",
             "legendFormat": "{{service}} read"
           },
           {
-            "expr": "dixwatcher_service_disk_io_bytes_per_second{direction=\"write\"}",
+            "expr": "dixmgr_service_disk_io_bytes_per_second{direction=\"write\"}",
             "legendFormat": "{{service}} write"
           }
         ],
@@ -150,7 +150,7 @@
         "gridPos": {"x": 0, "y": 20, "w": 12, "h": 4},
         "targets": [
           {
-            "expr": "dixwatcher_node_sync_status",
+            "expr": "dixmgr_node_sync_status",
             "legendFormat": "{{node}} - {{chain}}"
           }
         ],
@@ -179,7 +179,7 @@
         "gridPos": {"x": 12, "y": 20, "w": 12, "h": 4},
         "targets": [
           {
-            "expr": "dixwatcher_node_peer_count",
+            "expr": "dixmgr_node_peer_count",
             "legendFormat": "{{node}}"
           }
         ],
@@ -195,7 +195,7 @@
         "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, rate(dixwatcher_activity_duration_seconds_bucket[5m]))",
+            "expr": "histogram_quantile(0.95, rate(dixmgr_activity_duration_seconds_bucket[5m]))",
             "legendFormat": "{{activity}} p95"
           }
         ],
@@ -211,7 +211,7 @@
         "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
         "targets": [
           {
-            "expr": "rate(dixwatcher_activity_errors_total[5m])",
+            "expr": "rate(dixmgr_activity_errors_total[5m])",
             "legendFormat": "{{activity}} - {{error_type}}"
           }
         ],
@@ -227,7 +227,7 @@
         "gridPos": {"x": 0, "y": 32, "w": 24, "h": 8},
         "targets": [
           {
-            "expr": "dixwatcher_alerts_active > 0",
+            "expr": "dixmgr_alerts_active > 0",
             "format": "table",
             "instant": true
           }
@@ -254,7 +254,7 @@
         "gridPos": {"x": 0, "y": 40, "w": 12, "h": 8},
         "targets": [
           {
-            "expr": "rate(dixwatcher_workflow_executions_total[5m])",
+            "expr": "rate(dixmgr_workflow_executions_total[5m])",
             "legendFormat": "{{workflow}} - {{status}}"
           }
         ],
@@ -270,7 +270,7 @@
         "gridPos": {"x": 12, "y": 40, "w": 12, "h": 8},
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, rate(dixwatcher_dependency_wait_time_seconds_bucket[5m]))",
+            "expr": "histogram_quantile(0.95, rate(dixmgr_dependency_wait_time_seconds_bucket[5m]))",
             "legendFormat": "{{service}} waiting for {{dependency}}"
           }
         ],

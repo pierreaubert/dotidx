@@ -1,8 +1,8 @@
-# DixWatcher Process Management
+# DixMgr Process Management
 
 ## Overview
 
-DixWatcher now includes a pluggable process management system that allows you to manage processes either through **systemd** or **directly** without systemd. This provides flexibility for different deployment scenarios and removes the hard dependency on systemd.
+DixMgr now includes a pluggable process management system that allows you to manage processes either through **systemd** or **directly** without systemd. This provides flexibility for different deployment scenarios and removes the hard dependency on systemd.
 
 ## Architecture
 
@@ -40,9 +40,9 @@ type ProcessManager interface {
 
 # Direct mode configuration
 -process-log-dir string
-    Directory for process logs (direct mode) (default "/var/log/dixwatcher")
+    Directory for process logs (direct mode) (default "/var/log/dixmgr")
 -process-pid-dir string
-    Directory for PID files (direct mode) (default "/var/run/dixwatcher")
+    Directory for PID files (direct mode) (default "/var/run/dixmgr")
 -process-max-restarts int
     Maximum restart attempts per process (default 5)
 ```
@@ -52,13 +52,13 @@ type ProcessManager interface {
 #### Using Systemd (Default)
 
 ```bash
-./dixwatcher -conf config.toml -exec -process-manager systemd
+./dixmgr -conf config.toml -exec -process-manager systemd
 ```
 
 #### Using Direct Process Management
 
 ```bash
-./dixwatcher -conf config.toml -exec \
+./dixmgr -conf config.toml -exec \
   -process-manager direct \
   -process-log-dir /var/log/myapp \
   -process-pid-dir /var/run/myapp \
@@ -232,11 +232,11 @@ err := workflow.ExecuteActivity(ctx, activities.ListProcessesActivity).Get(ctx, 
 
 Process management integrates with Prometheus metrics:
 
-- `dixwatcher_activity_executions_total{activity="StartProcess"}`
-- `dixwatcher_activity_executions_total{activity="StopProcess"}`
-- `dixwatcher_activity_executions_total{activity="RestartProcess"}`
-- `dixwatcher_activity_duration_seconds{activity="StartProcess"}`
-- `dixwatcher_service_restarts_total{service="myapp", type="direct"}`
+- `dixmgr_activity_executions_total{activity="StartProcess"}`
+- `dixmgr_activity_executions_total{activity="StopProcess"}`
+- `dixmgr_activity_executions_total{activity="RestartProcess"}`
+- `dixmgr_activity_duration_seconds{activity="StartProcess"}`
+- `dixmgr_service_restarts_total{service="myapp", type="direct"}`
 
 ### Circuit Breakers
 
@@ -294,7 +294,7 @@ To switch back to systemd, simply:
 
 1. Change `-process-manager` flag to `systemd`
 2. Ensure services are defined as systemd units
-3. Restart dixwatcher
+3. Restart dixmgr
 
 ## Security Considerations
 
@@ -316,13 +316,13 @@ config := ProcessConfig{
 
 ### PID File Security
 
-- PID files are created in `-process-pid-dir` (default: `/var/run/dixwatcher`)
+- PID files are created in `-process-pid-dir` (default: `/var/run/dixmgr`)
 - Ensure this directory has appropriate permissions (0755)
 - PID files are automatically cleaned up on process exit
 
 ### Log File Security
 
-- Log files are created in `-process-log-dir` (default: `/var/log/dixwatcher`)
+- Log files are created in `-process-log-dir` (default: `/var/log/dixmgr`)
 - Files are created with 0644 permissions
 - Ensure log rotation is configured to prevent disk space issues
 
@@ -330,7 +330,7 @@ config := ProcessConfig{
 
 ### Process Won't Start
 
-1. Check logs: `journalctl -u dixwatcher` or check log files
+1. Check logs: `journalctl -u dixmgr` or check log files
 2. Verify command and arguments are correct
 3. Check working directory exists and is accessible
 4. Verify user/group permissions if using user switching
@@ -353,7 +353,7 @@ config := ProcessConfig{
 
 ### Permission Errors
 
-1. Ensure dixwatcher has permissions to create PID/log directories
+1. Ensure dixmgr has permissions to create PID/log directories
 2. Check user/group switching requirements (need root)
 3. Verify command path is executable
 4. Check SELinux/AppArmor policies if applicable

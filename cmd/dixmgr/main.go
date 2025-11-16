@@ -37,14 +37,14 @@ func main() {
 	// Medium-priority feature flags
 	enableCircuitBreaker := flag.Bool("circuit-breaker", true, "Enable circuit breaker pattern")
 	enableHealthHistory := flag.Bool("health-history", false, "Enable persistent health history")
-	healthHistoryDB := flag.String("health-history-db", "/var/lib/dixwatcher/health.db", "Health history database path")
+	healthHistoryDB := flag.String("health-history-db", "/var/lib/dixmgr/health.db", "Health history database path")
 	enableDynamicConfig := flag.Bool("dynamic-config", true, "Enable dynamic configuration")
 	configPort := flag.Int("config-port", 9091, "Configuration API port")
 
 	// Process manager flags
 	processManagerType := flag.String("process-manager", "systemd", "Process manager type: systemd or direct")
-	processLogDir := flag.String("process-log-dir", "/var/log/dixwatcher", "Directory for process logs (direct mode)")
-	processPIDDir := flag.String("process-pid-dir", "/var/run/dixwatcher", "Directory for PID files (direct mode)")
+	processLogDir := flag.String("process-log-dir", "/var/log/dixmgr", "Directory for process logs (direct mode)")
+	processPIDDir := flag.String("process-pid-dir", "/var/run/dixmgr", "Directory for PID files (direct mode)")
 	processMaxRestarts := flag.Int("process-max-restarts", 5, "Maximum restart attempts per process")
 
 	flag.Parse()
@@ -83,7 +83,7 @@ func main() {
 	// Initialize metrics collector
 	var metricsCollector *MetricsCollector
 	if *metricsEnabled {
-		metricsCollector = NewMetricsCollector("dixwatcher")
+		metricsCollector = NewMetricsCollector("dixmgr")
 		log.Printf("Metrics collector initialized")
 
 		// Start metrics server in background
