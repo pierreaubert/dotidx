@@ -91,12 +91,12 @@ func (rb *RingBuffer) GetLines(n int) []string {
 func NewDirectManager(config ProcessManagerConfig, metrics *MetricsCollector) (*DirectManager, error) {
 	logDir := config.LogDir
 	if logDir == "" {
-		logDir = "/var/log/dixwatcher"
+		logDir = "/var/log/dixmgr"
 	}
 
 	pidDir := config.PIDDir
 	if pidDir == "" {
-		pidDir = "/var/run/dixwatcher"
+		pidDir = "/var/run/dixmgr"
 	}
 
 	// Create directories

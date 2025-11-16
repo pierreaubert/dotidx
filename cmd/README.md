@@ -3,8 +3,7 @@ List of command line tools
 - dixcron: run periodic statitics computations
 - dixfe: REST frontend
 - dixlive: index live blocks on all the parachains at the same time
-- dixmgr: generate configuration and startup files for all parachains
-- dixwatcher: monitor all process and restart them when needed
+- dixmgr: monitor all processes and restart them when needed (with metrics, alerting, health tracking)
 
 Lis of utility
 - filter_cli: filtering cli to check how filtering is working

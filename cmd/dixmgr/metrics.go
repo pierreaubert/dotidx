@@ -10,7 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// MetricsCollector manages Prometheus metrics for dixwatcher
+// MetricsCollector manages Prometheus metrics for dixmgr
 type MetricsCollector struct {
 	// Service health metrics
 	serviceHealth *prometheus.GaugeVec

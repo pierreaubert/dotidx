@@ -103,7 +103,7 @@ total 8
 
 The system build 5 binaries:
 
-- `dixmgr`: a service that launches and monitor all the various services.
+- `dixmgr`: a service that monitors all processes and restarts them when needed, with metrics, alerting, and health tracking.
 - `dixbatch` : pull large amount of blocks into the database.
 - `dixlive`: can pull the head of 1 or many chains into the database (and run continously).
 - `dixfe`: a web frontend to demonstrate how to use the data in the database.

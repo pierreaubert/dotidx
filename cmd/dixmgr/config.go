@@ -85,7 +85,7 @@ type InfrastructureWorkflowInput struct {
 type MetricsConfig struct {
 	Enabled   bool   // Enable metrics collection
 	Port      int    // Metrics server port (default: 9090)
-	Namespace string // Prometheus namespace (default: "dixwatcher")
+	Namespace string // Prometheus namespace (default: "dixmgr")
 }
 
 // AlertChannelConfig represents configuration for an alert channel
