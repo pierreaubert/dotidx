@@ -237,6 +237,8 @@ func main() {
 	w.RegisterWorkflow(ClusterWorkflowExample)
 	w.RegisterWorkflow(InfrastructureWorkflow)
 	w.RegisterWorkflow(DependentServiceWorkflow)
+	w.RegisterWorkflow(BatchWorkflow)
+	w.RegisterWorkflow(CronWorkflow)
 
 	// Register activities
 	w.RegisterActivity(activities.CheckSystemdServiceActivity)
@@ -256,6 +258,18 @@ func main() {
 	w.RegisterActivity(activities.GetProcessOutputActivity)
 	w.RegisterActivity(activities.KillProcessActivity)
 	w.RegisterActivity(activities.ListProcessesActivity)
+
+	// Register batch processing activities
+	w.RegisterActivity(activities.GetChainHeadActivity)
+	w.RegisterActivity(activities.CheckExistingBlocksActivity)
+	w.RegisterActivity(activities.ProcessSingleBlockActivity)
+	w.RegisterActivity(activities.ProcessBlockBatchActivity)
+
+	// Register cron query activities
+	w.RegisterActivity(activities.GetDatabaseInfoActivity)
+	w.RegisterActivity(activities.CheckQueryResultExistsActivity)
+	w.RegisterActivity(activities.ExecuteAndStoreNamedQueryActivity)
+	w.RegisterActivity(activities.RegisterDefaultQueriesActivity)
 
 	log.Printf("Registered workflows and activities on task queue: %s", actualTaskQueue)
 

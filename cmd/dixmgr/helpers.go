@@ -44,6 +44,14 @@ func WorkflowIDSvc(name string) string {
 	return fmt.Sprintf("wf.svc.%s", name)
 }
 
+func WorkflowIDBatch(relay, chain string) string {
+	return fmt.Sprintf("wf.batch.%s.%s", relay, chain)
+}
+
+func WorkflowIDCron(schedule string) string {
+	return fmt.Sprintf("wf.cron.%s", schedule)
+}
+
 // FromMgrConfigToInfraInput converts MgrConfig to InfrastructureWorkflowInput
 // It validates port conventions and derives service names, RPC ports, and signals
 func FromMgrConfigToInfraInput(cfg *dix.MgrConfig, watchInterval, maxRestarts int, restartBackoff int) (InfrastructureWorkflowInput, error) {

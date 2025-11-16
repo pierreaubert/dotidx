@@ -104,6 +104,25 @@ type AlertConfig struct {
 	DisabledRules  []string             // List of disabled rule names
 }
 
+// BatchWorkflowConfig represents configuration for batch block indexing
+type BatchWorkflowConfig struct {
+	RelayChain   string        // Relay chain name (e.g., "polkadot")
+	Chain        string        // Chain name (e.g., "assethub")
+	StartRange   int           // Starting block number
+	EndRange     int           // Ending block number (-1 = use chain head)
+	BatchSize    int           // Blocks per batch request
+	MaxWorkers   int           // Maximum parallel workers
+	FlushTimeout time.Duration // Database flush timeout
+	SidecarURL   string        // Sidecar API URL (e.g., "http://localhost:8080")
+}
+
+// CronWorkflowConfig represents configuration for periodic query execution
+type CronWorkflowConfig struct {
+	HourlyCronSchedule string // Cron schedule for hourly queries (e.g., "0 * * * *")
+	DailyCronSchedule  string // Cron schedule for daily queries (e.g., "0 0 * * *")
+	RegisteredQueries  []string // List of registered query names to execute
+}
+
 // WatcherConfig represents the complete watcher configuration
 type WatcherConfig struct {
 	Metrics MetricsConfig // Metrics configuration
