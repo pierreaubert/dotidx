@@ -20,6 +20,7 @@ type Activities struct {
 	circuitBreakers *CircuitBreakerManager
 	healthHistory   *HealthHistoryStore
 	dynamicConfig   *DynamicConfig
+	database        Database // Database interface for batch and cron operations
 }
 
 func NewActivities(executeMode bool, metrics *MetricsCollector, alertManager *AlertManager, enableResourceMonitoring bool, cbManager *CircuitBreakerManager, healthHistory *HealthHistoryStore, dynamicConfig *DynamicConfig, processManager ProcessManager) (*Activities, error) {
@@ -65,4 +66,12 @@ func (a *Activities) Close() {
 	if a.healthHistory != nil {
 		a.healthHistory.Close()
 	}
+	if a.database != nil {
+		a.database.Close()
+	}
+}
+
+// SetDatabase sets the database for batch and cron operations
+func (a *Activities) SetDatabase(db Database) {
+	a.database = db
 }
