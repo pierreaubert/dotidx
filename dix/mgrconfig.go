@@ -35,6 +35,7 @@ type MgrConfig struct {
 	Filesystem            FilesystemConfig                      `toml:"filesystem"`
 	Monitoring            MonitoringConfig                      `toml:"monitoring"`
 	Watcher               OrchestratorConfig                    `toml:"watcher"`
+	Temporal              TemporalConfig                        `toml:"temporal"`
 }
 
 type DotidxDB struct {
@@ -106,6 +107,12 @@ type OrchestratorConfig struct {
 	MaxRestarts      int           `toml:"max_restarts"`
 	RestartBackoff   time.Duration `toml:"restart_backoff"`
 	OperationTimeout time.Duration `toml:"operation_timeout"`
+}
+
+type TemporalConfig struct {
+	HostPort  string `toml:"hostport"`  // Temporal server address (e.g., "localhost:7233")
+	Namespace string `toml:"namespace"` // Temporal namespace (e.g., "dotidx")
+	TaskQueue string `toml:"taskqueue"` // Task queue name (e.g., "dotidx-watcher")
 }
 
 func LoadMgrConfig(file string) (*MgrConfig, error) {
