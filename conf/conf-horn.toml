@@ -199,3 +199,8 @@ zfs = true
 user = "prometheus"
 prometheus_ip = "192.168.1.32"
 prometheus_port = 9100
+
+[temporal]
+hostport = "192.168.1.32:7233"
+namespace = "dotidx"
+taskqueue = "dotidx-watcher"

@@ -66,7 +66,6 @@ func main() {
 		mode = "exec (execute actions)"
 	}
 	log.Printf("Starting Dix Watcher in %s mode with configuration file: %s", mode, *configFile)
-	log.Printf("Temporal server: %s, namespace: %s", *temporalHost, *temporalNamespace)
 	log.Printf("High-priority features: metrics=%v, alerts=%v, resource-monitoring=%v",
 		*metricsEnabled, *alertsEnabled, *enableResourceMonitoring)
 	log.Printf("Medium-priority features: circuit-breaker=%v, health-history=%v, dynamic-config=%v",
@@ -79,6 +78,24 @@ func main() {
 	if err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
+
+	// Use temporal config from file if available, otherwise use command-line flags
+	actualTemporalHost := *temporalHost
+	actualTemporalNamespace := *temporalNamespace
+	actualTaskQueue := "dotidx-watcher"
+
+	if config.Temporal.HostPort != "" {
+		actualTemporalHost = config.Temporal.HostPort
+	}
+	if config.Temporal.Namespace != "" {
+		actualTemporalNamespace = config.Temporal.Namespace
+	}
+	if config.Temporal.TaskQueue != "" {
+		actualTaskQueue = config.Temporal.TaskQueue
+	}
+
+	log.Printf("Temporal configuration: host=%s, namespace=%s, taskqueue=%s",
+		actualTemporalHost, actualTemporalNamespace, actualTaskQueue)
 
 	// Initialize metrics collector
 	var metricsCollector *MetricsCollector
@@ -195,8 +212,8 @@ func main() {
 
 	// Create Temporal client
 	temporalClient, err := client.Dial(client.Options{
-		HostPort:  *temporalHost,
-		Namespace: *temporalNamespace,
+		HostPort:  actualTemporalHost,
+		Namespace: actualTemporalNamespace,
 	})
 	if err != nil {
 		log.Fatalf("Failed to create Temporal client: %v", err)
@@ -213,8 +230,7 @@ func main() {
 	defer activities.Close()
 
 	// Create and start worker
-	taskQueue := "dotidx-watcher"
-	w := worker.New(temporalClient, taskQueue, worker.Options{})
+	w := worker.New(temporalClient, actualTaskQueue, worker.Options{})
 
 	// Register workflows
 	w.RegisterWorkflow(NodeWorkflow)
@@ -241,7 +257,7 @@ func main() {
 	w.RegisterActivity(activities.KillProcessActivity)
 	w.RegisterActivity(activities.ListProcessesActivity)
 
-	log.Printf("Registered workflows and activities on task queue: %s", taskQueue)
+	log.Printf("Registered workflows and activities on task queue: %s", actualTaskQueue)
 
 	// Start worker in background
 	err = w.Start()
@@ -259,7 +275,7 @@ func main() {
 	}
 
 	// Start the single InfrastructureWorkflow
-	err = startInfrastructureWorkflow(temporalClient, input, taskQueue)
+	err = startInfrastructureWorkflow(temporalClient, input, actualTaskQueue)
 	if err != nil {
 		log.Fatalf("Failed to start infrastructure workflow: %v", err)
 	}
